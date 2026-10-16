@@ -1,11 +1,13 @@
 
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { pass } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { sfx } from './audio';
 import { ParticleFX } from './particles';
 import { GlowFX } from './glow';
 import { slowmo } from './slowmo';
-import { AnimRigs } from './animation';
+import { AnimRigs, upgradeUnitRig } from './animation';
 
 /* ================= УТИЛИТЫ ================= */
 const $=q=>document.querySelector(q);
@@ -61,10 +63,11 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0c1510);
 scene.fog=new THREE.FogExp2(0x0c1510,0.014);
 
-/* ==== v0.7: эффекты (партиклы / glow-хало / анимационные риги) ==== */
+/* ==== v0.7: эффекты (партиклы / glow-хало / анимационные риги / bloom) ==== */
 const fx=new ParticleFX(scene);
 const glows=new GlowFX(scene);
 const rigs=new AnimRigs();
+let postFX=null;
 const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,0.1,220);
 camera.position.set(2,27,41);
 const controls=new OrbitControls(camera,renderer.domElement);
@@ -664,6 +667,8 @@ async function doAttack(att,def,w,opts){
   busyOn();
   faceTo(att,def.mesh.position);
   sfx.swing(w);
+  /* v0.7.x: выпад корпусом (работает и для GLTF-рига) */
+  void tween(0.26,k=>{if(att.rig)att.rig.rotation.x=Math.sin(k*Math.PI)*0.5;});
   await lunge(att,def);
   const m=attackMod(att,w),bl=blessed(att);
   const nat=d(20),total=nat+m+bl,crit=nat===20;
@@ -780,6 +785,8 @@ async function castFireball(h,tx,tz){
 
 /* ================= ПЕРЕМЕЩЕНИЕ ================= */
 async function animateMove(u,path){
+  u.moving=true;
+  try{
   for(const step of path){
     if(!u.alive)return false;
     const diag=(step.x!==u.x&&step.z!==u.z);
@@ -819,6 +826,7 @@ async function animateMove(u,path){
     refreshUI();
   }
   return u.alive;
+  }finally{u.moving=false;}
 }
 
 /* ================= ХОДЫ ================= */
@@ -1852,7 +1860,7 @@ function loop(){
   glows.update(dt,t);
   rigs.update(dt,t);
   updateOverlays();
-  renderer.render(scene,camera);
+  if(postFX)postFX.render();else renderer.render(scene,camera);
 }
 
 /* ================= СТАРТ ================= */
@@ -1871,6 +1879,17 @@ let disposed=false;
     return;
   }
   if(disposed)return;
+  /* v0.7.x: bloom-пасс (TSL, работает и на WebGL2-бэкенде); при сбое — обычный рендер */
+  try{
+    const scenePass=pass(scene,camera);
+    const sceneColor=scenePass.getTextureNode();
+    const bloomPass=bloom(sceneColor,0.45,0.55,0.82);
+    postFX=new THREE.PostProcessing(renderer);
+    postFX.outputNode=sceneColor.add(bloomPass);
+    console.log('[bg3] bloom enabled (TSL PostProcessing)');
+  }catch(e){
+    console.warn('[bg3] bloom disabled:',e);postFX=null;
+  }
   try{
   buildWorld();
   buildUnits();
@@ -1881,6 +1900,18 @@ let disposed=false;
   /* v0.7: хало и угли костра */
   glows.campfire(W(FIREPIT[0]),W(FIREPIT[1]));
   fx.addEmber('campfire',W(FIREPIT[0]),W(FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
+  /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и босса; гоблины — капсулы */
+  void (async()=>{
+    const targets=units.filter(u=>u.side==='hero'||u.isBoss);
+    let ok=0;
+    for(const u of targets){
+      const tint=u.isBoss?0xb03424:(u.cls==='fighter'?0x5a7fb0:0x9a6ab8);
+      const done=await upgradeUnitRig(u,{tint,tintStrength:0.4,scale:u.isBoss?1.24:1.0,yaw:Math.PI});
+      if(done)ok++;
+    }
+    console.log('[bg3] GLTF rigs:',ok+'/'+targets.length);
+    if(ok)log('Скелетные анимации подключены ('+ok+' рига).','g-sys');
+  })();
   phase='explore';
   refreshUI();refreshParty();
   openExploreUI();
@@ -1890,7 +1921,7 @@ let disposed=false;
     sb.addEventListener('click',onSnd);
     disposers.push(()=>sb.removeEventListener('click',onSnd));
   }
-  log('BG3 Web-прототип v0.7 «Слово и сталь»: звук, партиклы, слоумо-криты.','g-sys');
+  log('BG3 Web-прототип v0.7 «Слово и сталь»: звук, партиклы, слоумо, анимации, bloom.','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал заданий • ПКМ/Esc — отмена.','g-sys');
   log('Лагерь гоблинов — на севере. Взрывайте бочки, поджигайте траву — или договоритесь!','g-sys');
