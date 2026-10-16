@@ -121,3 +121,12 @@
 #slowfx{position:fixed;inset:0;pointer-events:none;z-index:44;opacity:0;transition:opacity .12s linear;
   background:radial-gradient(ellipse at center,rgba(10,6,20,0) 42%,rgba(24,10,40,.55) 78%,rgba(40,12,60,.8) 100%);
   mix-blend-mode:normal}
+
+/* ==== v0.8: боссбар + фейд перехода между картами ==== */
+#bossbar{position:fixed;top:70px;left:50%;transform:translateX(-50%);width:430px;z-index:11;
+  background:var(--panel);border:1px solid #6a2f3f;border-radius:10px;padding:6px 12px 8px;
+  box-shadow:0 4px 18px rgba(0,0,0,.5);display:none;text-align:center;pointer-events:none}
+#bossname{font:600 12px Georgia,serif;color:#e08a7a;letter-spacing:.07em;text-transform:uppercase}
+.bbar{height:10px;background:#241014;border-radius:5px;margin-top:4px;overflow:hidden;border:1px solid #552330}
+.bbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#8a2430,#d95845);transition:width .25s}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .55s ease;z-index:60}

@@ -35,7 +35,8 @@ const STATUS={
 };
 const S={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
-  cageMesh:null,ilvaMesh:null,crateMesh:null};
+  cageMesh:null,ilvaMesh:null,crateMesh:null,
+  cryptGroup:[],chestLooted:false,barrelsUsed:new Set()};/* v0.8 */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    Весь игровой стейт живёт в замыкании bootGame(), чтобы React мог
@@ -62,6 +63,9 @@ $('#scene').appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0c1510);
 scene.fog=new THREE.FogExp2(0x0c1510,0.014);
+/* v0.8: вся декорации карты — в worldGroup, чтобы сменять карту одним clear */
+const worldGroup=new THREE.Group();scene.add(worldGroup);
+function clearGroup(g){for(let i=g.children.length-1;i>=0;i--)g.remove(g.children[i]);}
 
 /* ==== v0.7: эффекты (партиклы / glow-хало / анимационные риги / bloom) ==== */
 const fx=new ParticleFX(scene);
@@ -76,23 +80,49 @@ controls.maxPolarAngle=1.32; controls.minPolarAngle=0.15;
 controls.minDistance=8; controls.maxDistance=62;
 controls.target.set(1,0,12);
 
-/* ================= СЕТКА ================= */
+/* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
+   Одна сетка 28×28, но два набора декораций/обстановки:
+   forest — тракт и лагерь Костей, crypt — подземелье босса. */
 const solid=new Set(), grass=new Set();
-for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
-[[7,19],[21,19],[13,13],[23,11],[9,8]].forEach(([cx,cz])=>{
-  for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
-    const x=cx+dx,z=cz+dz;
-    if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
-    if(solid.has(key(x,z)))continue;
-    if(srand()<0.72)grass.add(key(x,z));
-  }
-});
-const ROCKS=[[7,13],[21,17],[12,8],[25,7],[9,17],[18,11],[23,24]];
-const TREES=[[3,9],[9,3],[5,20],[3,15],[10,18],[24,20],[25,12],[20,22],[6,6],[26,16],[17,9],[11,11],[8,22],[22,14],[4,12],[15,4]];
-const TENTS=[[19,3],[22,3],[19,7]];
-const FIREPIT=[21,5];
+let TREES=null,ROCKS=null,TENTS=null,FIREPIT=null,BARREL_POS=null;
 const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25};
-for(const [x,z] of BARREL_POS)grass.add(key(x,z));
+let mapId='forest';
+const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра'};
+const CRYPT={
+  PILLARS:[[6,8],[10,8],[17,8],[21,8],[6,18],[10,18],[17,18],[21,18]],
+  SARCS:[[4,13],[23,13],[8,2],[19,2]],
+  BRAZIERS:[[9,15],[18,15]],
+  URNS:[[11,10],[17,10]],
+  THRONE:[14,3],CHEST:[14,1],EXIT:[14,26],ENTER:[[13,25],[14,25]],
+};
+function seedForest(){
+  TREES=[[3,9],[9,3],[5,20],[3,15],[10,18],[24,20],[25,12],[20,22],[6,6],[26,16],[17,9],[11,11],[8,22],[22,14],[4,12],[15,4]];
+  ROCKS=[[7,13],[21,17],[12,8],[25,7],[9,17],[18,11],[23,24]];
+  TENTS=[[19,3],[22,3],[19,7]];
+  FIREPIT=[21,5];
+  BARREL_POS=[[18,5],[22,6],[24,6]];
+  solid.clear();grass.clear();
+  for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
+  [[7,19],[21,19],[13,13],[23,11],[9,8]].forEach(([cx,cz])=>{
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      const x=cx+dx,z=cz+dz;
+      if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
+      if(solid.has(key(x,z)))continue;
+      if(srand()<0.72)grass.add(key(x,z));
+    }
+  });
+  for(const [x,z] of BARREL_POS)grass.add(key(x,z));
+}
+function seedCrypt(){
+  TREES=[];ROCKS=[];TENTS=[];FIREPIT=null;BARREL_POS=CRYPT.URNS;
+  solid.clear();grass.clear();
+  for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
+  for(const [x,z] of CRYPT.PILLARS)solid.add(key(x,z));
+  for(const [x,z] of CRYPT.SARCS)solid.add(key(x,z));
+  for(const [x,z] of CRYPT.BRAZIERS)solid.add(key(x,z));
+  solid.add(key(CRYPT.THRONE[0],CRYPT.THRONE[1]));
+  solid.add(key(CRYPT.CHEST[0],CRYPT.CHEST[1]));
+}
 
 function passable(x,z,mover){
   if(x<1||z<1||x>=GRID-1||z>=GRID-1)return false;
@@ -132,7 +162,7 @@ function addTree(x,z){
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*6.28;
   g.scale.setScalar(0.85+srand()*0.5);
-  scene.add(g);
+  worldGroup.add(g);
 }
 function addRock(x,z){
   solid.add(key(x,z));
@@ -141,7 +171,7 @@ function addRock(x,z){
   m.position.set(W(x),0.35,W(z));
   m.rotation.set(srand()*3,srand()*3,srand()*3);
   m.castShadow=true;m.receiveShadow=true;
-  scene.add(m);
+  worldGroup.add(m);
 }
 function addTent(x,z){
   solid.add(key(x,z));
@@ -149,7 +179,7 @@ function addTent(x,z){
     new THREE.MeshStandardMaterial({color:0x7a5c3f,roughness:1}));
   m.position.set(W(x),0.8,W(z));
   m.rotation.y=srand()*3;m.castShadow=true;
-  scene.add(m);
+  worldGroup.add(m);
 }
 function addCampfire(x,z){
   solid.add(key(x,z));
@@ -174,11 +204,11 @@ function addCampfire(x,z){
   fireLight.position.y=1.1;
   g.add(fireLight);
   g.position.set(W(x),0,W(z));
-  scene.add(g);
+  worldGroup.add(g);
 }
-function addBarrel(x,z){
+function addBarrel(x,z,bodyColor){/* v0.8: цвет — лес (дерево) или крипта (урна) */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.85,10),
-    new THREE.MeshStandardMaterial({color:0x6b3f24,roughness:0.7}));
+    new THREE.MeshStandardMaterial({color:bodyColor||0x6b3f24,roughness:0.7}));
   body.position.y=0.43;body.castShadow=true;
   const band=new THREE.Mesh(new THREE.CylinderGeometry(0.435,0.435,0.1,10),
     new THREE.MeshStandardMaterial({color:0x2a2a2a,roughness:0.5,emissive:0x3a1000}));
@@ -190,51 +220,71 @@ function addBarrel(x,z){
   g.add(body,band,warn);
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*3;
-  scene.add(g);
-  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:'Взрывная бочка',isBarrel:true,mesh:g};
+  worldGroup.add(g);
+  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g};
   g.userData.ent=b;
   barrels.push(b);
 }
+/* v0.8: атмосфера и свет — параметризованы по карте */
+function applyAtmosphere(m){
+  if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
+  else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
+}
+let hemiLight=null,sunLight=null;
+function applyLighting(m){
+  if(!hemiLight){
+    hemiLight=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
+    sunLight=new THREE.DirectionalLight(0xffeecf,2.4);
+    sunLight.position.set(14,22,8);sunLight.castShadow=true;
+    sunLight.shadow.mapSize.set(2048,2048);
+    sunLight.shadow.camera.left=-24;sunLight.shadow.camera.right=24;
+    sunLight.shadow.camera.top=24;sunLight.shadow.camera.bottom=-24;
+    sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=60;
+    scene.add(hemiLight,sunLight);
+  }
+  if(m==='crypt'){
+    hemiLight.color.setHex(0x7c8ca4);hemiLight.groundColor.setHex(0x1a1826);hemiLight.intensity=0.68;
+    sunLight.color.setHex(0x9fb4d8);sunLight.intensity=1.05;
+  }else{
+    hemiLight.color.setHex(0xbcd8e8);hemiLight.groundColor.setHex(0x2a3325);hemiLight.intensity=0.85;
+    sunLight.color.setHex(0xffeecf);sunLight.intensity=2.4;
+  }
+}
 function buildWorld(){
-  scene.add(new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85));
-  const sun=new THREE.DirectionalLight(0xffeecf,2.4);
-  sun.position.set(14,22,8);sun.castShadow=true;
-  sun.shadow.mapSize.set(2048,2048);
-  sun.shadow.camera.left=-24;sun.shadow.camera.right=24;
-  sun.shadow.camera.top=24;sun.shadow.camera.bottom=-24;
-  sun.shadow.camera.near=1;sun.shadow.camera.far=60;
-  scene.add(sun);
+  applyLighting(mapId);
   groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
-    new THREE.MeshStandardMaterial({color:0x3a5530,roughness:1}));
+    new THREE.MeshStandardMaterial({color:mapId==='crypt'?0x3d3d47:0x3a5530,roughness:1}));
   groundMesh.rotation.x=-Math.PI/2;groundMesh.receiveShadow=true;
-  scene.add(groundMesh);
+  worldGroup.add(groundMesh);
   const patchGeo=new THREE.CircleGeometry(1,16);
-  const patchMat=new THREE.MeshStandardMaterial({color:0x324a2a,roughness:1});
+  const patchMat=new THREE.MeshStandardMaterial({color:mapId==='crypt'?0x34343e:0x324a2a,roughness:1});
   for(let i=0;i<26;i++){
     const m=new THREE.Mesh(patchGeo,patchMat);
     m.rotation.x=-Math.PI/2;
     m.position.set((srand()-0.5)*GRID*TILE*0.9,0.012,(srand()-0.5)*GRID*TILE*0.9);
     m.scale.setScalar(0.7+srand()*1.6);
-    scene.add(m);
+    worldGroup.add(m);
   }
-  const tuftG=new THREE.ConeGeometry(0.16,0.5,5);
-  const tuftM=new THREE.MeshStandardMaterial({color:0x4e8a34,roughness:1});
-  for(const k of grass){
-    const [x,z]=k.split('_').map(Number);
-    if(BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
-    for(let i=0;i<3;i++){
-      const t=new THREE.Mesh(tuftG,tuftM);
-      t.position.set(W(x)+(srand()-0.5),0.22,W(z)+(srand()-0.5));
-      t.rotation.z=(srand()-0.5)*0.5;
-      t.castShadow=true;
-      scene.add(t);
+  if(mapId==='forest'){
+    const tuftG=new THREE.ConeGeometry(0.16,0.5,5);
+    const tuftM=new THREE.MeshStandardMaterial({color:0x4e8a34,roughness:1});
+    for(const k of grass){
+      const [x,z]=k.split('_').map(Number);
+      if(BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
+      for(let i=0;i<3;i++){
+        const t=new THREE.Mesh(tuftG,tuftM);
+        t.position.set(W(x)+(srand()-0.5),0.22,W(z)+(srand()-0.5));
+        t.rotation.z=(srand()-0.5)*0.5;
+        t.castShadow=true;
+        worldGroup.add(t);
+      }
     }
   }
   for(const [x,z] of TREES)addTree(x,z);
   for(const [x,z] of ROCKS)addRock(x,z);
   for(const [x,z] of TENTS)addTent(x,z);
-  addCampfire(FIREPIT[0],FIREPIT[1]);
-  for(const [x,z] of BARREL_POS)addBarrel(x,z);
+  if(FIREPIT)addCampfire(FIREPIT[0],FIREPIT[1]);
+  for(const [x,z] of BARREL_POS)if(!S.barrelsUsed.has(key(x,z)))addBarrel(x,z,mapId==='crypt'?0x4a4238:undefined);
 }
 /* ================= ЮНИТЫ ================= */
 function buildFigure(cfg){
@@ -251,7 +301,7 @@ function buildFigure(cfg){
       new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:0.8}));
     st.position.set(0.38,0.8,0.12);st.castShadow=true;
     const tip=new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8),
-      new THREE.MeshBasicMaterial({color:0xffa040}));
+      new THREE.MeshBasicMaterial({color:cfg.tipColor||0xffa040}));
     tip.position.set(0.38,1.58,0.12);
     g.add(st,tip);
   }else{
@@ -310,7 +360,36 @@ function makeGoblin(t,x,z){
     weapon:t.weapon,dagger:t.dagger||null,keepDist:!!t.keepDist,features:[],
   });
 }
-function buildUnits(){
+/* ================= v0.8: НЕЖИТЬ КРИПТЫ ================= */
+const SKEL={name:'Скелет-страж',short:'Скелет',hp:11,ac:13,xp:60,color:0xcfc7b0,
+  weapon:{name:'Ржавый меч',dice:[1,6],abil:'str',melee:true,range:1}};
+function makeSkeleton(x,z){
+  gobCount[SKEL.short]=(gobCount[SKEL.short]||0)+1;
+  const n=gobCount[SKEL.short];
+  return makeUnit({
+    name:SKEL.name+(n>1?' №'+n:''),short:SKEL.short+(n>1?' '+n:''),side:'goblin',
+    cls:'undead',clsName:'Скелет',x,z,
+    str:13,dex:12,con:10,int:2,wis:8,cha:6,
+    hp:SKEL.hp,maxhp:SKEL.hp,ac:SKEL.ac,speed:6,xp:SKEL.xp,color:SKEL.color,skin:0xd8d2be,
+    weapon:SKEL.weapon,dagger:null,keepDist:false,features:[],
+  });
+}
+function makeNecro(){
+  return makeUnit({
+    name:'Вхорил Костепёр',short:'Костепёр',cls:'necro',clsName:'Некромант',side:'goblin',
+    str:10,dex:12,con:14,int:16,wis:14,cha:14,
+    hp:46,maxhp:46,ac:15,speed:5,xp:400,x:14,z:4,color:0x3f2f55,skin:0xcac2ae,staff:true,tipColor:0x7fffc0,
+    keepDist:true,bossBrain:true,isBoss:true,cryptBoss:true,fearImmune:true,phase2:false,
+    weapon:{name:'Жезл гнили',dice:[1,8],abil:'int',range:6,necro:true,status:{type:'poison',turns:2}},
+    dagger:{name:'Костяной клинок',dice:[1,6],abil:'str',melee:true,range:1},
+    features:['Костяной шквал — 2d6 некротического всем соседям (1 раз в ход)',
+      'На половине хитов призывает скелетов из стен',
+      'Не ведает страха — запугивание бесполезно',
+      'Печать его сундука держится, пока он «жив»'],
+  });
+}
+function buildHeroes(){
+  if(units.some(u=>u.side==='hero'))return;/* герои переживают смену карт */
   makeUnit({name:'Торик Кремень',short:'Торик',cls:'fighter',clsName:'Воин',side:'hero',
     str:16,dex:12,con:14,int:10,wis:12,cha:10,hp:14,maxhp:14,ac:16,speed:6,
     weapon:{name:'Длинный меч',dice:[1,8],abil:'str',melee:true,range:1},
@@ -330,18 +409,29 @@ function buildUnits(){
       'Лечащее слово — бонус + ячейка, лечение 1d4+ИНТ',
       'Благословение — бонус + ячейка, +1d4 к атакам союзника (3 хода)',
       'Со 2 уровня: +5 HP, ИНТ +1, 4 ячейки; с 3 уровня — 5 ячеек']});
-  S.patrolGroup=[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
-  const grat=makeGoblin(GOB.chief,21,6);
-  grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
-  grat.isBoss=true;grat.str=14;
-  S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4)];
 }
-function buildScenery(){
+function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса */
+  for(const k in gobCount)delete gobCount[k];
+  if(mapId==='forest'){
+    S.patrolGroup=S.patrolDone?[]:[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
+    if(S.campDone){S.campGroup=[];return;}
+    const grat=makeGoblin(GOB.chief,21,6);
+    grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
+    grat.isBoss=true;grat.mainBoss=true;grat.str=14;
+    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4)];
+  }else{
+    S.patrolGroup=[];S.campGroup=[];
+    const necro=makeNecro();
+    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5)];
+  }
+}
+function buildForestScenery(){/* v0.8: было buildScenery + охрана прогресса + вход в крипту */
+  S.cageMesh=null;S.ilvaMesh=null;S.crateMesh=null;
   addCampfire(12,25);
   const dam=buildFigure({color:0x9a6a3f,side:'npc'});
   dam.scale.setScalar(1.08);
   dam.position.set(W(MERCHANT.x),0,W(MERCHANT.z));
-  scene.add(dam);
+  worldGroup.add(dam);
   solid.add(key(MERCHANT.x,MERCHANT.z));
   const cart=new THREE.Group();
   const box=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,1.0),
@@ -356,38 +446,220 @@ function buildScenery(){
   const wh2=wh1.clone();wh2.position.z=-0.55;
   cart.add(box,cov,wh1,wh2);
   cart.position.set(W(MERCHANT.x+1),0,W(MERCHANT.z+1));
-  scene.add(cart);
+  worldGroup.add(cart);
   solid.add(key(MERCHANT.x+1,MERCHANT.z+1));
   addInteract(MERCHANT.x,MERCHANT.z,2.6,'Поговорить с Дамроком',()=>openDlg('damrock'),dam,
     'Дамрок Бочкарь','Торговец. Товар, сплетни и награды за услуги.');
-  const cage=new THREE.Group();
-  const barM=new THREE.MeshStandardMaterial({color:0x555a60,metalness:0.7,roughness:0.4});
-  for(let i=0;i<9;i++){
-    const b=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.7,6),barM);
-    const a=i/9*Math.PI*2;
-    b.position.set(Math.cos(a)*0.55,0.85,Math.sin(a)*0.55);
-    cage.add(b);
+  if(!S.ilvaFreed){
+    const cage=new THREE.Group();
+    const barM=new THREE.MeshStandardMaterial({color:0x555a60,metalness:0.7,roughness:0.4});
+    for(let i=0;i<9;i++){
+      const b=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.7,6),barM);
+      const a=i/9*Math.PI*2;
+      b.position.set(Math.cos(a)*0.55,0.85,Math.sin(a)*0.55);
+      cage.add(b);
+    }
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.08,12),barM);
+    top.position.y=1.72;cage.add(top);
+    cage.position.set(W(CAGE.x),0,W(CAGE.z));
+    worldGroup.add(cage);
+    solid.add(key(CAGE.x,CAGE.z));
+    const ilva=buildFigure({color:0x3f7a6a,side:'npc'});
+    ilva.scale.setScalar(0.92);
+    ilva.position.set(W(CAGE.x),0,W(CAGE.z));
+    worldGroup.add(ilva);
+    addInteract(CAGE.x,CAGE.z,2.4,'Поговорить с пленницей',()=>openDlg('ilva'),ilva,
+      'Илва','Пленница в клетке. Похожа на разведчицу.');
+    S.cageMesh=cage;S.ilvaMesh=ilva;
   }
-  const top=new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.08,12),barM);
-  top.position.y=1.72;cage.add(top);
-  cage.position.set(W(CAGE.x),0,W(CAGE.z));
-  scene.add(cage);
-  solid.add(key(CAGE.x,CAGE.z));
-  const ilva=buildFigure({color:0x3f7a6a,side:'npc'});
-  ilva.scale.setScalar(0.92);
-  ilva.position.set(W(CAGE.x),0,W(CAGE.z));
-  scene.add(ilva);
-  addInteract(CAGE.x,CAGE.z,2.4,'Поговорить с пленницей',()=>openDlg('ilva'),ilva,
-    'Илва','Пленница в клетке. Похожа на разведчицу.');
-  S.cageMesh=cage;S.ilvaMesh=ilva;
-  const crate=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.7,0.95),
-    new THREE.MeshStandardMaterial({color:0x8a6a3a,roughness:0.85}));
-  crate.position.set(W(CRATE.x),0.35,W(CRATE.z));
-  crate.castShadow=true;scene.add(crate);
-  solid.add(key(CRATE.x,CRATE.z));
-  addInteract(CRATE.x,CRATE.z,2.2,'Осмотреть ящик',()=>takeCrate(),crate,
-    'Ящик с товаром','Пометка на крышке: «Д. Бочкарь, поставка №7».');
-  S.crateMesh=crate;
+  if(!S.hasCrate){
+    const crate=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.7,0.95),
+      new THREE.MeshStandardMaterial({color:0x8a6a3a,roughness:0.85}));
+    crate.position.set(W(CRATE.x),0.35,W(CRATE.z));
+    crate.castShadow=true;worldGroup.add(crate);
+    solid.add(key(CRATE.x,CRATE.z));
+    addInteract(CRATE.x,CRATE.z,2.2,'Осмотреть ящик',()=>takeCrate(),crate,
+      'Ящик с товаром','Пометка на крышке: «Д. Бочкарь, поставка №7».');
+    S.crateMesh=crate;
+  }
+  /* v0.8: вход в крипту на северо-востоке */
+  const stairs=new THREE.Group();
+  const stM=new THREE.MeshStandardMaterial({color:0x6a6a60,roughness:1});
+  for(let i=0;i<4;i++){
+    const s=new THREE.Mesh(new THREE.BoxGeometry(1.9-i*0.34,0.18,0.72),stM);
+    s.position.set(0,0.09+i*0.18,-i*0.56);s.castShadow=true;s.receiveShadow=true;
+    stairs.add(s);
+  }
+  const lintel=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.32,0.8),stM);
+  lintel.position.set(0,1.05,-2.05);lintel.castShadow=true;
+  stairs.add(lintel);
+  stairs.position.set(W(26),0,W(3));
+  worldGroup.add(stairs);
+  addRock(25,1);addRock(26,6);
+  glows.attach('cryptin',W(26),W(3),1.7,0x5fae7f);
+  fx.addEmber('cryptin',W(26),W(3),{rate:3,color:0x7fd0a0,up:0.9,spread:0.5,size:0.09,life:1.2});
+  addInteract(26,3,2.6,'Вход в крипту',()=>enterCrypt(),stairs,
+    'Вход в крипту','Древние ступени под курганом. Изнутри тянет холодом и прахом.');
+}
+function enterCrypt(){
+  if(QUESTS.main.state!=='done'){
+    log('Проход в курган завален и охраняется лагерем Костей. Сначала разгромите лагерь.','g-sys');
+    setHint('Крипта откроется после разгрома лагеря гоблинов.');
+    return;
+  }
+  void switchMap('crypt');
+}
+function buildCryptScenery(){/* v0.8: подземелье босса */
+  const pilM=new THREE.MeshStandardMaterial({color:0x555560,roughness:1});
+  for(const [x,z] of CRYPT.PILLARS){
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,3.2,8),pilM);
+    p.position.set(W(x),1.6,W(z));p.castShadow=true;p.receiveShadow=true;
+    worldGroup.add(p);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.28,1.15),pilM);
+    cap.position.set(W(x),3.3,W(z));cap.castShadow=true;
+    worldGroup.add(cap);
+  }
+  const sarM=new THREE.MeshStandardMaterial({color:0x4a4a56,roughness:0.9});
+  for(const [x,z] of CRYPT.SARCS){
+    const s=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.8,2.0),sarM);
+    s.position.set(W(x),0.4,W(z));s.castShadow=true;s.receiveShadow=true;
+    worldGroup.add(s);
+    const lid=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.16,2.1),
+      new THREE.MeshStandardMaterial({color:0x5a5a66,roughness:0.85}));
+    lid.position.set(W(x),0.88,W(z));lid.castShadow=true;
+    worldGroup.add(lid);
+  }
+  CRYPT.BRAZIERS.forEach(([x,z],i)=>{
+    const g=new THREE.Group();
+    const legM=new THREE.MeshStandardMaterial({color:0x3a3a30,roughness:0.8,metalness:0.4});
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.22,0.4,9),legM);
+    bowl.position.y=0.85;bowl.castShadow=true;
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.12,0.85,6),legM);
+    leg.position.y=0.42;
+    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.26,0.75,7),
+      new THREE.MeshBasicMaterial({color:0x6fe8a0,transparent:true,opacity:0.85}));
+    fl.position.y=1.42;
+    const lt=new THREE.PointLight(0x66e0a0,19,15,2);
+    lt.position.y=1.6;
+    g.add(bowl,leg,fl,lt);
+    g.position.set(W(x),0,W(z));
+    worldGroup.add(g);
+    glows.attach('braz'+i,W(x),W(z),1.5,0x5fae7f);
+    fx.addEmber('braz'+i,W(x),W(z),{rate:6,color:0x7fd0a0,up:1.4,spread:0.3,size:0.1,life:1.1});
+  });
+  const th=CRYPT.THRONE;
+  const throne=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.35,1.1),sarM);
+  throne.position.set(W(th[0]),0.67,W(th[1]));throne.castShadow=true;throne.receiveShadow=true;
+  worldGroup.add(throne);
+  const thBack=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.6,0.28),sarM);
+  thBack.position.set(W(th[0]),1.9,W(th[1])-0.55);thBack.castShadow=true;
+  worldGroup.add(thBack);
+  glows.attach('throne',W(th[0]),W(th[1])+0.8,1.2,0x4a8a6a);
+  /* сундук босса */
+  const ch=CRYPT.CHEST;
+  const chest=new THREE.Group();
+  const cM=new THREE.MeshStandardMaterial({color:0x6a4a26,roughness:0.75});
+  const cb=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.5,0.6),cM);
+  cb.position.y=0.25;cb.castShadow=true;
+  const cl=new THREE.Mesh(new THREE.BoxGeometry(0.99,0.2,0.64),
+    new THREE.MeshStandardMaterial({color:0x7a5a30,roughness:0.7,metalness:0.25}));
+  cl.position.y=0.56;
+  const band=new THREE.Mesh(new THREE.BoxGeometry(0.99,0.54,0.12),
+    new THREE.MeshStandardMaterial({color:0xb8a05a,roughness:0.4,metalness:0.7}));
+  band.position.y=0.26;
+  chest.add(cb,cl,band);
+  chest.position.set(W(ch[0]),0,W(ch[1]));
+  worldGroup.add(chest);
+  addInteract(ch[0],ch[1],2.4,'Открыть сундук Костепёра',()=>openChest(chest),chest,
+    'Сундук Костепёра','Запечатан могильной силой. Печать держится, пока некромант «жив».');
+  /* лестница наверх */
+  const ex=CRYPT.EXIT;
+  const out=new THREE.Group();
+  for(let i=0;i<3;i++){
+    const s=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.16,0.6),pilM);
+    s.position.set(0,0.08+i*0.16,i*0.5);s.receiveShadow=true;s.castShadow=true;
+    out.add(s);
+  }
+  out.position.set(W(ex[0]),0,W(ex[1]));
+  worldGroup.add(out);
+  addInteract(ex[0],ex[1],2.2,'Подняться на тракт',()=>{void switchMap('forest');},out,
+    'Лестница на тракт','Слабый серый свет и шум ветра — наверху дневной тракт.');
+  for(const [x,z] of CRYPT.URNS)addBarrel(x,z,0x4a4238);
+}
+function openChest(chest){
+  if(S.chestLooted)return;
+  if(units.some(u=>u.cryptBoss&&u.alive)){
+    setHint('Печать держится, пока Костепёр «жив».');
+    log('Сундук не поддаётся: могильная печать питается волей некроманта.','g-sys');
+    return;
+  }
+  S.chestLooted=true;
+  const g=100+d(100);
+  gainGold(g);
+  for(const h of aliveHeroes())h.potions++;
+  const f=aliveHeroes().find(h=>h.cls==='fighter')||aliveHeroes()[0];
+  if(f){f.ac+=1;log('Перстень Костепёра надет: КД '+f.short+' теперь '+f.ac+'.','g-sys');}
+  log('В сундуке: '+g+' золота, зелье каждому и перстень Костепёра (+1 КД)!','g-heal');
+  fx.burstAtMesh({mesh:chest},{count:34,color:0xffd54f,speed:3.2,size:0.13,life:1.0,gravity:-1.2});
+  glows.flashAtMesh({mesh:chest},0xffd54f,1.5);
+  sfx.gold();
+  refreshParty();refreshTracker();
+}
+/* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
+function placeHeroes(list){
+  const hs=units.filter(u=>u.side==='hero');
+  hs.forEach((h,i)=>{
+    const p=list[i%list.length];
+    h.x=p[0];h.z=p[1];
+    h.mesh.position.set(W(p[0]),0,W(p[1]));
+    h.mesh.rotation.set(0,0,0);
+  });
+}
+async function switchMap(id){
+  if(busy||mapId===id||phase==='transition')return;
+  busyOn();phase='transition';
+  cancelTargeting();setHint('');
+  sfx.portal();
+  const f=$('#fade');
+  f.style.opacity=1;
+  await sleep(620);
+  for(const u of units.filter(u=>u.side!=='hero'))removeUnit(u);
+  for(const b of barrels)if(b.mesh)b.mesh.removeFromParent();
+  barrels.length=0;
+  for(const k of [...fires.keys()])removeFire(k);
+  fx.clearEmbers();
+  glows.clear();
+  interactables.length=0;
+  clearGroup(worldGroup);
+  groundMesh=null;fireLight=null;flameMesh=null;
+  combatOn=false;order=[];turnIdx=-1;current=null;
+  $('#actionbar').style.display='none';
+  refreshBossBar();
+  mapId=id;
+  if(id==='crypt'){
+    seedCrypt();applyAtmosphere('crypt');
+    buildWorld();buildCryptScenery();spawnEnemies();
+    placeHeroes(CRYPT.ENTER);
+    controls.target.set(1,0,8);
+    if(QUESTS.crypt.state==='hidden')questStart('crypt');
+    questObj('crypt','enter');
+    const nc=units.find(u=>u.cryptBoss);
+    if(nc)void upgradeUnitRig(nc,{tint:0x4a7a5f,tintStrength:0.5,scale:1.14,yaw:Math.PI});
+    log('Крипта Костепёра. Зелёный свет жаровен, холод и стрёкот костей в темноте.','g-sys');
+  }else{
+    seedForest();applyAtmosphere('forest');
+    buildWorld();buildForestScenery();spawnEnemies();
+    placeHeroes(CRYPT.ENTER);
+    controls.target.set(1,0,12);
+    log('Вы поднимаетесь на тракт. Ветер и пение птиц — мертвецы больше не тревожат дорогу.','g-sys');
+  }
+  initOverlays();
+  phase='explore';
+  $('#round').textContent=MAP_NAME[mapId];
+  f.style.opacity=0;
+  openExploreUI();
+  refreshTracker();refreshParty();refreshBossBar();
+  busyOff();
 }
 const BOLT={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
 
@@ -459,6 +731,7 @@ function bigBanner(text){
 function initOverlays(){
   const ov=$('#ov');
   for(const u of units){
+    if(u._el)continue;/* v0.8: герои переживают смену карт */
     const el=document.createElement('div');
     el.className='uhp '+u.side;
     el.innerHTML='<div class="nm">'+u.name+'</div><div class="ubar"><i></i></div><div class="uic"></div>';
@@ -598,7 +871,7 @@ function igniteTile(x,z,turns){
   m2.rotation.x=-Math.PI/2;m2.position.y=0.09;m2.scale.setScalar(0.55);
   g.add(m1,m2);
   g.position.set(W(x),0,W(z));
-  scene.add(g);
+  worldGroup.add(g);
   fires.set(k,{x,z,turns,g,m1,m2});
   /* v0.7: угли над плитой + хало пламени */
   fx.addEmber(k,W(x),W(z),{rate:5,color:0xff9030,up:1.3,spread:0.55,size:0.09,life:1.0});
@@ -607,7 +880,7 @@ function igniteTile(x,z,turns){
 function removeFire(k){
   const f=fires.get(k);
   if(!f)return;
-  scene.remove(f.g);fires.delete(k);
+  f.g.removeFromParent();fires.delete(k);/* v0.8: плита живёт в worldGroup */
   fx.removeEmber(k);glows.detach(k);
 }
 function tickFires(){
@@ -652,6 +925,7 @@ function avgDamage(u,w){
 }
 function addStatus(u,type,turns){
   if(!u||!u.alive||u.isBarrel)return;
+  if(type==='fear'&&u.fearImmune){log(u.name+' не ведает страха!','g-enemy');return;}/* v0.8 */
   const ex=u.statuses.find(s=>s.type===type);
   if(ex)ex.turns=Math.max(ex.turns,turns);
   else u.statuses.push({type,turns});
@@ -680,10 +954,10 @@ async function doAttack(att,def,w,opts){
   }else{
     const n=w.dice[0]*(crit?2:1);
     const dmg=roll(n,w.dice[1])+mod(att[w.abil]);
-    ftextAbove(def,(crit?'КРИТ! −':'−')+dmg,crit?'#ffd54f':(w.fire?'#ff8a50':'#ffffff'));
+    ftextAbove(def,(crit?'КРИТ! −':'−')+dmg,crit?'#ffd54f':(w.fire?'#ff8a50':(w.necro?'#9fe8b8':'#ffffff')));
     log(att.name+': '+w.name+' по «'+def.name+'» — '+(crit?'КРИТ! ':'')+total+' против КД '+def.ac+', урон '+dmg+'.',cls);
     /* v0.7: искры попадания, звук удара, слоумо-крит */
-    fx.burstAtMesh(def,w.fire?{count:16,color:0xff8a50,speed:3.4,size:0.13,life:0.5}:{count:12,color:0xffe8b0,speed:2.8,size:0.1,life:0.4});
+    fx.burstAtMesh(def,w.fire?{count:16,color:0xff8a50,speed:3.4,size:0.13,life:0.5}:(w.necro?{count:16,color:0x9fe8b8,speed:2.6,size:0.12,life:0.6}:{count:12,color:0xffe8b0,speed:2.8,size:0.1,life:0.4}));
     sfx.impact(w);
     if(crit){
       sfx.crit();slowmo.trigger(0.55,0.22);
@@ -699,12 +973,14 @@ async function doAttack(att,def,w,opts){
 function damageUnit(t,dmg,src){
   if(!t||!t.alive)return;
   t.hp-=dmg;
+  refreshBossBar();/* v0.8: боссбар живёт в реальном времени */
   if(t.hp<=0)die(t,src);
 }
 function healUnit(u,amt,why){
   if(!u.alive)return;
   const before=u.hp;
   u.hp=Math.min(u.maxhp,u.hp+amt);
+  refreshBossBar();/* v0.8 */
   ftextAbove(u,'+'+(u.hp-before),'#8fd36a');
   sfx.heal();
   fx.burstAtMesh(u,{count:18,color:0x8fd36a,speed:1.5,size:0.11,life:0.9,gravity:-1.1});
@@ -725,7 +1001,13 @@ function die(t,src){
   refreshIcons(t);refreshInit();refreshParty();
   if(t.side==='goblin'&&t.xp)awardXP(t.xp);
   if(t.side==='goblin'){const g=3+d(6);gainGold(g);log('С поверженного собрано '+g+' золота.','g-sys');}
-  if(t.isBoss){questObj('main','boss');questDone('main');}
+  if(t.mainBoss){questObj('main','boss');questDone('main');}/* v0.8: Грат — босс основного квеста */
+  if(t.cryptBoss){
+    questObj('crypt','boss');questDone('crypt');
+    fx.burstAtMesh(t,{count:44,color:0xcfe8d8,speed:3.6,size:0.15,life:1.1,gravity:0.6});
+    sfx.bones();
+    log('Могильная печать на сундуке у трона рассыпается!','g-sys');
+  }
   checkEnd();
 }
 
@@ -765,7 +1047,7 @@ function explodeBarrel(b){
   if(!b.alive)return;
   b.alive=false;
   const m=b.mesh;
-  tween(0.15,k=>{m.scale.setScalar(1+0.6*k);}).then(()=>scene.remove(m));
+  tween(0.15,k=>{m.scale.setScalar(1+0.6*k);}).then(()=>m.removeFromParent());/* v0.8 */
   log('Взрывная бочка детонирует!','g-fire');
   explode(b.x,b.z,{dice:[3,6],radius:2.5});
 }
@@ -837,6 +1119,10 @@ function startCombat(group){
   combatOn=true;
   log('=== БОЙ НАЧИНАЕТСЯ ===','g-sys');
   sfx.stinger('combat');
+  if(S.combatGroup.some(g=>g.cryptBoss)){/* v0.8: аутро босса крипты */
+    bigBanner('ВХОРИЛ КОСТЕПЁР');
+    log('Из тьмы поднимается Вхорил Костепёр — глаза горят могильным огнём.','g-enemy');
+  }
   for(const h of aliveHeroes()){
     h.swUsed=false;h.slots=h.slotsMax;
     if(h.cls==='fighter'&&h.level>=2)h.surge=h.level>=3?2:1;
@@ -924,7 +1210,16 @@ function victorySequence(){
   sfx.stinger('victory');
   fx.burstAtMesh(aliveHeroes()[0]||units[0],{count:36,color:0xffd54f,speed:3.2,size:0.14,life:1.1,gravity:-1.2});
   for(const h of aliveHeroes())healUnit(h,roll(2,6)+2,'перевязка после боя');
+  const summ=units.filter(x=>x.summoned&&x.alive);/* v0.8: призраки рассыпаются */
+  for(const s of summ){
+    log(s.name+' рассыпается прахом без воли хозяина.','g-sys');
+    s.alive=false;
+    fx.burstAtMesh(s,{count:14,color:0xbfc8b8,speed:1.8,size:0.1,life:0.7});
+    const m=s.mesh;
+    tween(0.5,k=>{m.scale.setScalar(Math.max(0.01,1-k));m.rotation.z=1.1*k;}).then(()=>removeUnit(s));
+  }
   openExploreUI();
+  refreshBossBar();
   if(S.combatGroup.some(g=>g.isBoss))setTimeout(()=>showEnd(true),2000);
   else checkTriggers();
 }
@@ -968,13 +1263,74 @@ function showEnd(win){
   const lv=units.find(u=>u.side==='hero');
   if(win){
     const qd=Object.values(QUESTS).filter(q=>q.state==='done').length;
-    $('#endstats').textContent='Заданий выполнено: '+qd+'/3 • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold;
+    const total=Object.keys(QUESTS).length;
+    const fin=qd>=total?' Долгий Дозор будет помнить вас: тракт свободен — и от гоблинов, и от мертвецов!':'';
+    $('#endstats').textContent='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
   }else{
     $('#endstats').textContent='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
   }
 }
 
 /* ================= UTILITY-ИИ ГОБЛИНОВ ================= */
+function freeSpotNear(c,ring){/* v0.8: свободная клетка вокруг точки */
+  for(let r=1;r<=ring;r++)for(let dx=-r;dx<=r;dx++)for(let dz=-r;dz<=r;dz++){
+    if(Math.max(Math.abs(dx),Math.abs(dz))!==r)continue;
+    const x=c.x+dx,z=c.z+dz;
+    if(passable(x,z,null))return{x,z};
+  }
+  return null;
+}
+function joinCombat(u){/* v0.8: подкрепление встаёт в очередь инициативы */
+  u.init=d(20)+mod(u.dex);
+  order.push(u);
+  log(u.name+' вступает в бой (инициатива '+u.init+').','g-enemy');
+  refreshInit();
+}
+function planNecro(u){/* v0.8: ИИ некроманта — шквал, дистанция, фаза призыва */
+  const heroes=aliveHeroes();
+  if(!heroes.length)return null;
+  if(!u.phase2&&u.hp<=u.maxhp*0.5)return{type:'phase2'};
+  if(u.action>0&&heroes.filter(h=>cheb(u,h)<=1).length>=2)return{type:'nova'};
+  if(u.action>0){
+    let best=null;
+    for(const h of heroes)if(cheb(u,h)<=u.weapon.range){
+      const s=evalAttack(u,h)+(h.hp<=h.maxhp*0.4?1.6:0);
+      if(!best||s>best.s)best={s,target:h};
+    }
+    if(best)return{type:'attack',target:best.target};
+  }
+  if(u.keepDist&&u.moveLeft>=1){
+    const close=heroes.some(h=>cheb(u,h)<3);
+    if(close){
+      const nodes=reachNodes(u,true);
+      let best=null;
+      const curD=Math.min(...heroes.map(h=>cheb(u,h)));
+      for(const node of nodes.values()){
+        if(node.g<=0)continue;
+        const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
+        const s=dmin*0.9-node.g*0.12;
+        if(!best||s>best.s)best={s,node};
+      }
+      if(best&&Math.min(...heroes.map(h=>cheb(best.node,h)))>curD)return{type:'move',path:nodePath(best.node)};
+    }
+  }
+  if(u.moveLeft>=1&&u.action>0){
+    const nodes=reachNodes(u,true);
+    let best=null;
+    for(const node of nodes.values()){
+      if(node.g<=0)continue;
+      for(const h of heroes){
+        const dd=cheb(node,h);
+        if(dd>u.weapon.range)continue;
+        const s=evalAttack(u,h)-node.g*0.05+(dd>=4?0.8:0);
+        if(!best||s>best.s)best={s,node};
+      }
+    }
+    if(best)return{type:'move',path:nodePath(best.node)};
+  }
+  if(u.bonus>0&&u.action>0)return{type:'dash'};
+  return null;
+}
 function evalAttack(u,h){
   const w=u.weapon;
   const exp=hitChance(u,h,w)*avgDamage(u,w);
@@ -1067,9 +1423,43 @@ function planGoblin(u){
 async function aiTurn(u){
   await sleep(500);
   let guard=0;
-  while(combatOn&&u.alive&&guard++<5){
-    const plan=planGoblin(u);
+  while(combatOn&&u.alive&&guard++<6){
+    const plan=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
+    if(plan.type==='phase2'){/* v0.8: подъём мёртвых */
+      u.phase2=true;
+      bigBanner('ФАЗА 2: ПОДЪЁМ МЁРТВЫХ');
+      log('Костепёр: «ВСТАНЬТЕ, МОИ ВЕРНЫЕ КОСТИ!»','g-enemy');
+      sfx.bones();
+      fx.burstAtMesh(u,{count:44,color:0x9fe8b8,speed:3.2,size:0.15,life:1.2,gravity:-1.1});
+      glows.flashAtMesh(u,0x9fe8b8,2.6);
+      shake(0.35);
+      for(let i=0;i<2;i++){
+        const spot=freeSpotNear(u,2);
+        if(!spot)break;
+        const sk=makeSkeleton(spot.x,spot.z);
+        sk.summoned=true;
+        joinCombat(sk);
+      }
+      await sleep(700);continue;
+    }
+    if(plan.type==='nova'){/* v0.8: костяной шквал */
+      u.action--;
+      log('КОСТЯНОЙ ШКВАЛ! Костепёр выплёскивает могильную силу вокруг себя!','g-enemy');
+      sfx.nova();
+      shake(0.4);
+      const cx=W(u.x),cz=W(u.z);
+      fx.burst(cx,0.7,cz,{count:40,color:0x9fe8b8,speed:4.6,life:0.8,gravity:1.6,spread:0.8});
+      fx.burst(cx,0.4,cz,{count:18,color:0x6a8a9f,speed:3.2,life:0.9,gravity:1.2,spread:0.6});
+      glows.flash(cx,cz,3.2,0x7fd0a0);
+      for(const h of aliveHeroes())if(cheb(u,h)<=1){
+        const dmg=roll(2,6);
+        ftextAbove(h,'−'+dmg,'#b08fd3');
+        log('Костяной шквал бьёт '+h.name+': '+dmg+' некротического урона.','g-enemy');
+        damageUnit(h,dmg,u);
+      }
+      await sleep(500);continue;
+    }
     if(plan.type==='potion'){
       u.bonus--;u.potions--;
       healUnit(u,roll(2,4)+2,'зелье');
@@ -1248,11 +1638,15 @@ const QUESTS={
   crate:{name:'Похищенный товар',state:'hidden',
     desc:'Гоблины утащили у Дамрока ящик с товаром. Он где-то в их лагере.',
     objs:[{k:'find',t:'Найти ящик в лагере',done:false},{k:'return',t:'Вернуть ящик Дамроку',done:false}]},
+  crypt:{name:'Сердце крипты',state:'hidden',/* v0.8 */
+    desc:'Мертвецы тракта — не гоблинская работа. Под курганом на северо-востоке открылась крипта, где сидит некромант Вхорил Костепёр и дёргает за ниточки своих костяных кукол.',
+    objs:[{k:'enter',t:'Спуститься в крипту',done:false},{k:'boss',t:'Уничтожить Костепёра',done:false}]},
 };
 const QUEST_REWARD={
   main:'300 XP, 150 зол.',
   prisoner:'150 XP, 100 зол., кулон красноречия',
   crate:'150 XP, 100 зол., вечная скидка',
+  crypt:'300 XP, 150 зол., перстень Костепёра',
 };
 function questActive(id){return QUESTS[id].state==='active';}
 function questStart(id){
@@ -1280,6 +1674,7 @@ function questDone(id){
     if(m){m.cha+=1;log('Илва дарит кулон красноречия: ХАР '+m.short+' +1.','g-sys');}
   }
   if(id==='crate'){gainGold(100);awardXP(150);S.discount=true;}
+  if(id==='crypt'){gainGold(150);awardXP(300);log('Крипта очистилась — мертвецы тракта больше не поднимутся.','g-heal');}
   bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
   refreshTracker();refreshParty();
@@ -1410,6 +1805,7 @@ const DLGS={
         {t:'«Что случилось?»',show:()=>QUESTS.crate.state==='hidden',fn:()=>gotoNode('story')},
         {t:'«Вот ваш ящик с товаром.»',show:()=>S.hasCrate&&QUESTS.crate.state==='active',fn:()=>gotoNode('cratedone')},
         {t:'[Убеждение СЛ 12] «Героям положена скидка, сам знаешь.»',req:{skill:'Убеждение',dc:12},ok:'discok',fail:'discfail'},
+        {t:'«Что известно о крипте в кургане?»',show:()=>QUESTS.main.state==='done'&&QUESTS.crypt.state==='hidden',fn:()=>gotoNode('cryptinfo')},
         {t:'«До встречи.»',end:true},
       ]};
     if(id==='story')return{name:'Дамрок Бочкарь',
@@ -1421,6 +1817,9 @@ const DLGS={
       opts:[{t:'«Договорились.»',end:true,fn:()=>{S.discount=true;log('Дамрок даёт отряду скидку 20%.','g-sys');refreshTracker();}}]};
     if(id==='discfail')return{name:'Дамрок Бочкарь',text:'Думешь, красные глазки меня тронули? Плати как все, герой.',
       opts:[{t:'«Жадина.»',end:true}]};
+    if(id==='cryptinfo')return{name:'Дамрок Бочкарь',/* v0.8 */
+      text:'Крипту? Слушай сюда: как Грат пал — вход вскрылся, северо-восток, ступени под корнями кургана. Мертвецы на тракте — не гоблинская работа, это Костепёр ниточки дёргает. Возьмите огня, света и... не умирайте, а то скидку кому оставлять буду?',
+      opts:[{t:'«Зачистим. Держи лавку открытой.»',fn:()=>{questStart('crypt');gotoNode('start');}}]};
   },
   ilva(id){
     if(id==='start')return{name:'Илва (в клетке)',
@@ -1433,6 +1832,36 @@ const DLGS={
     if(id==='bossinfo')return{name:'Илва (в клетке)',
       text:'Грат Костолом. Двухметровый отбойник с тесаком. Но есть слабость: однажды он здорово обгорел в пожаре и ПАНИЧЕСКИ боится огня. Шепни ему об этом — и увидишь, как дрогнут его колени.',
       opts:[{t:'«Запомним. Держись, Илва.»',end:true,fn:()=>{if(!S.knowsBoss){S.knowsBoss=true;log('Получены сведения о слабости вожака!','g-sys');}}}]};
+  },
+  necro(id){/* v0.8: босс крипты */
+    if(id==='start')return{name:'Вхорил Костепёр',
+      text:'Ах-х... тёплые. ТАКИЕ тёплые гости. Грат был грубым инструментом, а я работаю тонко: одна ниточка за лопатку — и ты уже мой. Останьтесь. НАВСЕГДА.',
+      opts:[
+        {t:'[Запугивание СЛ 16] «Я сотру твой жезл в пыль, костяной кукловод.»',req:{skill:'Запугивание',dc:16},ok:'brave',fail:'fight'},
+        {t:'«Пепел тебе вместо философского камня!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти к лестнице.»',end:true,fn:()=>{log('Костепёр провожает вас смехом, похожим на стрёкот костей.','g-enemy');}},
+      ]};
+    if(id==='brave')return{name:'Вхорил Костепёр',
+      text:'Пыль?.. ПЫЛЬ?! Ну что ж... пусть будет по-вашему. КОСТИ! ПОДНИМАЙТЕСЬ И УБЕЙТЕ ИХ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Вхорил Костепёр',
+      text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+  },
+  necro(id){/* v0.8: босс крипты */
+    if(id==='start')return{name:'Вхорил Костепёр',
+      text:'Ах-х... тёплые. ТАКИЕ тёплые гости. Грат был грубым инструментом, а я работаю тонко: одна ниточка за лопатку — и ты уже мой. Останьтесь. НАВСЕГДА.',
+      opts:[
+        {t:'[Запугивание СЛ 16] «Я сотру твой жезл в пыль, костяной кукловод.»',req:{skill:'Запугивание',dc:16},ok:'brave',fail:'fight'},
+        {t:'«Пепел тебе вместо философского камня!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти к лестнице.»',end:true,fn:()=>{log('Костепёр провожает вас смехом, похожим на стрёкот костей.','g-enemy');}},
+      ]};
+    if(id==='brave')return{name:'Вхорил Костепёр',
+      text:'Пыль?.. ПЫЛЬ?! Ну что ж... пусть будет по-вашему. КОСТИ! ПОДНИМАЙТЕСЬ И УБЕЙТЕ ИХ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Вхорил Костепёр',
+      text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
   },
 };
 function bossFear(){
@@ -1482,7 +1911,7 @@ async function freeIlva(){
   busyOn();
   log('Вы выламываете засов — клетка открыта!','g-sys');
   solid.delete(key(CAGE.x,CAGE.z));
-  if(S.cageMesh){scene.remove(S.cageMesh);S.cageMesh=null;}
+  if(S.cageMesh){S.cageMesh.removeFromParent();S.cageMesh=null;}
   const it=interactables.find(i=>i.mesh===S.ilvaMesh);
   if(it)interactables.splice(interactables.indexOf(it),1);
   if(QUESTS.prisoner.state==='hidden')questStart('prisoner');
@@ -1491,7 +1920,7 @@ async function freeIlva(){
     const a=S.ilvaMesh.position.clone(),b=new THREE.Vector3(W(st.x),0,W(st.z));
     await tween(0.11,k=>S.ilvaMesh.position.lerpVectors(a,b,k));
   }
-  scene.remove(S.ilvaMesh);S.ilvaMesh=null;
+  S.ilvaMesh.removeFromParent();S.ilvaMesh=null;/* v0.8 */
   busyOff();
   log('Илва: «Долг дозору! Загляните к Дамроку — и берегите кулон!»','g-sys');
   questObj('prisoner','free');
@@ -1502,7 +1931,7 @@ async function freeIlva(){
 function takeCrate(){
   if(S.hasCrate)return;
   S.hasCrate=true;
-  scene.remove(S.crateMesh);S.crateMesh=null;
+  S.crateMesh.removeFromParent();S.crateMesh=null;/* v0.8 */
   const it=interactables.find(i=>i.label==='Осмотреть ящик');
   if(it)interactables.splice(interactables.indexOf(it),1);
   if(QUESTS.crate.state==='hidden')questStart('crate');
@@ -1545,10 +1974,13 @@ function checkTriggers(){
   if(!S.campDone&&S.campGroup.some(g=>g.alive)){
     if(hs.some(h=>S.campGroup.some(g=>cheb(h,g)<=7))){openDlg('boss');return;}
   }
-  if(!S.cageSeen&&hs.some(h=>cheb(h,{x:CAGE.x,z:CAGE.z})<=6)){
+  if(!S.cageSeen&&!S.ilvaFreed&&hs.some(h=>cheb(h,{x:CAGE.x,z:CAGE.z})<=6)){
     S.cageSeen=true;
     questStart('prisoner');
     log('В клетке у тропы кто-то шевелится…','g-sys');
+  }
+  if(mapId==='crypt'&&S.cryptGroup.some(g=>g.alive&&g.cryptBoss)){/* v0.8: триггер босса крипты */
+    if(hs.some(h=>S.cryptGroup.some(g=>cheb(h,g)<=7))){openDlg('necro');return;}
   }
   refreshHintExplore();
 }
@@ -1616,7 +2048,7 @@ $('#contBtn').onclick=()=>{$('#end').style.display='none';};
 function openExploreUI(){
   $('#actionbar').style.display='none';
   $('#turnb').textContent='';
-  $('#round').textContent='Исследование тракта';
+  $('#round').textContent=MAP_NAME[mapId];/* v0.8 */
   refreshInit();refreshTracker();
   refreshHintExplore();
 }
@@ -1670,7 +2102,18 @@ function refreshParty(){
     el.appendChild(card);
   }
 }
+/* v0.8: боссбар сверху экрана */
+function refreshBossBar(){
+  const el=$('#bossbar');
+  if(!el)return;
+  const b=combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
+  if(!b){el.style.display='none';return;}
+  el.style.display='block';
+  $('#bossname').textContent=b.name+' — '+b.clsName;
+  $('#bossfill').style.width=Math.max(0,b.hp/b.maxhp*100)+'%';
+}
 function refreshInit(){
+  refreshBossBar();
   const el=$('#initRow');
   if(!combatOn){el.innerHTML='';return;}
   el.innerHTML=order.map(u=>
@@ -1784,7 +2227,7 @@ function showTipFor(ent,e){
     html='<b>'+ent.talkName+'</b><br>'+ent.talkDesc;
     if(phase==='explore')html+='<br><span class="tc">E или клик — взаимодействовать</span>';
   }else if(ent.isBarrel){
-    html='<b>Взрывная бочка</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
+    html='<b>'+(ent.name||'Взрывная бочка')+'</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
   }else{
     html='<b>'+ent.name+'</b><br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
     if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
@@ -1891,9 +2334,13 @@ let disposed=false;
     console.warn('[bg3] bloom disabled:',e);postFX=null;
   }
   try{
+  /* v0.8: карта леса по умолчанию — сетка, мир, герои, враги, декорации */
+  seedForest();
+  applyAtmosphere('forest');
   buildWorld();
-  buildUnits();
-  buildScenery();
+  buildHeroes();
+  spawnEnemies();
+  buildForestScenery();
   initMarkers();
   initOverlays();
   bindInput();
@@ -1921,16 +2368,18 @@ let disposed=false;
     sb.addEventListener('click',onSnd);
     disposers.push(()=>sb.removeEventListener('click',onSnd));
   }
-  log('BG3 Web-прототип v0.7 «Слово и сталь»: звук, партиклы, слоумо, анимации, bloom.','g-sys');
+  log('BG3 Web-прототип v0.8 «Крипта Костепёра»: вторая карта, босс-некромант, фазы боя, добыча.','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал заданий • ПКМ/Esc — отмена.','g-sys');
-  log('Лагерь гоблинов — на севере. Взрывайте бочки, поджигайте траву — или договоритесь!','g-sys');
+  log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
   renderer.setAnimationLoop(loop);
   console.log('[bg3] boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
 })();
+/* v0.8: отладочный хук (E2E-проверки в консоли браузера) */
+window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone};
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);

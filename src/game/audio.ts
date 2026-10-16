@@ -189,6 +189,26 @@ class Bg3Audio {
     this.tone({ type: 'sawtooth', f0: 120, f1: 420, dur: 0.35, gain: 0.07 });
   }
 
+  /** Переход между картами: низкий свип-портал (v0.8). */
+  portal() {
+    this.tone({ type: 'sine', f0: 420, f1: 62, dur: 0.9, gain: 0.16 });
+    this.noise({ dur: 0.9, f0: 700, f1: 90, gain: 0.13, q: 0.6, type: 'lowpass' });
+    this.tone({ type: 'sine', f0: 58, f1: 170, dur: 0.7, gain: 0.1, delay: 0.4 });
+  }
+
+  /** Стрёкот костей / некромантия (v0.8). */
+  bones() {
+    this.noise({ dur: 0.28, f0: 2300, f1: 800, gain: 0.11, q: 3 });
+    this.noise({ dur: 0.2, f0: 1700, f1: 600, gain: 0.09, q: 3, delay: 0.15 });
+    this.tone({ type: 'sawtooth', f0: 72, f1: 44, dur: 0.55, gain: 0.12, attack: 0.05 });
+  }
+
+  /** Костяной шквал — AoE босса (v0.8). */
+  nova() {
+    this.noise({ dur: 0.45, f0: 1000, f1: 180, gain: 0.2, q: 0.9 });
+    this.tone({ type: 'square', f0: 170, f1: 55, dur: 0.3, gain: 0.12 });
+  }
+
   gold() {
     this.tone({ type: 'sine', f0: 1320, dur: 0.09, gain: 0.1 });
     this.tone({ type: 'sine', f0: 1760, dur: 0.14, gain: 0.1, delay: 0.06 });

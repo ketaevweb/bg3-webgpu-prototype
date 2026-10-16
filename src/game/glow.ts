@@ -71,6 +71,20 @@ export class GlowFX {
     this.attached.delete(id);
   }
 
+  /** Снять все постоянные хала (смена карты, v0.8). */
+  clear() {
+    for (const a of this.attached.values()) {
+      this.scene.remove(a.sprite);
+      (a.sprite.material as THREE.Material).dispose();
+    }
+    this.attached.clear();
+    if (this.campfireGlow) {
+      this.scene.remove(this.campfireGlow.sprite);
+      (this.campfireGlow.sprite.material as THREE.Material).dispose();
+      this.campfireGlow = null;
+    }
+  }
+
   /** Одноразовая вспышка в точке (взрыв). */
   flash(x: number, z: number, scale: number, color: number) {
     const s = this.makeSprite(color, 0.85);
