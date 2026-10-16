@@ -1,5 +1,29 @@
-# build/check artifacts
-.check/
-parts/
+# --- зависимости и сборка ---
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# --- среда песочницы / инфраструктура ---
+.zscripts/
+.caddy/
+Caddyfile
+dev.log
+server.log
+db/
+upload/
+tool-results/
+skills/
+examples/
+mini-services/
+tests/
+.git-sandbox-backup/
+worklog.md
+next-env.d.ts
+
+# --- локальные артефакты разработки ---
+download/
+scripts/
 *.log
 .DS_Store
+.env
