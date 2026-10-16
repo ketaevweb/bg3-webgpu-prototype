@@ -1,0 +1,5 @@
+# build/check artifacts
+.check/
+parts/
+*.log
+.DS_Store
