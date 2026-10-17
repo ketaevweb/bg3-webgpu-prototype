@@ -2,6 +2,7 @@
 // v0.8: + #bossbar, #fade
 // v1.1: + #gfxBtn/#saveBtn, панели #gfx и #saves (3 слота + JSON export/import),
 //         кнопка «Загрузить игру» на экране конца (#loadBtn2)
+// v1.2: разметка без изменений — спутники (Илва/Кая) живут в #party как обычные карточки героев
 export const HUD_HTML = `<div id="scene"></div>
 <div id="ov"></div>
 <div id="topbar" class="panel">

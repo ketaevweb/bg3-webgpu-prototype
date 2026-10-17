@@ -32,11 +32,13 @@ const STATUS={
   poison:{name:'Отравление',tag:'О',css:'#8fd36a'},
   bless:{name:'Благословение',tag:'Б',css:'#ffd54f'},
   fear:{name:'Страх',tag:'С',css:'#b08fd3'},
+  dodge:{name:'Уклонение',tag:'У',css:'#9fc4e8'},/* v1.2 */
+  faith:{name:'Щит веры',tag:'Щ',css:'#8fb8ff'},/* v1.2 */
 };
 const S={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
   cageMesh:null,ilvaMesh:null,crateMesh:null,
-  cryptGroup:[],chestLooted:false,necroSlain:false,barrelsUsed:new Set()};/* v0.8+v1.1 */
+  cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set()};/* v0.8+v1.1+v1.2 */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    Весь игровой стейт живёт в замыкании bootGame(), чтобы React мог
@@ -85,7 +87,7 @@ controls.target.set(1,0,12);
    forest — тракт и лагерь Костей, crypt — подземелье босса. */
 const solid=new Set(), grass=new Set();
 let TREES=null,ROCKS=null,TENTS=null,FIREPIT=null,BARREL_POS=null;
-const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25};
+const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25}, KAYA_SPOT=[15,22];/* v1.2: алтарь Кая */
 let mapId='forest';
 const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра'};
 const CRYPT={
@@ -93,7 +95,7 @@ const CRYPT={
   SARCS:[[4,13],[23,13],[8,2],[19,2]],
   BRAZIERS:[[9,15],[18,15]],
   URNS:[[11,10],[17,10]],
-  THRONE:[14,3],CHEST:[14,1],EXIT:[14,26],ENTER:[[13,25],[14,25]],
+  THRONE:[14,3],CHEST:[14,1],EXIT:[14,26],ENTER:[[13,25],[14,25],[12,24],[15,24]],/* v1.2: 4 места отряда */
 };
 function seedForest(){
   TREES=[[3,9],[9,3],[5,20],[3,15],[10,18],[24,20],[25,12],[20,22],[6,6],[26,16],[17,9],[11,11],[8,22],[22,14],[4,12],[15,4]];
@@ -321,7 +323,7 @@ function buildFigure(cfg){
 function makeUnit(cfg){
   const u=Object.assign({
     id:++uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
-    slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,
+    slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,poisonBlade:0,dawnUsed:false,/* v1.2 */
   },cfg);
   u.mesh=buildFigure(cfg);
   u.mesh.position.set(W(cfg.x),0,W(cfg.z));
@@ -410,7 +412,78 @@ function buildHeroes(){
       'Благословение — бонус + ячейка, +1d4 к атакам союзника (3 хода)',
       'Со 2 уровня: +5 HP, ИНТ +1, 4 ячейки; с 3 уровня — 5 ячеек']});
 }
-function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса */
+/* ================= v1.2: СПУТНИКИ — ИЛВА (плут) и КАЯ (жрица) ================= */
+function makeIlva(x,z){
+  return makeUnit({
+    name:'Илва Острый Глаз',short:'Илва',cls:'rogue',clsName:'Плут',side:'hero',
+    str:10,dex:16,con:12,int:12,wis:12,cha:14,hp:11,maxhp:11,ac:14,speed:6,
+    weapon:{name:'Короткий лук',dice:[1,6],abil:'dex',range:8},
+    dagger:{name:'Кинжал',dice:[1,4],abil:'dex',melee:true,range:1},
+    armor:'Кожаный доспех',potions:1,x,z,color:0x3f7a6a,
+    features:['Подлый удар — +1d6 урона, если рядом с целью есть союзник (с 3 ур. — 2d6)',
+      'Отравленный клинок — бонус: следующая ближняя атака отравляет цель (2 хода)',
+      'Уклонение — бонус: КД +3 до её следующего хода',
+      'Со 2 уровня: +6 HP, ЛОВ +1'],
+  });
+}
+function makeKaya(x,z){
+  return makeUnit({
+    name:'Кая Заря',short:'Кая',cls:'cleric',clsName:'Жрица',side:'hero',
+    str:13,dex:10,con:14,int:9,wis:16,cha:13,hp:12,maxhp:12,ac:15,speed:5,
+    weapon:{name:'Булава',dice:[1,6],abil:'str',melee:true,range:1},
+    dagger:null,armor:'Чешуйчатый доспех',potions:1,slots:2,slotsMax:2,x,z,color:0xc9b070,
+    features:['Лечение — действие + ячейка: 1d8+МДР',
+      'Щит веры — бонус + ячейка: +2 КД (3 хода)',
+      'Карание света — действие + ячейка: 2d6 излучения, дальность 6 кл.',
+      'Гнев рассвета — 1/бой: 2d6 излучения всем соседям (нежить — вдвойне)',
+      'Со 2 уровня: +6 HP, МДР +1, 3 ячейки; с 3 уровня — 4 ячейки'],
+  });
+}
+const HERO_TINT={fighter:0x5a7fb0,wizard:0x9a6ab8,rogue:0x3f7a6a,cleric:0xc9a84a};
+async function rigHero(u){/* v1.2: GLTF-риг для спутников */
+  try{await upgradeUnitRig(u,{tint:HERO_TINT[u.cls]||0x5a7fb0,tintStrength:0.4,scale:1.0,yaw:Math.PI});}catch(e){}
+}
+function dismissKayaScene(){/* v1.2: убрать алтарь после ухода Кая в отряд */
+  if(S.kayaMesh){S.kayaMesh.removeFromParent();S.kayaMesh=null;}
+  const it=interactables.find(i=>i.label==='Поговорить с Кая');
+  if(it)interactables.splice(interactables.indexOf(it),1);
+  solid.delete(key(KAYA_SPOT[0],KAYA_SPOT[1]));solid.delete(key(KAYA_SPOT[0]+1,KAYA_SPOT[1]));
+  glows.detach('kaya');fx.removeEmber('kaya');
+}
+function joinIlva(x,z){
+  if(units.some(u=>u.cls==='rogue'))return null;
+  const u=makeIlva(x,z);
+  bigBanner('ИЛВА ПРИСОЕДИНИЛАСЬ');
+  log('Илва: «Долг Дозору. Идите за мной — я знаю здесь каждый куст.»','g-heal');
+  fx.burstAtMesh(u,{count:26,color:0x7fd0a0,speed:2.6,size:0.12,life:0.9,gravity:-1});
+  sfx.bless();void rigHero(u);
+  refreshParty();refreshInit();refreshHintExplore();
+  return u;
+}
+function joinKaya(x,z){
+  if(units.some(u=>u.cls==='cleric'))return null;
+  dismissKayaScene();
+  S.kayaJoined=true;/* v1.2: флаг для сейва */
+  const u=makeKaya(x,z);
+  bigBanner('КАЯ ПРИСОЕДИНИЛАСЬ');
+  log('Кая: «Рассвет ярче там, где есть кого защищать. Ведите — я прикрою спины.»','g-heal');
+  fx.burstAtMesh(u,{count:26,color:0xffd54f,speed:2.6,size:0.12,life:0.9,gravity:-1});
+  glows.flashAtMesh(u,0xffd54f,1.4);
+  sfx.bless();void rigHero(u);
+  refreshParty();refreshInit();refreshHintExplore();
+  return u;
+}
+function ensureCompanions(){/* v1.2: восстановление спутников при загрузке сейва по флагам */
+  const lead=units.find(u=>u.side==='hero');
+  if(!lead)return;
+  if(S.ilvaFreed&&!units.some(u=>u.cls==='rogue')){
+    const p=freeSpotNear(lead,3)||{x:lead.x,z:lead.z};joinIlva(p.x,p.z);
+  }
+  if(S.kayaJoined&&!units.some(u=>u.cls==='cleric')){
+    const p=freeSpotNear(lead,3)||{x:lead.x,z:lead.z};joinKaya(p.x,p.z);
+  }
+}
+function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(mapId==='forest'){
     S.patrolGroup=S.patrolDone?[]:[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
@@ -418,12 +491,12 @@ function spawnEnemies(){/* v0.8: враги зависят от карты и п
     const grat=makeGoblin(GOB.chief,21,6);
     grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
     grat.isBoss=true;grat.mainBoss=true;grat.str=14;
-    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4)];
+    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7)];
   }else{
     S.patrolGroup=[];S.campGroup=[];
     if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */
     const necro=makeNecro();
-    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5)];
+    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5),makeSkeleton(14,7)];
   }
 }
 function buildForestScenery(){/* v0.8: было buildScenery + охрана прогресса + вход в крипту */
@@ -482,6 +555,34 @@ function buildForestScenery(){/* v0.8: было buildScenery + охрана пр
     addInteract(CRATE.x,CRATE.z,2.2,'Осмотреть ящик',()=>takeCrate(),crate,
       'Ящик с товаром','Пометка на крышке: «Д. Бочкарь, поставка №7».');
     S.crateMesh=crate;
+  }
+  /* v1.2: придорожный алтарь жрицы Кая */
+  if(!S.kayaJoined){
+    const alt=new THREE.Group();
+    const st=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.5,0.9),
+      new THREE.MeshStandardMaterial({color:0x8a8a80,roughness:1}));
+    st.position.y=0.25;st.castShadow=true;st.receiveShadow=true;
+    const sun=new THREE.Mesh(new THREE.RingGeometry(0.18,0.26,18),
+      new THREE.MeshBasicMaterial({color:0xffd54f,side:THREE.DoubleSide}));
+    sun.position.y=1.05;
+    const cand=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.25,6),
+      new THREE.MeshBasicMaterial({color:0xfff2c0}));
+    cand.position.set(0.28,0.62,0.2);
+    const cl=new THREE.PointLight(0xffd890,7,7,2);cl.position.y=0.8;
+    alt.add(st,sun,cand,cl);
+    alt.position.set(W(KAYA_SPOT[0]),0,W(KAYA_SPOT[1]));
+    worldGroup.add(alt);
+    solid.add(key(KAYA_SPOT[0],KAYA_SPOT[1]));
+    glows.attach('kaya',W(KAYA_SPOT[0]),W(KAYA_SPOT[1]),0.8,0xffd070);
+    fx.addEmber('kaya',W(KAYA_SPOT[0]),W(KAYA_SPOT[1]),{rate:2.4,color:0xffd070,up:0.7,spread:0.18,size:0.07,life:1.0});
+    const kayaFig=buildFigure({color:0xc9b070,side:'npc'});
+    kayaFig.scale.setScalar(0.96);
+    kayaFig.position.set(W(KAYA_SPOT[0]+1),0,W(KAYA_SPOT[1]));
+    worldGroup.add(kayaFig);
+    solid.add(key(KAYA_SPOT[0]+1,KAYA_SPOT[1]));
+    addInteract(KAYA_SPOT[0],KAYA_SPOT[1],2.6,'Поговорить с Кая',()=>openDlg('kaya'),alt,
+      'Кая Заря','Жрица Рассвета. Молится у придорожного алтаря — ищет попутчиков на север.');
+    S.kayaMesh=kayaFig;
   }
   /* v0.8: вход в крипту на северо-востоке */
   const stairs=new THREE.Group();
@@ -673,6 +774,7 @@ async function switchMap(id){
   busyOff();
 }
 const BOLT={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
+const SMITE={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
 
 /* ================= ТВИНЫ / ЭФФЕКТЫ ================= */
 function tween(dur,fn){return new Promise(res=>tweens.push({t:0,dur,fn,res}));}
@@ -928,7 +1030,10 @@ function attackMod(u,w){
 }
 function blessed(u){return u.statuses.some(s=>s.type==='bless')?d(4):0;}
 function hitChance(u,t,w){
-  const need=t.ac-attackMod(u,w);
+  let ac=t.ac;
+  if(t.statuses&&t.statuses.some(s=>s.type==='dodge'))ac+=3;/* v1.2: уклонение Илвы */
+  if(t.statuses&&t.statuses.some(s=>s.type==='faith'))ac+=2;/* v1.2: щит веры Кая */
+  const need=ac-attackMod(u,w);
   return clamp((21-need)/20,0.05,0.95);
 }
 function avgDamage(u,w){
@@ -942,8 +1047,9 @@ function addStatus(u,type,turns){
   else u.statuses.push({type,turns});
   log(u.name+': '+STATUS[type].name+' ('+turns+' ход.).','g-sys');
   /* v0.7: вспышка статуса + звук */
-  fx.burstAtMesh(u,{count:10,color:{burn:0xff9a4d,poison:0x8fd36a,bless:0xffd54f,fear:0xb08fd3}[type]||0xffffff,speed:1.4,size:0.1,life:0.7,gravity:-0.8});
+  fx.burstAtMesh(u,{count:10,color:{burn:0xff9a4d,poison:0x8fd36a,bless:0xffd54f,fear:0xb08fd3,dodge:0x9fc4e8,faith:0x8fb8ff}[type]||0xffffff,speed:1.4,size:0.1,life:0.7,gravity:-0.8});
   if(type==='bless')sfx.bless();else if(type==='poison')sfx.poison();else if(type==='burn')sfx.ignite();
+  else if(type==='faith')sfx.bless();else if(type==='dodge')sfx.ui();/* v1.2 */
   refreshIcons(u);refreshParty();
 }
 async function doAttack(att,def,w,opts){
@@ -964,11 +1070,15 @@ async function doAttack(att,def,w,opts){
     log(att.name+': '+w.name+' по «'+def.name+'» — '+total+' против КД '+def.ac+' — промах!',cls);
   }else{
     const n=w.dice[0]*(crit?2:1);
-    const dmg=roll(n,w.dice[1])+mod(att[w.abil]);
-    ftextAbove(def,(crit?'КРИТ! −':'−')+dmg,crit?'#ffd54f':(w.fire?'#ff8a50':(w.necro?'#9fe8b8':'#ffffff')));
+    let dmg=roll(n,w.dice[1])+mod(att[w.abil]);
+    if(opts.sneakBonus){/* v1.2: подлый удар Илвы */
+      dmg+=opts.sneakBonus;
+      log('Подлый удар добавляет '+opts.sneakBonus+' урона!','g-hero');
+    }
+    ftextAbove(def,(crit?'КРИТ! −':'−')+dmg,crit?'#ffd54f':(w.fire?'#ff8a50':(w.smite?'#ffe08a':(w.necro?'#9fe8b8':'#ffffff'))));
     log(att.name+': '+w.name+' по «'+def.name+'» — '+(crit?'КРИТ! ':'')+total+' против КД '+def.ac+', урон '+dmg+'.',cls);
     /* v0.7: искры попадания, звук удара, слоумо-крит */
-    fx.burstAtMesh(def,w.fire?{count:16,color:0xff8a50,speed:3.4,size:0.13,life:0.5}:(w.necro?{count:16,color:0x9fe8b8,speed:2.6,size:0.12,life:0.6}:{count:12,color:0xffe8b0,speed:2.8,size:0.1,life:0.4}));
+    fx.burstAtMesh(def,w.smite?{count:16,color:0xffe08a,speed:3,size:0.12,life:0.5}:(w.fire?{count:16,color:0xff8a50,speed:3.4,size:0.13,life:0.5}:(w.necro?{count:16,color:0x9fe8b8,speed:2.6,size:0.12,life:0.6}:{count:12,color:0xffe8b0,speed:2.8,size:0.1,life:0.4})));
     sfx.impact(w);
     if(crit){
       sfx.crit();slowmo.trigger(0.55,0.22);
@@ -977,6 +1087,10 @@ async function doAttack(att,def,w,opts){
     }
     damageUnit(def,dmg,att);
     if(w.status&&def.alive)addStatus(def,w.status.type,w.status.turns);
+    if(att.poisonBlade>0&&def.alive&&w.melee){/* v1.2: отравленный клинок */
+      att.poisonBlade--;
+      addStatus(def,'poison',2);
+    }
   }
   if(opts.aoo)refreshInit();
   busyOff();
@@ -1076,6 +1190,24 @@ async function castFireball(h,tx,tz){
   projMesh.visible=false;
   explode(tx,tz,{dice:[3,6],radius:2.5});
 }
+async function radiantNova(h){/* v1.2: гнев рассвета Кая */
+  h.action--;h.dawnUsed=true;
+  log(h.name+' призывает ГНЕВ РАССВЕТА!','g-hero');
+  sfx.nova();
+  shake(0.35);
+  const cx=W(h.x),cz=W(h.z);
+  fx.burst(cx,0.8,cz,{count:42,color:0xffd54f,speed:4.4,life:0.8,gravity:1.4,spread:0.7});
+  fx.burst(cx,0.4,cz,{count:16,color:0xfff2c0,speed:3,life:0.9,gravity:1.1,spread:0.5});
+  glows.flash(cx,cz,3.4,0xffd54f);
+  for(const e of units)if(e.alive&&!e.isBarrel&&e.side!=='hero'&&cheb(h,e)<=1){
+    let dmg=roll(2,6);
+    if(e.cls==='undead'){dmg*=2;log('Святой свет выжигает '+e.name+' насквозь!','g-hero');}
+    ftextAbove(e,'−'+dmg,'#ffe08a');
+    log('Гнев рассвета бьёт '+e.name+': '+dmg+' излучения.','g-hero');
+    damageUnit(e,dmg,h);
+  }
+  refreshUI();showReach(h);
+}
 
 /* ================= ПЕРЕМЕЩЕНИЕ ================= */
 async function animateMove(u,path){
@@ -1138,6 +1270,7 @@ function startCombat(group){
   for(const h of aliveHeroes()){
     h.swUsed=false;h.slots=h.slotsMax;
     if(h.cls==='fighter'&&h.level>=2)h.surge=h.level>=3?2:1;
+    if(h.cls==='cleric')h.dawnUsed=false;/* v1.2 */
   }
   const list=[...aliveHeroes(),...group.filter(g=>g.alive)];
   for(const u of list)u.init=d(20)+mod(u.dex);
@@ -1252,6 +1385,18 @@ function levelUp(h){
       log(h.name+' — УРОВЕНЬ 2! +8 HP, СИЛ +1, открыто «Доп. действие» (1/бой).','g-sys');}
     else{h.surge=2;
       log(h.name+' — УРОВЕНЬ 3! +8 HP, «Доп. действие» теперь 2/бой.','g-sys');}
+  }else if(h.cls==='rogue'){/* v1.2 */
+    h.maxhp+=6;h.hp+=6;
+    if(h.level===2){h.dex+=1;
+      log(h.name+' — УРОВЕНЬ 2! +6 HP, ЛОВ +1.','g-sys');}
+    else{
+      log(h.name+' — УРОВЕНЬ 3! +6 HP, подлый удар усилен до 2d6.','g-sys');}
+  }else if(h.cls==='cleric'){/* v1.2 */
+    h.maxhp+=6;h.hp+=6;
+    if(h.level===2){h.wis+=1;h.slotsMax=3;h.slots=3;
+      log(h.name+' — УРОВЕНЬ 2! +6 HP, МДР +1, ячеек заклинаний теперь 3.','g-sys');}
+    else{h.slotsMax=4;h.slots=4;
+      log(h.name+' — УРОВЕНЬ 3! +6 HP, ячеек заклинаний теперь 4.','g-sys');}
   }else{
     h.maxhp+=5;h.hp+=5;
     if(h.level===2){h.int+=1;h.slotsMax=4;h.slots=4;
@@ -1507,6 +1652,18 @@ const ACTIONS=[
   {label:'Огненный шар',sub:'Действие · ячейка',cls:'wiz',only:h=>h.cls==='wizard',enabled:h=>h.action>0&&h.slots>0,run:h=>enterTarget('fireball')},
   {label:'Благословение',sub:'Бонус · ячейка',cls:'wiz',only:h=>h.cls==='wizard',enabled:h=>h.bonus>0&&h.slots>0,run:h=>enterTarget('bless')},
   {label:'Лечащее слово',sub:'Бонус · ячейка',cls:'wiz',only:h=>h.cls==='wizard',enabled:h=>h.bonus>0&&h.slots>0,run:h=>enterTarget('heal')},
+  /* v1.2: умения Илвы-плута */
+  {label:'Подлый удар',sub:'Действие · +1d6 во фланге',cls:'rog',only:h=>h.cls==='rogue',enabled:h=>h.action>0,run:h=>enterTarget('sneak')},
+  {label:'Отравленный клинок',sub:'Бонус · яд',cls:'rog',only:h=>h.cls==='rogue',enabled:h=>h.bonus>0,
+    run:h=>{h.bonus--;h.poisonBlade=2;log(h.name+' смазывает клинок ядом: следующая ближняя атака отравит.','g-sys');refreshUI();}},
+  {label:'Уклонение',sub:'Бонус · КД +3',cls:'rog',only:h=>h.cls==='rogue',enabled:h=>h.bonus>0,
+    run:h=>{h.bonus--;addStatus(h,'dodge',1);refreshUI();showReach(h);}},
+  /* v1.2: умения жрицы Кая */
+  {label:'Лечение',sub:'Действие · ячейка',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.action>0&&h.slots>0,run:h=>enterTarget('cure')},
+  {label:'Щит веры',sub:'Бонус · ячейка',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.bonus>0&&h.slots>0,
+    run:h=>{h.bonus--;h.slots--;addStatus(h,'faith',3);refreshUI();showReach(h);}},
+  {label:'Карание света',sub:'Действие · ячейка',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.action>0&&h.slots>0,run:h=>enterTarget('smite')},
+  {label:'Гнев рассвета',sub:'Действие · 1/бой',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.action>0&&!h.dawnUsed,run:h=>radiantNova(h)},
   {label:'Второе дыхание',sub:'Бонус · 1/бой',enabled:h=>h.bonus>0&&!h.swUsed,only:h=>h.cls==='fighter',
     run:h=>{h.bonus--;h.swUsed=true;healUnit(h,roll(1,10)+1,'второе дыхание');refreshUI();showReach(h);}},
   {label:'Доп. действие',sub:'1/бой',enabled:h=>(h.surge||0)>0,only:h=>h.cls==='fighter'&&h.level>=2,
@@ -1527,14 +1684,16 @@ function enterTarget(type){
   if(targeting&&targeting.type===type){cancelTargeting();return;}
   targeting={type};
   clearMarkers();clearDots();
-  if(type==='attack'||type==='bolt'){
-    const range=type==='attack'?h.weapon.range:9;
+  if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'){/* v1.2: +подлый удар и карание */
+    const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:9);
     let any=false;
     const cands=[...units.filter(x=>x.side==='goblin'&&x.alive),...barrels.filter(b=>b.alive)];
     for(const e of cands)if(cheb(h,e)<=range){addMarker(e.x,e.z,0xe06c55,0.62);any=true;}
-    setHint(type==='attack'
-      ?(any?'Выберите цель для атаки (ПКМ / Esc — отмена)':'Вне зоны действия — подойдите ближе!')
-      :(any?'Огненные стрелы: выберите цель (ПКМ / Esc — отмена)':'Вне зоны действия!'));
+    const hintTxt=type==='attack'?'Выберите цель для атаки'
+      :type==='sneak'?'Подлый удар: выберите цель (фланг — +1d6)'
+      :type==='smite'?'Карание света: выберите цель'
+      :'Огненные стрелы: выберите цель';
+    setHint(any?(hintTxt+' (ПКМ / Esc — отмена)'):'Вне зоны действия!');
   }else if(type==='fireball'){
     for(let x=1;x<GRID-1;x++)for(let z=1;z<GRID-1;z++){
       if(cheb(h,{x,z})<=RANGE_FB&&passable(x,z,h))addMarker(x,z,0xff9a4d,0.5);
@@ -1547,7 +1706,7 @@ function enterTarget(type){
     setHint('Огненное масло: выберите клетку. Осторожно — огонь распространяется! (ПКМ — отмена)');
   }else{
     for(const a of units.filter(x=>x.side==='hero'&&x.alive&&cheb(h,x)<=6))addMarker(a.x,a.z,0xffd54f,0.62);
-    setHint(type==='bless'?'Благословение: выберите союзника (ПКМ — отмена)':'Лечащее слово: выберите союзника (ПКМ — отмена)');
+    setHint(type==='bless'?'Благословение: выберите союзника (ПКМ — отмена)':(type==='cure'?'Лечение: выберите союзника (ПКМ — отмена)':'Лечащее слово: выберите союзника (ПКМ — отмена)'));
   }
 }
 function cancelTargeting(){
@@ -1558,15 +1717,23 @@ function cancelTargeting(){
 async function resolveTargetClick(){
   const h=current,t=targeting;
   if(!t||!h)return;
-  if(t.type==='attack'||t.type==='bolt'){
+  if(t.type==='attack'||t.type==='bolt'||t.type==='sneak'||t.type==='smite'){
     const tgt=pick.ent;
     if(!tgt){setHint('Нужно выбрать цель!');return;}
-    const range=t.type==='attack'?h.weapon.range:9;
+    const range=(t.type==='attack'||t.type==='sneak')?h.weapon.range:(t.type==='smite'?6:9);
     if(tgt.side==='hero'){setHint('Это союзник!');return;}
     if(cheb(h,tgt)>range){setHint('Слишком далеко!');return;}
     cancelTargeting();
-    if(t.type==='attack')h.action--;else h.action--;
-    await doAttack(h,tgt,t.type==='attack'?h.weapon:BOLT);
+    h.action--;
+    if(t.type==='attack')await doAttack(h,tgt,h.weapon);
+    else if(t.type==='sneak'){/* v1.2: подлый удар — усилен во фланге */
+      const flank=aliveHeroes().some(a=>a!==h&&a.alive&&cheb(a,tgt)<=1);
+      if(flank){const sd=h.level>=3?2:1;await doAttack(h,tgt,h.weapon,{sneakBonus:roll(sd,6)});}
+      else{log(h.name+' бьёт без фланга — подлый удар не сработал.','g-sys');await doAttack(h,tgt,h.weapon);}
+    }else{/* v1.2: карание света */
+      h.slots--;
+      await doAttack(h,tgt,SMITE);
+    }
     refreshUI();showReach(h);
   }else if(t.type==='fireball'){
     if(!pick.tile){setHint('Выберите клетку!');return;}
@@ -1590,8 +1757,10 @@ async function resolveTargetClick(){
     if(!ally||ally.side!=='hero'){setHint('Выберите союзника!');return;}
     if(cheb(h,ally)>6){setHint('Слишком далеко!');return;}
     cancelTargeting();
-    h.bonus--;h.slots--;
+    h.slots--;
+    if(t.type==='cure')h.action--;else h.bonus--;/* v1.2: лечение жрицы — действие */
     if(t.type==='heal')healUnit(ally,roll(1,4)+mod(h.int),'лечащее слово');
+    else if(t.type==='cure')healUnit(ally,roll(1,8)+mod(h.wis),'молитва Кая');
     else{
       addStatus(ally,'bless',3);
       ftextAbove(ally,'Благословение','#ffd54f');
@@ -1845,6 +2014,21 @@ const DLGS={
       text:'Грат Костолом. Двухметровый отбойник с тесаком. Но есть слабость: однажды он здорово обгорел в пожаре и ПАНИЧЕСКИ боится огня. Шепни ему об этом — и увидишь, как дрогнут его колени.',
       opts:[{t:'«Запомним. Держись, Илва.»',end:true,fn:()=>{if(!S.knowsBoss){S.knowsBoss=true;log('Получены сведения о слабости вожака!','g-sys');}}}]};
   },
+  kaya(id){/* v1.2: жрица-спутница */
+    if(id==='start')return{name:'Кая Заря',
+      text:'Мир вам, путники. Я — Кая, жрица Рассвета. Иду на север: в кургане кости шумят слишком громко для спокойного мертвеца. Одна мне не справиться с тем, что ждёт под землёй.',
+      opts:[
+        {t:'«Идём с нами. Нам нужны молитвы и лечащие руки.»',end:true,fn:()=>{closeDlg();joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]);}},
+        {t:'«Что слышно о кургане?»',fn:()=>gotoNode('rumor')},
+        {t:'«Мы справимся сами.»',end:true,fn:()=>{log('Кая кивает и продолжает молитву.','g-sys');}},
+      ]};
+    if(id==='rumor')return{name:'Кая Заря',
+      text:'Паломники рассказывали: некромант в глубине поднимает мёртвых одну за другой. Мой молот против него слаб, а вот рассветный гнев — нет. Позвольте идти с вами.',
+      opts:[
+        {t:'«Идём с нами. Нам нужны лечащие руки.»',end:true,fn:()=>{closeDlg();joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]);}},
+        {t:'«Позже.»',end:true},
+      ]};
+  },
   necro(id){/* v0.8: босс крипты */
     if(id==='start')return{name:'Вхорил Костепёр',
       text:'Ах-х... тёплые. ТАКИЕ тёплые гости. Грат был грубым инструментом, а я работаю тонко: одна ниточка за лопатку — и ты уже мой. Останьтесь. НАВСЕГДА.',
@@ -1934,9 +2118,9 @@ async function freeIlva(){
   }
   S.ilvaMesh.removeFromParent();S.ilvaMesh=null;/* v0.8 */
   busyOff();
-  log('Илва: «Долг дозору! Загляните к Дамроку — и берегите кулон!»','g-sys');
   questObj('prisoner','free');
   questDone('prisoner');
+  joinIlva(13,21);/* v1.2: освобождённая разведчица встаёт в отряд */
   refreshHintExplore();
   checkTriggers();
 }
@@ -2145,6 +2329,15 @@ function showSheet(h){
       '<p>• Огненный шар — 3d6 огонь, радиус 2.5 кл. (действие+ячейка)</p>'+
       '<p>• Лечащее слово — 1d4+'+mod(h.int)+' (бонус+ячейка)</p>'+
       '<p>• Благословение — +1d4 к атакам, 3 хода (бонус+ячейка)</p>';
+  }else if(h.cls==='cleric'){/* v1.2 */
+    spells='<p>Ячейки заклинаний: <b>'+h.slots+'/'+h.slotsMax+'</b></p>'+
+      '<p>• Лечение — 1d8+'+mod(h.wis)+' (действие+ячейка)</p>'+
+      '<p>• Щит веры — +2 КД, 3 хода (бонус+ячейка)</p>'+
+      '<p>• Карание света — 2d6 излучения (действие+ячейка)</p>'+
+      '<p>• Гнев рассвета — 2d6 излучения вокруг, нежить ×2 (1/бой)</p>';
+  }else if(h.cls==='rogue'){/* v1.2 */
+    spells='<p>Подлый удар: +'+(h.level>=3?'2d6':'1d6')+', если рядом с целью есть союзник</p>'+
+      '<p>Отравленный клинок: зарядов на очереди — '+h.poisonBlade+'</p>';
   }
   $('#sheetbox').innerHTML=
     '<h2>'+h.name+'</h2>'+
@@ -2185,6 +2378,7 @@ function gameSnapshot(){
     flags:{
       patrolDone:!!S.patrolDone,campDone:!!S.campDone,cageSeen:!!S.cageSeen,knowsBoss:!!S.knowsBoss,
       hasCrate:!!S.hasCrate,ilvaFreed:!!S.ilvaFreed,chestLooted:!!S.chestLooted,necroSlain:!!S.necroSlain,
+      kayaJoined:!!S.kayaJoined,/* v1.2 */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -2262,6 +2456,7 @@ function applyGame(sv){
   const fl=sv.flags||{};
   S.patrolDone=!!fl.patrolDone;S.campDone=!!fl.campDone;S.cageSeen=!!fl.cageSeen;S.knowsBoss=!!fl.knowsBoss;
   S.hasCrate=!!fl.hasCrate;S.ilvaFreed=!!fl.ilvaFreed;S.chestLooted=!!fl.chestLooted;S.necroSlain=!!fl.necroSlain;
+  S.kayaJoined=!!fl.kayaJoined;/* v1.2 */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
     const svq=sv.quests&&sv.quests[id];
@@ -2273,6 +2468,7 @@ function applyGame(sv){
   cancelTargeting();
   teardownWorld();
   buildMap(sv.mapId==='crypt'?'crypt':'forest',null);
+  ensureCompanions();/* v1.2: восстановить Илву и Каю по флагам сейва */
   for(const hd of sv.heroes){
     const h=units.find(u=>u.side==='hero'&&u.cls===hd.cls);
     if(!h)continue;
@@ -2493,8 +2689,8 @@ function showTipFor(ent,e){
   }else{
     html='<b>'+ent.name+'</b><br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
     if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
-    if(targeting&&(targeting.type==='attack'||targeting.type==='bolt')&&ent.side==='goblin'&&current){
-      const w=targeting.type==='attack'?current.weapon:BOLT;
+    if(targeting&&(targeting.type==='attack'||targeting.type==='bolt'||targeting.type==='sneak'||targeting.type==='smite')&&ent.side==='goblin'&&current){
+      const w=(targeting.type==='attack'||targeting.type==='sneak')?current.weapon:(targeting.type==='smite'?SMITE:BOLT);
       const ch=Math.round(hitChance(current,ent,w)*100);
       html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(current,w).toFixed(1)+' • крит 5%</span>';
     }
@@ -2640,18 +2836,20 @@ let disposed=false;
     sb.addEventListener('click',onSnd);
     disposers.push(()=>sb.removeEventListener('click',onSnd));
   }
-  log('BG3 Web-прототип v1.1 «Скрижали судьбы»: 3 слота сохранений, экспорт/импорт JSON, настройки графики.','g-sys');
+  log('BG3 Web-прототип v1.2 «Отряд Долгого Дозора»: Илва-плут и жрица Кая встают под знамёна — партия четырёх.','g-sys');
+  log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.1 boot complete');
+  console.log('[bg3] v1.2 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
 })();
-/* v0.8+v1.1: отладочный хук (E2E-проверки в консоли браузера) */
+/* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) */
 window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
+  freeIlva:()=>freeIlva(),joinKaya:()=>joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]),
   gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx};
 return function dispose(){
   disposed=true;
