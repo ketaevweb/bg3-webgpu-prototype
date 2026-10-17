@@ -24,6 +24,7 @@ export const G:{
   postFX:any;mapId:MapId;
   TREES:any;ROCKS:any;TENTS:any;FIREPIT:any;BARREL_POS:any;
   order:Unit[];
+  bloomOn:boolean;fpsLimit:number;frameAcc:number;
 }={
   busy:false,busyCount:0,combatOn:false,phase:'idle',targeting:null,
   round:1,turnIdx:-1,current:null,
@@ -32,6 +33,7 @@ export const G:{
   postFX:null,mapId:'forest',
   TREES:null,ROCKS:null,TENTS:null,FIREPIT:null,BARREL_POS:null,
   order:[],
+  bloomOn:true,fpsLimit:0,frameAcc:0,
 };
 export type GameCtx=typeof G;
 

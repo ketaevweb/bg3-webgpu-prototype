@@ -4,8 +4,10 @@
    Перенесено дословно из engine.ts. */
 import { UI } from '../hud';
 import { $, mod } from '../utils';
-import { units, G, S } from '../state';
+import { units, G, S, MAP_NAME } from '../state';
 import { STATUS, XP_NEED } from '../constants';
+import { refreshTracker } from '../interact/quests';
+import { refreshHintExplore } from '../interact/explore';
 import type { Unit } from '../types';
 
 export function refreshParty(){
@@ -89,4 +91,13 @@ export function showSheet(h:Unit){
     '<div class="pbar" style="margin-top:10px"><i style="width:'+Math.min(100,h.xp/need*100)+'%"></i></div>'+
     '<p style="margin-top:3px">Опыт: '+h.xp+' / '+need+'</p>';
   $(UI.sheet).style.display='flex';
+}
+
+/* v0.8: переключение UI в режим исследования (после боя/карты/загрузки) */
+export function openExploreUI(){
+  $(UI.actionbar).style.display='none';
+  $(UI.turnb).textContent='';
+  $(UI.round).textContent=MAP_NAME[G.mapId];/* v0.8 */
+  refreshInit();refreshTracker();
+  refreshHintExplore();
 }

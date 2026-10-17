@@ -108,3 +108,16 @@ export function nodePath(node:AStarNode){
   while(c&&c.p){a.push({x:c.x,z:c.z});c=c.p;}
   return a.reverse();
 }
+
+/* свободная клетка вокруг точки (v0.8) — из engine (Фаза 4 рефакторинга)
+   GW — модульный синглтон из state.ts (обратная кромка type-only: state → grid) */
+import { GW } from '../state';
+/* ================= UTILITY-ИИ ГОБЛИНОВ ================= */
+export function freeSpotNear(c,ring){/* v0.8: свободная клетка вокруг точки */
+  for(let r=1;r<=ring;r++)for(let dx=-r;dx<=r;dx++)for(let dz=-r;dz<=r;dz++){
+    if(Math.max(Math.abs(dx),Math.abs(dz))!==r)continue;
+    const x=c.x+dx,z=c.z+dz;
+    if(passable(GW,x,z,null))return{x,z};
+  }
+  return null;
+}

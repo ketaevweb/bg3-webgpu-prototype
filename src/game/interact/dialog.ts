@@ -1,0 +1,188 @@
+/* ================= DIALOG (Фаза 4 рефакторинга) =================
+   Диалоги (DLGS), социальные проверки, бегство NPC. Перенесено дословно. */
+import { $, mod } from '../utils';
+import { d } from '../rng';
+import { UI } from '../hud';
+import { sfx } from '../audio';
+import { G, S, KAYA_SPOT, busyOn, busyOff } from '../state';
+import { setHint, log } from '../ui/overlays';
+import { aliveHeroes, removeUnit } from '../entities/units';
+import { startCombat } from '../systems/turns';
+import { addStatus } from '../systems/statuses';
+import { awardXP } from '../systems/progression';
+import { questStart, questObj, questDone, QUESTS, refreshTracker } from '../interact/quests';
+import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
+import { openShop, closeShop } from '../interact/shop';
+import { tween } from '../fx/tweens';
+import type { Unit } from '../types';
+
+/* ---- диалоги ---- */
+export function openDlg(npc){
+  if(G.combatOn||G.phase==='over')return;
+  busyOn();G.phase='dialogue';
+  sfx.dialog();
+  S.dlgNpc=npc;
+  setHint('');
+  $(UI.dlgBox).style.display='block';
+  showNode('start');
+}
+export function closeDlg(){
+  $(UI.dlgBox).style.display='none';
+  S.dlgNpc=null;
+  if(G.phase==='dialogue'){G.phase='explore';busyOff();}
+  refreshHintExplore();
+}
+export function closeDlgHard(){
+  $(UI.dlgBox).style.display='none';
+  S.dlgNpc=null;
+  G.busyCount=Math.max(0,G.busyCount-1);G.busy=G.busyCount>0;
+}
+export function gotoNode(id){showNode(id);}
+export function socialCheck(req){
+  const hs=aliveHeroes();
+  const best=hs.reduce((a,b)=>mod(b.cha)>mod(a.cha)?b:a);
+  const r=d(20),m=mod(best.cha)+2,tot=r+m;
+  const ok=r===20||(r!==1&&tot>=req.dc);
+  log('Проверка «'+req.skill+'» СЛ '+req.dc+': d20 '+r+(m>=0?'+':'')+m+' ('+best.short+') = '+tot+' — '+(ok?'УСПЕХ!':'провал.'),ok?'g-heal':'g-enemy');
+  return ok;
+}
+export function showNode(id){
+  const fn=S.dlgNpc?DLGS[S.dlgNpc]:undefined;
+  const n=fn?fn(id):null;
+  if(!n)return closeDlg();
+  $(UI.dlgName).textContent=n.name;
+  $(UI.dlgText).textContent=n.text;
+  const box=$(UI.dlgOpts);box.innerHTML='';
+  for(const o of (n.opts||[])){
+    if(o.show&&!o.show())continue;
+    const b=document.createElement('button');
+    b.textContent=o.t;
+    if(o.req)b.className='req';
+    b.onclick=()=>{
+      if(o.req){
+        const ok=socialCheck(o.req);
+        showNode(ok?(o.ok||'start'):(o.fail||'start'));
+        return;
+      }
+      if(o.end){closeDlg();if(o.fn)o.fn();return;}
+      if(o.fn)o.fn();
+    };
+    box.appendChild(b);
+  }
+}
+export const DLGS={
+  patrol(id){
+    if(id==='start')return{name:'Гоблин-патрульный',
+      text:'Стоять! Смердяки с юга?.. Это земля племени Кости! Уходи, пока кишки внутри!',
+      opts:[
+        {t:'[Запугивание СЛ 13] «У реки мы вырезали ваш дозор. Бежать, пока целы.»',req:{skill:'Запугивание',dc:13},ok:'scared',fail:'fight'},
+        {t:'[Убеждение СЛ 15] «Мы торговцы — идём к Грату с дарами. Не мешайте.»',req:{skill:'Убеждение',dc:15},ok:'pass',fail:'fight'},
+        {t:'«В атаку, отродья!»',fn:()=>{S.patrolDone=true;startCombat(S.patrolGroup.filter(g=>g.alive));}},
+        {t:'«Медленно отойти.»',end:true,fn:()=>{S.patrolDone=true;log('Гоблины провожают вас подозрительными взглядами.','g-sys');}},
+      ]};
+    if(id==='scared')return{name:'Гоблин-патрульный',text:'Д-демоны!! Отступаем! ОТСТУПАЕМ!!',
+      opts:[{t:'(Смотреть, как патруль обращается в бегство)',end:true,fn:()=>{S.patrolDone=true;awardXP(40);fleeUnits(S.patrolGroup);}}]};
+    if(id==='pass')return{name:'Гоблин-патрульный',text:'Торговцы, значит?.. Ладно. Ступайте в лагерь, дары Грату. Только не рыпайтесь!',
+      opts:[{t:'(Кивнуть и пройти)',end:true,fn:()=>{S.patrolDone=true;S.patrolGroup.forEach(g=>{g.pacified=true;});awardXP(40);log('Патруль вас пропустил.','g-sys');}}]};
+    if(id==='fight')return{name:'Гоблин-патрульный',text:'Ложь! Чужакам — смерть!',
+      opts:[{t:'«Как знаете.»',fn:()=>{S.patrolDone=true;startCombat(S.patrolGroup.filter(g=>g.alive));}}]};
+  },
+  boss(id){
+    if(id==='start'){
+      const opts:any[]=[];
+      if(S.knowsBoss)opts.push({t:'[Знание Илвы] «Помнишь драконий огонь, что оставил тебе те шрамы, Грат?»',fn:bossFear});
+      opts.push(
+        {t:'[Запугивание СЛ 16] «Ваш лагерь станет пеплом. Уведите щенков, пока целы.»',req:{skill:'Запугивание',dc:16},ok:'cow',fail:'fight'},
+        {t:'«В бой!»',fn:()=>{S.campDone=true;startCombat(S.campGroup.filter(g=>g.alive));}});
+      return{name:'Грат Костолом',text:'ХА! Мясо само пришло в котёл! Я — Грат Костолом, и сегодня вы — УЖИН!',opts};
+    }
+    if(id==='cow')return{name:'Грат Костолом',text:'Ч-что?.. Прочь! УХОДИТЕ! За мной, трусы!',
+      opts:[{t:'(Часть гоблинов в панике разбегается)',fn:()=>{S.campDone=true;fleeUnits(S.campGroup.filter(g=>g.alive&&(g.short.startsWith('Лучник')||g.short.startsWith('Задира'))));startCombat(S.campGroup.filter(g=>g.alive));}}]};
+    if(id==='fight')return{name:'Грат Костолом',text:'КОСТИ! КОСТИ! КОСТИ!',
+      opts:[{t:'«С прискорбием.»',fn:()=>{S.campDone=true;startCombat(S.campGroup.filter(g=>g.alive));}}]};
+  },
+  damrock(id){
+    if(id==='start')return{name:'Дамрок Бочкарь',
+      text:'Ох, живые души! Не верю глазам своим. Дамрок я, торговец. Гоблины Костей тракт перекрыли — торчу тут без дела. Чем помогу?',
+      opts:[
+        {t:'«Покажи товар.»',fn:()=>{closeDlg();openShop();}},
+        {t:'«Что случилось?»',show:()=>QUESTS.crate.state==='hidden',fn:()=>gotoNode('story')},
+        {t:'«Вот ваш ящик с товаром.»',show:()=>S.hasCrate&&QUESTS.crate.state==='active',fn:()=>gotoNode('cratedone')},
+        {t:'[Убеждение СЛ 12] «Героям положена скидка, сам знаешь.»',req:{skill:'Убеждение',dc:12},ok:'discok',fail:'discfail'},
+        {t:'«Что известно о крипте в кургане?»',show:()=>QUESTS.main.state==='done'&&QUESTS.crypt.state==='hidden',fn:()=>gotoNode('cryptinfo')},
+        {t:'«До встречи.»',end:true},
+      ]};
+    if(id==='story')return{name:'Дамрок Бочкарь',
+      text:'Случилось-то — беда! Ограбили меня вдоль и поперёк: ящик с товаром утащили в свой лагерь, вон там валяется, у шатров. Вернёшь — не обижу!',
+      opts:[{t:'«Найду ваш ящик.»',fn:()=>{questStart('crate');gotoNode('start');}}]};
+    if(id==='cratedone')return{name:'Дамрок Бочкарь',text:'Мой ящичек! Ай да герои! Держите награду — и скидка вечная, слово Бочкаря!',
+      opts:[{t:'«Служим Долгому Дозору.»',end:true,fn:()=>{questObj('crate','return');questDone('crate');}}]};
+    if(id==='discok')return{name:'Дамрок Бочкарь',text:'Ладно-ладно, краснобай... Десятина скидки — и не больше!',
+      opts:[{t:'«Договорились.»',end:true,fn:()=>{S.discount=true;log('Дамрок даёт отряду скидку 20%.','g-sys');refreshTracker();}}]};
+    if(id==='discfail')return{name:'Дамрок Бочкарь',text:'Думешь, красные глазки меня тронули? Плати как все, герой.',
+      opts:[{t:'«Жадина.»',end:true}]};
+    if(id==='cryptinfo')return{name:'Дамрок Бочкарь',/* v0.8 */
+      text:'Крипту? Слушай сюда: как Грат пал — вход вскрылся, северо-восток, ступени под корнями кургана. Мертвецы на тракте — не гоблинская работа, это Костепёр ниточки дёргает. Возьмите огня, света и... не умирайте, а то скидку кому оставлять буду?',
+      opts:[{t:'«Зачистим. Держи лавку открытой.»',fn:()=>{questStart('crypt');gotoNode('start');}}]};
+  },
+  ilva(id){
+    if(id==='start')return{name:'Илва (в клетке)',
+      text:'Пс! Эй! Вы не из племени Костей? Илва я, разведчица Долгого Дозора. Эти твари поймали меня, пока я следила за их вожаком.',
+      opts:[
+        {t:'«Кто их вожак?»',fn:()=>gotoNode('bossinfo')},
+        {t:'[Взломать замок] «Сейчас освободим!»',fn:()=>{closeDlg();freeIlva();}},
+        {t:'«Держись.»',end:true},
+      ]};
+    if(id==='bossinfo')return{name:'Илва (в клетке)',
+      text:'Грат Костолом. Двухметровый отбойник с тесаком. Но есть слабость: однажды он здорово обгорел в пожаре и ПАНИЧЕСКИ боится огня. Шепни ему об этом — и увидишь, как дрогнут его колени.',
+      opts:[{t:'«Запомним. Держись, Илва.»',end:true,fn:()=>{if(!S.knowsBoss){S.knowsBoss=true;log('Получены сведения о слабости вожака!','g-sys');}}}]};
+  },
+  kaya(id){/* v1.2: жрица-спутница */
+    if(id==='start')return{name:'Кая Заря',
+      text:'Мир вам, путники. Я — Кая, жрица Рассвета. Иду на север: в кургане кости шумят слишком громко для спокойного мертвеца. Одна мне не справиться с тем, что ждёт под землёй.',
+      opts:[
+        {t:'«Идём с нами. Нам нужны молитвы и лечащие руки.»',end:true,fn:()=>{closeDlg();joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]);}},
+        {t:'«Что слышно о кургане?»',fn:()=>gotoNode('rumor')},
+        {t:'«Мы справимся сами.»',end:true,fn:()=>{log('Кая кивает и продолжает молитву.','g-sys');}},
+      ]};
+    if(id==='rumor')return{name:'Кая Заря',
+      text:'Паломники рассказывали: некромант в глубине поднимает мёртвых одну за другой. Мой молот против него слаб, а вот рассветный гнев — нет. Позвольте идти с вами.',
+      opts:[
+        {t:'«Идём с нами. Нам нужны лечащие руки.»',end:true,fn:()=>{closeDlg();joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]);}},
+        {t:'«Позже.»',end:true},
+      ]};
+  },
+  necro(id){/* v0.8: босс крипты */
+    if(id==='start')return{name:'Вхорил Костепёр',
+      text:'Ах-х... тёплые. ТАКИЕ тёплые гости. Грат был грубым инструментом, а я работаю тонко: одна ниточка за лопатку — и ты уже мой. Останьтесь. НАВСЕГДА.',
+      opts:[
+        {t:'[Запугивание СЛ 16] «Я сотру твой жезл в пыль, костяной кукловод.»',req:{skill:'Запугивание',dc:16},ok:'brave',fail:'fight'},
+        {t:'«Пепел тебе вместо философского камня!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти к лестнице.»',end:true,fn:()=>{log('Костепёр провожает вас смехом, похожим на стрёкот костей.','g-enemy');}},
+      ]};
+    if(id==='brave')return{name:'Вхорил Костепёр',
+      text:'Пыль?.. ПЫЛЬ?! Ну что ж... пусть будет по-вашему. КОСТИ! ПОДНИМАЙТЕСЬ И УБЕЙТЕ ИХ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Вхорил Костепёр',
+      text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+  },
+};
+export function bossFear(){
+  const grat=S.campGroup.find(g=>g.isBoss);
+  log('Вы напоминаете Грату о старом пожаре — вожак бледнеет и хватается за тесак.','g-sys');
+  if(grat&&grat.alive)addStatus(grat,'fear',99);
+  fleeUnits(S.campGroup.filter(g=>g.alive&&g.short.startsWith('Задира')));
+  S.campDone=true;
+  startCombat(S.campGroup.filter(g=>g.alive));
+}
+export function fleeUnits(arr){
+  for(const g of arr){
+    if(!g.alive)continue;
+    log(g.name+' обращается в бегство!','g-sys');
+    g.alive=false;
+    const m=g.mesh,el=g._el;
+    tween(0.45,k=>{m.scale.setScalar(Math.max(0.01,1-k));if(el)el.style.opacity=String(1-k);})
+      .then(()=>removeUnit(g));
+  }
+}
