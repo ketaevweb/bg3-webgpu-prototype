@@ -350,6 +350,9 @@ const GOB={
     dagger:{name:'Кинжал',dice:[1,4],abil:'str',melee:true,range:1}},
   chief:{name:'Гоблин-вожак',short:'Вожак',hp:15,ac:14,xp:100,color:0x8f4a3a,
     weapon:{name:'Тесак',dice:[1,8],abil:'str',melee:true,range:1}},
+  /* v1.3: элитный задира лагеря — бьёт больно, лут богатый */
+  veteran:{name:'Гоблин-ветеран',short:'Ветеран',hp:14,ac:14,xp:110,color:0x4f7a35,
+    weapon:{name:'Двуручный тесак',dice:[1,10],abil:'str',melee:true,range:1}},
 };
 function makeGoblin(t,x,z){
   gobCount[t.short]=(gobCount[t.short]||0)+1;
@@ -375,6 +378,54 @@ function makeSkeleton(x,z){
     hp:SKEL.hp,maxhp:SKEL.hp,ac:SKEL.ac,speed:6,xp:SKEL.xp,color:SKEL.color,skin:0xd8d2be,
     weapon:SKEL.weapon,dagger:null,keepDist:false,features:[],
   });
+}
+/* ================= v1.3: ЭЛИТА И СПЕЛЛКАСТЕРЫ КРИПТЫ =================
+   applyElite — общий «класс элиты»: крупнее, золотое кольцо,
+   двойное золото и реликвия из лут-таблицы. */
+function applyElite(u){
+  u.elite=true;
+  u.mesh.scale.multiplyScalar(1.16);
+  if(u.mesh.userData.ring)u.mesh.userData.ring.material.color.setHex(0xd8b45a);
+  u.features.push('Элита племени Костей: крепче рядового и носит добычу получше');
+  return u;
+}
+const SKEL_KNIGHT={name:'Скелет-рыцарь',short:'Рыцарь',hp:22,ac:15,xp:160,color:0xb8b09a,
+  weapon:{name:'Древний клеймор',dice:[1,8],abil:'str',melee:true,range:1}};
+function makeSkeletonKnight(x,z){
+  gobCount[SKEL_KNIGHT.short]=(gobCount[SKEL_KNIGHT.short]||0)+1;
+  const n=gobCount[SKEL_KNIGHT.short];
+  const u=makeUnit({
+    name:SKEL_KNIGHT.name+(n>1?' №'+n:''),short:SKEL_KNIGHT.short+(n>1?' '+n:''),side:'goblin',
+    cls:'undead',clsName:'Скелет-рыцарь',x,z,
+    str:15,dex:12,con:12,int:2,wis:10,cha:6,
+    hp:SKEL_KNIGHT.hp,maxhp:SKEL_KNIGHT.hp,ac:SKEL_KNIGHT.ac,speed:6,xp:SKEL_KNIGHT.xp,
+    color:SKEL_KNIGHT.color,skin:0xd8d2be,
+    weapon:SKEL_KNIGHT.weapon,dagger:null,keepDist:false,features:[],
+  });
+  return applyElite(u);
+}
+const CULT={
+  cultist:{name:'Культист Костепёра',short:'Культист',hp:10,ac:12,xp:90,color:0x6a4f8e,dex:14,int:14,keepDist:true,
+    weapon:{name:'Некротический сгусток',dice:[1,6],abil:'int',range:7,necro:true,status:{type:'poison',turns:2}},
+    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
+  acolyte:{name:'Ученик Костепёра',short:'Ученик',hp:14,ac:13,xp:150,color:0x4f3a72,dex:14,int:16,keepDist:true,healer:true,
+    weapon:{name:'Луч могильного холода',dice:[1,8],abil:'int',range:8,necro:true},
+    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
+};
+function makeCultist(kind,x,z){
+  const t=CULT[kind];
+  gobCount[t.short]=(gobCount[t.short]||0)+1;
+  const n=gobCount[t.short];
+  const u=makeUnit({
+    name:t.name+(n>1?' №'+n:''),short:t.short+(n>1?' '+n:''),side:'goblin',
+    cls:'cultist',clsName:kind==='acolyte'?'Ученик некроманта':'Культист',x,z,
+    str:10,dex:t.dex,con:12,int:t.int,wis:12,cha:10,
+    hp:t.hp,maxhp:t.hp,ac:t.ac,speed:6,xp:t.xp,color:t.color,skin:0xcfc2a8,
+    staff:true,tipColor:kind==='acolyte'?0x9fe8b8:0xc08fff,
+    weapon:t.weapon,dagger:t.dagger||null,keepDist:!!t.keepDist,healer:!!t.healer,features:[],
+  });
+  if(kind==='acolyte')applyElite(u);
+  return u;
 }
 function makeNecro(){
   return makeUnit({
@@ -491,12 +542,16 @@ function spawnEnemies(){/* v0.8: враги зависят от карты и п
     const grat=makeGoblin(GOB.chief,21,6);
     grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
     grat.isBoss=true;grat.mainBoss=true;grat.str=14;
-    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7)];
+    /* v1.3: ветеран — элита лагеря Костей */
+    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7),applyElite(makeGoblin(GOB.veteran,22,8))];
   }else{
     S.patrolGroup=[];S.campGroup=[];
     if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */
     const necro=makeNecro();
-    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5),makeSkeleton(14,7)];
+    /* v1.3: гарнизон крипты — культисты, ученик-целитель и элитный скелет-рыцарь */
+    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5),
+      makeSkeletonKnight(14,6),makeCultist('cultist',11,4),makeCultist('cultist',17,4),
+      makeCultist('acolyte',15,6)];
   }
 }
 function buildForestScenery(){/* v0.8: было buildScenery + охрана прогресса + вход в крипту */
@@ -1113,6 +1168,58 @@ function healUnit(u,amt,why){
   log(u.name+' восстанавливает '+(u.hp-before)+' HP ('+why+').','g-heal');
   refreshParty();
 }
+/* ================= v1.3: ЛУТ-ТАБЛИЦЫ =================
+   Из каждого врага выпадает добыча по таблице его типа:
+   гоблины/нежить/культисты/боссы — золото, шанс зелья и масла.
+   Элита даёт вдвое больше золота, гарантированный предмет и реликвию. */
+const ri=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const LOOT={
+  goblin:{gold:[2,7],potion:0.12,oil:0.10},
+  undead:{gold:[3,9],potion:0.15,oil:0.06},
+  cultist:{gold:[5,12],potion:0.22,oil:0.15},
+  boss:{gold:[18,32],potion:1,oil:0.6},
+};
+function giveToParty(kind,why){
+  const hs=aliveHeroes();if(!hs.length)return null;
+  const h=kind==='potion'
+    ?hs.slice().sort((a,b)=>a.hp/a.maxhp-b.hp/b.maxhp)[0]
+    :hs[Math.floor(Math.random()*hs.length)];
+  if(kind==='potion')h.potions++;
+  else h.oil=(h.oil||0)+1;
+  log(h.short+' забирает: '+why+'.','g-sys');
+  return h;
+}
+function rollLoot(t){
+  if(!t||t.isBarrel||t.side!=='goblin'||t.summoned)return;
+  const isBoss=!!(t.mainBoss||t.cryptBoss);
+  const tbl=isBoss?LOOT.boss:(t.caster?LOOT.cultist:(t.cls==='undead'?LOOT.undead:LOOT.goblin));
+  const g=ri(tbl.gold[0],tbl.gold[1])*(t.elite?2:1);
+  gainGold(g);
+  log('С поверженного «'+t.name+'» собрано '+g+' золота.','g-sys');
+  const hs=aliveHeroes();
+  if(hs.length){
+    fx.burstAtMesh(t,{count:12,color:0xffd54f,speed:2.2,size:0.1,life:0.7,gravity:-1});
+    if(Math.random()<tbl.potion)giveToParty('potion','зелье лечения из пожитков врага');
+    if(Math.random()<tbl.oil)giveToParty('oil','огненное масло из пожитков врага');
+  }
+  if(t.elite&&hs.length){/* реликвии элиты — по одной на героя */
+    let relic=null,cand=aliveHeroes();
+    if(t.cls==='undead'){relic={n:'Костяной оберег',apply:h=>{h.ac+=1;h.relic='Костяной оберег';return h.short+': КД +1';}};}
+    else if(t.caster){relic={n:'Пыльный фолиант',apply:h=>{h.slotsMax+=1;h.slots+=1;h.relic='Пыльный фолиант';return h.short+': +1 ячейка заклинаний';}};cand=aliveHeroes().filter(h=>h.slotsMax>0);}
+    else{relic={n:'Трофейный клык',apply:h=>{h.str+=1;h.relic='Трофейный клык';return h.short+': СИЛ +1';}};cand=aliveHeroes().filter(h=>h.cls==='fighter');}
+    const free=(cand.length?cand:aliveHeroes()).filter(h=>!h.relic);
+    if(relic&&free.length){
+      const h=free[0];
+      log('Реликвия «'+relic.n+'» переходит к отряду: '+relic.apply(h)+'.','g-heal');
+      glows.flashAtMesh(h,0xd8b45a,1.3);
+      refreshParty();
+    }else{
+      const b=25;gainGold(b);
+      log('Носить реликвию некому — она обращена в '+b+' золота.','g-sys');
+    }
+  }
+  refreshParty();
+}
 function die(t,src){
   if(!t.alive)return;
   if(t.isBarrel){explodeBarrel(t);return;}
@@ -1125,7 +1232,7 @@ function die(t,src){
   tween(0.5,k=>{m.rotation.z=1.35*k*k;m.position.y=-0.12*k;});
   refreshIcons(t);refreshInit();refreshParty();
   if(t.side==='goblin'&&t.xp)awardXP(t.xp);
-  if(t.side==='goblin'){const g=3+d(6);gainGold(g);log('С поверженного собрано '+g+' золота.','g-sys');}
+  if(t.side==='goblin')rollLoot(t);/* v1.3: лут-таблицы вместо фиксированных 3-9 золота */
   if(t.mainBoss){questObj('main','boss');questDone('main');}/* v0.8: Грат — босс основного квеста */
   if(t.cryptBoss){
     S.necroSlain=true;/* v1.1: печать сундука и респаун */
@@ -1286,7 +1393,7 @@ function beginTurn(u){
   if(!combatOn)return;
   current=u;targeting=null;
   clearMarkers();clearDots();setHint('');
-  for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:0xa04a3a);
+  for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:(x.elite?0xd8b45a:0xa04a3a));/* v1.3: элита — золотое кольцо */
   u.mesh.userData.ring.material.color.setHex(0xd8b45a);
   refreshInit();
   $('#turnb').textContent=u.side==='hero'?'Ваш ход: '+u.name:'Ход противника: '+u.name;
@@ -1517,6 +1624,16 @@ function planGoblin(u){
   const heroes=units.filter(x=>x.side==='hero'&&x.alive);
   if(!heroes.length)return null;
   const gobs=units.filter(x=>x.side==='goblin'&&x.alive);
+  /* v1.3: ученик некроманта первым делом латает раненых слуг */
+  if(u.healer&&u.action>0){
+    let hb=null;
+    for(const w of gobs){
+      if(w===u||w.hp>=w.maxhp*0.65)continue;
+      const s=(1-w.hp/w.maxhp)*3+(w.isBoss?1.2:0);
+      if(cheb(u,w)<=u.weapon.range&&(!hb||s>hb.s))hb={s,t:w};
+    }
+    if(hb)return{type:'heal',target:hb.t};
+  }
   if(u.bonus>0&&u.potions>0&&u.hp<u.maxhp*0.45)return{type:'potion'};
   if(u.action>0){
     for(const b of barrels)if(b.alive){
@@ -1616,6 +1733,12 @@ async function aiTurn(u){
         damageUnit(h,dmg,u);
       }
       await sleep(500);continue;
+    }
+    if(plan.type==='heal'){/* v1.3: могильная песнь ученика */
+      u.action--;
+      healUnit(plan.target,roll(2,4)+mod(u.int),'могильная песнь');
+      glows.flashAtMesh(plan.target,0x9fe8b8,1.1);
+      await sleep(450);continue;
     }
     if(plan.type==='potion'){
       u.bonus--;u.potions--;
@@ -2044,21 +2167,6 @@ const DLGS={
       text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
       opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
   },
-  necro(id){/* v0.8: босс крипты */
-    if(id==='start')return{name:'Вхорил Костепёр',
-      text:'Ах-х... тёплые. ТАКИЕ тёплые гости. Грат был грубым инструментом, а я работаю тонко: одна ниточка за лопатку — и ты уже мой. Останьтесь. НАВСЕГДА.',
-      opts:[
-        {t:'[Запугивание СЛ 16] «Я сотру твой жезл в пыль, костяной кукловод.»',req:{skill:'Запугивание',dc:16},ok:'brave',fail:'fight'},
-        {t:'«Пепел тебе вместо философского камня!»',fn:()=>gotoNode('fight')},
-        {t:'«Медленно отойти к лестнице.»',end:true,fn:()=>{log('Костепёр провожает вас смехом, похожим на стрёкот костей.','g-enemy');}},
-      ]};
-    if(id==='brave')return{name:'Вхорил Костепёр',
-      text:'Пыль?.. ПЫЛЬ?! Ну что ж... пусть будет по-вашему. КОСТИ! ПОДНИМАЙТЕСЬ И УБЕЙТЕ ИХ!',
-      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
-    if(id==='fight')return{name:'Вхорил Костепёр',
-      text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
-      opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
-  },
 };
 function bossFear(){
   const grat=S.campGroup.find(g=>g.isBoss);
@@ -2385,7 +2493,7 @@ function gameSnapshot(){
     heroes:units.filter(u=>u.side==='hero').map(h=>({
       cls:h.cls,level:h.level,xp:h.xp,hp:h.hp,maxhp:h.maxhp,ac:h.ac,
       str:h.str,dex:h.dex,con:h.con,int:h.int,wis:h.wis,cha:h.cha,
-      slotsMax:h.slotsMax||0,potions:h.potions,oil:h.oil||0,armor:h.armor,
+      slotsMax:h.slotsMax||0,potions:h.potions,oil:h.oil||0,armor:h.armor,relic:h.relic||null,/* v1.3 */
       weapon:h.weapon?{name:h.weapon.name,dice:h.weapon.dice,abil:h.weapon.abil,range:h.weapon.range,melee:!!h.weapon.melee}:null,
       x:h.x,z:h.z,
     })),
@@ -2477,7 +2585,7 @@ function applyGame(sv){
     h.ac=hd.ac||h.ac;
     ['str','dex','con','int','wis','cha'].forEach(a=>{if(typeof hd[a]==='number')h[a]=hd[a];});
     h.slotsMax=hd.slotsMax||0;h.slots=h.slotsMax;
-    h.potions=hd.potions||0;h.oil=hd.oil||0;h.armor=hd.armor||h.armor;
+    h.potions=hd.potions||0;h.oil=hd.oil||0;h.armor=hd.armor||h.armor;h.relic=hd.relic||null;/* v1.3: реликвия элиты */
     if(hd.weapon&&hd.weapon.dice)h.weapon={name:hd.weapon.name,dice:hd.weapon.dice,abil:hd.weapon.abil,range:hd.weapon.range,melee:!!hd.weapon.melee};
     h.statuses=[];h.swUsed=false;h.surge=0;
     if(typeof hd.x==='number'&&typeof hd.z==='number'){
@@ -2687,7 +2795,9 @@ function showTipFor(ent,e){
   }else if(ent.isBarrel){
     html='<b>'+(ent.name||'Взрывная бочка')+'</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
   }else{
-    html='<b>'+ent.name+'</b><br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
+    html='<b>'+ent.name+'</b>'+(ent.elite?' · ЭЛИТА':'')+'<br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
+    if(ent.healer)html+='<br><span class="tc">Целитель: латает слуг Костепёра — бейте первым.</span>';
+    if(ent.elite)html+='<br><span class="tc">Элита: крепче рядового, добыча богаче.</span>';
     if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
     if(targeting&&(targeting.type==='attack'||targeting.type==='bolt'||targeting.type==='sneak'||targeting.type==='smite')&&ent.side==='goblin'&&current){
       const w=(targeting.type==='attack'||targeting.type==='sneak')?current.weapon:(targeting.type==='smite'?SMITE:BOLT);
@@ -2836,13 +2946,14 @@ let disposed=false;
     sb.addEventListener('click',onSnd);
     disposers.push(()=>sb.removeEventListener('click',onSnd));
   }
-  log('BG3 Web-прототип v1.2 «Отряд Долгого Дозора»: Илва-плут и жрица Кая встают под знамёна — партия четырёх.','g-sys');
+  log('BG3 Web-прототип v1.3 «Слуги Костепёра»: партия четырёх героев, элитные враги и лут-таблицы — добыча выпадает из каждого врага.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
+  log('В лагере Костей орудует гоблин-ветеран, а в крипте ждут культисты, ученик-целитель и скелет-рыцарь. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.2 boot complete');
+  console.log('[bg3] v1.3 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -2850,7 +2961,8 @@ let disposed=false;
 /* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) */
 window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   freeIlva:()=>freeIlva(),joinKaya:()=>joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]),
-  gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx};
+  gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx,
+  rollLoot,LOOT};/* v1.3: +лут-таблицы для E2E */
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);
