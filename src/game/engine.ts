@@ -1,95 +1,41 @@
 
 import * as THREE from 'three/webgpu';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { pass } from 'three/tsl';
-import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { sfx } from './audio';
-import { ParticleFX } from './particles';
-import { GlowFX } from './glow';
 import { slowmo } from './slowmo';
-import { AnimRigs, upgradeUnitRig } from './animation';
+import { upgradeUnitRig } from './animation';
 
-/* Фаза 2 рефакторинга: чистые листья вынесены в модули (REFACTORING.md §5):
-   rng.ts, utils.ts, constants.ts, world/grid.ts, systems/combat.ts, systems/loot.ts */
-/* TODO(refactor-p3): доменные типы Unit/Barrel/Interact вместо any[] и any-полей (types.ts) */
+/* Фаза 2 рефакторинга: чистые листья — rng/utils/constants/world-grid/боевая математика/лут.
+   Фаза 3: доменные типы — types.ts. Фаза 4a: state (S/G/контейнеры), render, fx/tweens. */
 import { d, roll, ri, srand } from './rng';
 import { $, clamp, mod, sleep, key, cheb } from './utils';
 import { TILE, GRID, HALF, W, XP_NEED, RANGE_FB, RANGE_OIL, STATUS, HERO_TINT, SAVE_VER, SLOT_N } from './constants';
-import { astar, reachNodes, nodePath, passable, unitAt, barrelAt, type GridWorld } from './world/grid';
+import { astar, reachNodes, nodePath, passable, unitAt, barrelAt } from './world/grid';
 import { attackMod, blessed, hitChance, avgDamage } from './systems/combat';
 import { LOOT } from './systems/loot';
 import { UI } from './hud';
-/* Фаза 3: доменные типы — единственный источник (types.ts) */
-import type { Barrel, FireTile, GameState, MapId, Phase, PickState, Quest, SaveData, StatusType, Unit, UnitTemplate, Weapon } from './types';
-const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
-  hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
-  cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,
-  cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set<string>()};/* v0.8+v1.1+v1.2 */
+import type { Barrel, Quest, SaveData, StatusType, Unit, UnitTemplate, Weapon } from './types';
+import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT } from './state';
+import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, applyAtmosphere, applyLighting, clearGroup, setupPostFX } from './render/renderer';
+import { tween, faceTo, lunge, boomFX, shake, tickTweens, projMesh } from './fx/tweens';
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
-   Весь игровой стейт живёт в замыкании bootGame(), чтобы React мог
-   безопасно монтировать/размонтировать игру (HMR, StrictMode). */
+   bootGame() — оркестратор: сборка, ввод, игровой цикл, dispose.
+   Состояние — в state.ts (Фаза 4a), рендер — render/renderer.ts,
+   твины — fx/tweens.ts; системы выносятся по REFACTORING.md §5 (4b–4h). */
 export function bootGame(){
 
-/* ================= СОСТОЯНИЕ ================= */
-let busy=false, busyCount=0, combatOn=false, phase:Phase='idle', targeting:any=null;/* TODO(refactor-p4a): targeting/current — поля GameCtx */
-function busyOn(){busyCount++;busy=true;}
-function busyOff(){busyCount=Math.max(0,busyCount-1);if(busyCount===0)busy=false;}
-let wave=1, pendingWave=false, round=1, turnIdx=-1, current:any=null;
-let order:Unit[]=[]; const units:Unit[]=[], barrels:Unit[]=[], fires=new Map<string,FireTile>();/* Фаза 3: доменные типы */
-let uid=0; const gobCount:Record<string,number>={};
-const tweens:any[]=[]; let shakeT=0;
-const pick:PickState={tile:null,ent:null,inter:null};
-let groundMesh:any=null, fireLight:any=null, flameMesh:any=null;
 
-/* ================= РЕНДЕРЕР / СЦЕНА ================= */
-const renderer=new THREE.WebGPURenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.shadowMap.enabled=true;
-$(UI.scene).appendChild(renderer.domElement);
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0c1510);
-scene.fog=new THREE.FogExp2(0x0c1510,0.014);
-/* v0.8: вся декорации карты — в worldGroup, чтобы сменять карту одним clear */
-const worldGroup=new THREE.Group();scene.add(worldGroup);
-function clearGroup(g){for(let i=g.children.length-1;i>=0;i--)g.remove(g.children[i]);}
 
-/* ==== v0.7: эффекты (партиклы / glow-хало / анимационные риги / bloom) ==== */
-const fx=new ParticleFX(scene);
-const glows=new GlowFX(scene);
-const rigs=new AnimRigs();
-let postFX:any=null;
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,0.1,220);
-camera.position.set(2,27,41);
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true; controls.dampingFactor=0.08;
-controls.maxPolarAngle=1.32; controls.minPolarAngle=0.15;
-controls.minDistance=8; controls.maxDistance=62;
-controls.target.set(1,0,12);
 
 /* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
-   Одна сетка 28×28, но два набора декораций/обстановки:
-   forest — тракт и лагерь Костей, crypt — подземелье босса. */
-const solid=new Set<string>(), grass=new Set<string>();
-const GW:GridWorld={solid,units,barrels,fires};/* Фаза 2: явный контекст для world/grid (→ GameCtx в p4a) */
-let TREES:any=null,ROCKS:any=null,TENTS:any=null,FIREPIT:any=null,BARREL_POS:any=null;
-const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25}, KAYA_SPOT=[15,22];/* v1.2: алтарь Кая */
-let mapId:MapId='forest';
-const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра'};
-const CRYPT={
-  PILLARS:[[6,8],[10,8],[17,8],[21,8],[6,18],[10,18],[17,18],[21,18]],
-  SARCS:[[4,13],[23,13],[8,2],[19,2]],
-  BRAZIERS:[[9,15],[18,15]],
-  URNS:[[11,10],[17,10]],
-  THRONE:[14,3],CHEST:[14,1],EXIT:[14,26],ENTER:[[13,25],[14,25],[12,24],[15,24]],/* v1.2: 4 места отряда */
-};
+   solid/grass/GW и константы карт (CAGE/CRYPT/…) — в state.ts (Фаза 4a).
+   Ниже — сиды: заполнение наборов под конкретную карту. */
 function seedForest(){
-  TREES=[[3,9],[9,3],[5,20],[3,15],[10,18],[24,20],[25,12],[20,22],[6,6],[26,16],[17,9],[11,11],[8,22],[22,14],[4,12],[15,4]];
-  ROCKS=[[7,13],[21,17],[12,8],[25,7],[9,17],[18,11],[23,24]];
-  TENTS=[[19,3],[22,3],[19,7]];
-  FIREPIT=[21,5];
-  BARREL_POS=[[18,5],[22,6],[24,6]];
+  G.TREES=[[3,9],[9,3],[5,20],[3,15],[10,18],[24,20],[25,12],[20,22],[6,6],[26,16],[17,9],[11,11],[8,22],[22,14],[4,12],[15,4]];
+  G.ROCKS=[[7,13],[21,17],[12,8],[25,7],[9,17],[18,11],[23,24]];
+  G.TENTS=[[19,3],[22,3],[19,7]];
+  G.FIREPIT=[21,5];
+  G.BARREL_POS=[[18,5],[22,6],[24,6]];
   solid.clear();grass.clear();
   for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
   [[7,19],[21,19],[13,13],[23,11],[9,8]].forEach(([cx,cz])=>{
@@ -100,10 +46,10 @@ function seedForest(){
       if(srand()<0.72)grass.add(key(x,z));
     }
   });
-  for(const [x,z] of BARREL_POS)grass.add(key(x,z));
+  for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
 }
 function seedCrypt(){
-  TREES=[];ROCKS=[];TENTS=[];FIREPIT=null;BARREL_POS=CRYPT.URNS;
+  G.TREES=[];G.ROCKS=[];G.TENTS=[];G.FIREPIT=null;G.BARREL_POS=CRYPT.URNS;
   solid.clear();grass.clear();
   for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
   for(const [x,z] of CRYPT.PILLARS)solid.add(key(x,z));
@@ -167,13 +113,13 @@ function addCampfire(x,z){
     s.position.set(Math.cos(i*1.05)*0.65,0.08,Math.sin(i*1.05)*0.65);
     g.add(s);
   }
-  flameMesh=new THREE.Mesh(new THREE.ConeGeometry(0.32,0.9,7),
+  G.flameMesh=new THREE.Mesh(new THREE.ConeGeometry(0.32,0.9,7),
     new THREE.MeshBasicMaterial({color:0xff8c2a,transparent:true,opacity:0.9}));
-  flameMesh.position.y=0.55;
-  g.add(flameMesh);
-  fireLight=new THREE.PointLight(0xff9040,22,16,2);
-  fireLight.position.y=1.1;
-  g.add(fireLight);
+  G.flameMesh.position.y=0.55;
+  g.add(G.flameMesh);
+  G.fireLight=new THREE.PointLight(0xff9040,22,16,2);
+  G.fireLight.position.y=1.1;
+  g.add(G.fireLight);
   g.position.set(W(x),0,W(z));
   worldGroup.add(g);
 }
@@ -192,43 +138,18 @@ function addBarrel(x,z,bodyColor){/* v0.8: цвет — лес (дерево) и
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*3;
   worldGroup.add(g);
-  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
+  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:G.mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
   g.userData.ent=b;
   barrels.push(b);
 }
-/* v0.8: атмосфера и свет — параметризованы по карте */
-function applyAtmosphere(m){
-  if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
-  else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
-}
-let hemiLight:any=null,sunLight:any=null;
-function applyLighting(m){
-  if(!hemiLight){
-    hemiLight=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
-    sunLight=new THREE.DirectionalLight(0xffeecf,2.4);
-    sunLight.position.set(14,22,8);sunLight.castShadow=true;
-    sunLight.shadow.mapSize.set(2048,2048);
-    sunLight.shadow.camera.left=-24;sunLight.shadow.camera.right=24;
-    sunLight.shadow.camera.top=24;sunLight.shadow.camera.bottom=-24;
-    sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=60;
-    scene.add(hemiLight,sunLight);
-  }
-  if(m==='crypt'){
-    hemiLight.color.setHex(0x7c8ca4);hemiLight.groundColor.setHex(0x1a1826);hemiLight.intensity=0.68;
-    sunLight.color.setHex(0x9fb4d8);sunLight.intensity=1.05;
-  }else{
-    hemiLight.color.setHex(0xbcd8e8);hemiLight.groundColor.setHex(0x2a3325);hemiLight.intensity=0.85;
-    sunLight.color.setHex(0xffeecf);sunLight.intensity=2.4;
-  }
-}
 function buildWorld(){
-  applyLighting(mapId);
-  groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
-    new THREE.MeshStandardMaterial({color:mapId==='crypt'?0x3d3d47:0x3a5530,roughness:1}));
-  groundMesh.rotation.x=-Math.PI/2;groundMesh.receiveShadow=true;
-  worldGroup.add(groundMesh);
+  applyLighting(G.mapId);
+  G.groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
+    new THREE.MeshStandardMaterial({color:G.mapId==='crypt'?0x3d3d47:0x3a5530,roughness:1}));
+  G.groundMesh.rotation.x=-Math.PI/2;G.groundMesh.receiveShadow=true;
+  worldGroup.add(G.groundMesh);
   const patchGeo=new THREE.CircleGeometry(1,16);
-  const patchMat=new THREE.MeshStandardMaterial({color:mapId==='crypt'?0x34343e:0x324a2a,roughness:1});
+  const patchMat=new THREE.MeshStandardMaterial({color:G.mapId==='crypt'?0x34343e:0x324a2a,roughness:1});
   for(let i=0;i<26;i++){
     const m=new THREE.Mesh(patchGeo,patchMat);
     m.rotation.x=-Math.PI/2;
@@ -236,12 +157,12 @@ function buildWorld(){
     m.scale.setScalar(0.7+srand()*1.6);
     worldGroup.add(m);
   }
-  if(mapId==='forest'){
+  if(G.mapId==='forest'){
     const tuftG=new THREE.ConeGeometry(0.16,0.5,5);
     const tuftM=new THREE.MeshStandardMaterial({color:0x4e8a34,roughness:1});
     for(const k of grass){
       const [x,z]=k.split('_').map(Number);
-      if(BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
+      if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
       for(let i=0;i<3;i++){
         const t=new THREE.Mesh(tuftG,tuftM);
         t.position.set(W(x)+(srand()-0.5),0.22,W(z)+(srand()-0.5));
@@ -251,11 +172,11 @@ function buildWorld(){
       }
     }
   }
-  for(const [x,z] of TREES)addTree(x,z);
-  for(const [x,z] of ROCKS)addRock(x,z);
-  for(const [x,z] of TENTS)addTent(x,z);
-  if(FIREPIT)addCampfire(FIREPIT[0],FIREPIT[1]);
-  for(const [x,z] of BARREL_POS)if(!S.barrelsUsed.has(key(x,z)))addBarrel(x,z,mapId==='crypt'?0x4a4238:undefined);
+  for(const [x,z] of G.TREES)addTree(x,z);
+  for(const [x,z] of G.ROCKS)addRock(x,z);
+  for(const [x,z] of G.TENTS)addTent(x,z);
+  if(G.FIREPIT)addCampfire(G.FIREPIT[0],G.FIREPIT[1]);
+  for(const [x,z] of G.BARREL_POS)if(!S.barrelsUsed.has(key(x,z)))addBarrel(x,z,G.mapId==='crypt'?0x4a4238:undefined);
 }
 /* ================= ЮНИТЫ ================= */
 function buildFigure(cfg){
@@ -291,8 +212,9 @@ function buildFigure(cfg){
 }
 function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза 3: доменный тип юнита */
   const u=Object.assign({
-    id:++uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
+    id:++G.uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
     slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,poisonBlade:0,dawnUsed:false,/* v1.2 */
+    action:0,bonus:0,/* Фаза 4a: обязательные поля Unit (переопределяются в beginTurn) */
   },cfg) as Unit;
   u.mesh=buildFigure(cfg);
   u.mesh.position.set(W(cfg.x),0,W(cfg.z));
@@ -505,7 +427,7 @@ function ensureCompanions(){/* v1.2: восстановление спутник
 }
 function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
-  if(mapId==='forest'){
+  if(G.mapId==='forest'){
     S.patrolGroup=S.patrolDone?[]:[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
     if(S.campDone){S.campGroup=[];return;}
     const grat=makeGoblin(GOB.chief,21,6);
@@ -752,15 +674,15 @@ function teardownWorld(){
   glows.clear();
   interactables.length=0;
   clearGroup(worldGroup);
-  groundMesh=null;fireLight=null;flameMesh=null;
-  combatOn=false;order=[];turnIdx=-1;current=null;
+  G.groundMesh=null;G.fireLight=null;G.flameMesh=null;
+  G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;
   $(UI.actionbar).style.display='none';
   refreshBossBar();
 }
 /* v1.1: сборка карты без фейда — общее ядро switchMap и загрузки сейва.
    spots — точки размещения героев (null — не трогать позиции). */
 function buildMap(id,spots){
-  mapId=id;
+  G.mapId=id;
   if(id==='crypt'){
     seedCrypt();applyAtmosphere('crypt');
     buildWorld();buildCryptScenery();spawnEnemies();
@@ -779,13 +701,13 @@ function buildMap(id,spots){
     log('Вы поднимаетесь на тракт. Ветер и пение птиц — мертвецы больше не тревожат дорогу.','g-sys');
   }
   initOverlays();
-  phase='explore';
-  $(UI.round).textContent=MAP_NAME[mapId];
+  G.phase='explore';
+  $(UI.round).textContent=MAP_NAME[G.mapId];
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
 async function switchMap(id){
-  if(busy||mapId===id||phase==='transition')return;
-  busyOn();phase='transition';
+  if(G.busy||G.mapId===id||G.phase==='transition')return;
+  busyOn();G.phase='transition';
   sfx.portal();
   const f=$(UI.fade);
   f.style.opacity='1';
@@ -800,41 +722,6 @@ async function switchMap(id){
 const BOLT:Weapon={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
 const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
 
-/* ================= ТВИНЫ / ЭФФЕКТЫ ================= */
-function tween(dur,fn){return new Promise(res=>tweens.push({t:0,dur,fn,res}));}
-function faceTo(u,p){
-  const dx=p.x-u.mesh.position.x,dz=p.z-u.mesh.position.z;
-  if(dx||dz)u.mesh.rotation.y=Math.atan2(dx,dz);
-}
-async function lunge(att,def){
-  const back=att.mesh.position.clone();
-  const dir=new THREE.Vector3(def.mesh.position.x-back.x,0,def.mesh.position.z-back.z);
-  const L=Math.min(0.55,Math.max(0.15,dir.length()*0.35));
-  if(dir.lengthSq()<1e-6)return;
-  dir.normalize();
-  await tween(0.11,k=>{const s=k*k*(3-2*k);att.mesh.position.copy(back).addScaledVector(dir,L*s);});
-  await tween(0.13,k=>{const s=k*k*(3-2*k);att.mesh.position.copy(back).addScaledVector(dir,L*(1-s));});
-  att.mesh.position.copy(back);
-}
-const boomPool:any[]=[];
-function boomFX(x,z,r){
-  let m=boomPool.find(b=>!b.visible);
-  if(!m){
-    m=new THREE.Mesh(new THREE.SphereGeometry(1,18,14),
-      new THREE.MeshBasicMaterial({color:0xffa040,transparent:true,opacity:0.9,depthWrite:false}));
-    scene.add(m);boomPool.push(m);
-  }
-  m.visible=true;m.position.set(x,0.4,z);m.scale.setScalar(0.3);m.material.opacity=0.9;
-  tween(0.4,k=>{m.scale.setScalar(0.3+r*1.05*k);m.material.opacity=0.9*(1-k);}).then(()=>{m.visible=false;});
-  const flash=new THREE.PointLight(0xff9040,60,14,2);
-  flash.position.set(x,1.5,z);scene.add(flash);
-  tween(0.35,k=>{flash.intensity=60*(1-k);}).then(()=>scene.remove(flash));
-  shake(0.45);
-}
-function shake(t){shakeT=Math.max(shakeT,t);}
-const projMesh=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),
-  new THREE.MeshBasicMaterial({color:0xffa040}));
-projMesh.visible=false;scene.add(projMesh);
 
 /* ================= ИНТЕРФЕЙС: ЛОГ / ТЕКСТ / ПОДСКАЗКИ ================= */
 function log(msg,cls){
@@ -928,7 +815,7 @@ function addDot(x,z,inRange){
 function clearDots(){di=0;for(const m of dotPool)m.visible=false;}
 function showReach(u){
   clearMarkers();
-  if(!combatOn||phase!=='player'||!u||!u.alive)return;
+  if(!G.combatOn||G.phase!=='player'||!u||!u.alive)return;
   const nodes=reachNodes(GW,u,false);
   for(const n of nodes.values())if(n.g>0)addMarker(n.x,n.z,0x3f7fae,0.45);
 }
@@ -1218,7 +1105,7 @@ async function animateMove(u,path){
       break;
     }
     const from={x:u.x,z:u.z};
-    if(combatOn&&!u.disengaging){
+    if(G.combatOn&&!u.disengaging){
       for(const e of enemiesOf(u)){
         if(e.reaction>0&&!e.pacified&&cheb(e,from)<=1){
           const mw=meleeWeaponOf(e);
@@ -1256,7 +1143,7 @@ function startCombat(group){
   closeDlgHard();
   if(!group.length)return;
   S.combatGroup=group;
-  combatOn=true;
+  G.combatOn=true;
   log('=== БОЙ НАЧИНАЕТСЯ ===','g-sys');
   sfx.stinger('combat');
   if(S.combatGroup.some(g=>g.cryptBoss)){/* v0.8: аутро босса крипты */
@@ -1270,17 +1157,17 @@ function startCombat(group){
   }
   const list=[...aliveHeroes(),...group.filter(g=>g.alive)];
   for(const u of list)u.init=d(20)+mod(u.dex);
-  order=list.sort((a,b)=>b.init-a.init);
-  turnIdx=-1;round=1;
+  G.order=list.sort((a,b)=>b.init-a.init);
+  G.turnIdx=-1;G.round=1;
   $(UI.round).textContent='Раунд 1';
   $(UI.actionbar).style.display='block';
   refreshInit();refreshParty();
-  log('Инициатива: '+order.map(u=>u.name+' ('+u.init+')').join(', '),'g-sys');
+  log('Инициатива: '+G.order.map(u=>u.name+' ('+u.init+')').join(', '),'g-sys');
   endTurn();
 }
 function beginTurn(u){
-  if(!combatOn)return;
-  current=u;targeting=null;
+  if(!G.combatOn)return;
+  G.current=u;G.targeting=null;
   clearMarkers();clearDots();setHint('');
   for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:(x.elite?0xd8b45a:0xa04a3a));/* v1.3: элита — золотое кольцо */
   u.mesh.userData.ring.material.color.setHex(0xd8b45a);
@@ -1306,43 +1193,43 @@ function beginTurn(u){
   refreshIcons(u);
   u.action=u.actionMax;u.bonus=1;u.reaction=1;
   u.moveLeft=u.speed;u.disengaging=false;u.dashUsed=false;
-  busy=false;
+  G.busy=false;
   $(UI.actionbar).style.display='block';
   if(u.side==='hero'){
-    phase='player';
+    G.phase='player';
     refreshUI();showReach(u);
   }else{
-    phase='ai';
+    G.phase='ai';
     refreshUI();
     setTimeout(()=>aiTurn(u),550);
   }
 }
 function endTurn(){
-  if(!combatOn)return;
-  targeting=null;clearMarkers();clearDots();
+  if(!G.combatOn)return;
+  G.targeting=null;clearMarkers();clearDots();
   let steps=0;
-  while(steps<=order.length*2){
-    turnIdx++;
-    if(turnIdx>=order.length){
-      turnIdx=0;round++;
-      $(UI.round).textContent='Раунд '+round;
+  while(steps<=G.order.length*2){
+    G.turnIdx++;
+    if(G.turnIdx>=G.order.length){
+      G.turnIdx=0;G.round++;
+      $(UI.round).textContent='Раунд '+G.round;
       tickFires();
     }
-    const c=order[turnIdx];
+    const c=G.order[G.turnIdx];
     if(c&&c.alive)break;
     steps++;
   }
-  const u=order[turnIdx];
-  if(!u||!u.alive||!combatOn)return;
+  const u=G.order[G.turnIdx];
+  if(!u||!u.alive||!G.combatOn)return;
   beginTurn(u);
 }
 
 /* ================= ВОЛНЫ / ОПЫТ / УРОВНИ ================= */
 function checkEnd(){
-  if(!combatOn)return;
-  if(!aliveHeroes().length){combatOn=false;phase='over';sfx.stinger('defeat');showEnd(false);return;}
+  if(!G.combatOn)return;
+  if(!aliveHeroes().length){G.combatOn=false;G.phase='over';sfx.stinger('defeat');showEnd(false);return;}
   if(S.combatGroup.some(g=>g.alive))return;
-  combatOn=false;phase='explore';
+  G.combatOn=false;G.phase='explore';
   victorySequence();
 }
 function victorySequence(){
@@ -1435,7 +1322,7 @@ function freeSpotNear(c,ring){/* v0.8: свободная клетка вокр�
 }
 function joinCombat(u){/* v0.8: подкрепление встаёт в очередь инициативы */
   u.init=d(20)+mod(u.dex);
-  order.push(u);
+  G.order.push(u);
   log(u.name+' вступает в бой (инициатива '+u.init+').','g-enemy');
   refreshInit();
 }
@@ -1586,7 +1473,7 @@ function planGoblin(u){
 async function aiTurn(u){
   await sleep(500);
   let guard=0;
-  while(combatOn&&u.alive&&guard++<6){
+  while(G.combatOn&&u.alive&&guard++<6){
     const plan=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
     if(plan.type==='phase2'){/* v0.8: подъём мёртвых */
@@ -1655,7 +1542,7 @@ async function aiTurn(u){
       await sleep(350);continue;
     }
   }
-  if(combatOn)endTurn();
+  if(G.combatOn)endTurn();
 }
 /* ================= ДЕЙСТВИЯ ИГРОКА ================= */
 const ACTIONS=[
@@ -1691,10 +1578,10 @@ const ACTIONS=[
   {label:'Завершить ход',sub:'',cls:'end',enabled:()=>true,run:()=>{cancelTargeting();endTurn();}},
 ];
 function enterTarget(type){
-  const h=current;
+  const h=G.current;
   if(!h||h.side!=='hero'||!h.alive)return;
-  if(targeting&&targeting.type===type){cancelTargeting();return;}
-  targeting={type};
+  if(G.targeting&&G.targeting.type===type){cancelTargeting();return;}
+  G.targeting={type};
   clearMarkers();clearDots();
   if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'){/* v1.2: +подлый удар и карание */
     const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:9);
@@ -1722,12 +1609,12 @@ function enterTarget(type){
   }
 }
 function cancelTargeting(){
-  targeting=null;
+  G.targeting=null;
   clearMarkers();clearDots();setHint('');
-  if(combatOn&&phase==='player'&&current&&current.alive)showReach(current);
+  if(G.combatOn&&G.phase==='player'&&G.current&&G.current.alive)showReach(G.current);
 }
 async function resolveTargetClick(){
-  const h=current,t=targeting;
+  const h=G.current,t=G.targeting;
   if(!t||!h)return;
   if(t.type==='attack'||t.type==='bolt'||t.type==='sneak'||t.type==='smite'){
     const tgt=pick.ent;
@@ -1760,7 +1647,7 @@ async function resolveTargetClick(){
     if(!pick.tile){setHint('Выберите клетку!');return;}
     if(cheb(h,pick.tile)>RANGE_OIL){setHint('Слишком далеко!');return;}
     cancelTargeting();
-    h.action--;h.oil--;
+    h.action--;h.oil=(h.oil||0)-1;/* Фаза 4a: oil — опциональное поле */
     log(h.name+' метает огненное масло!','g-fire');
     explode(pick.tile.x,pick.tile.z,{dice:[1,6],radius:1.5});
     refreshUI();showReach(h);
@@ -1781,7 +1668,7 @@ async function resolveTargetClick(){
   }
 }
 async function tryMove(h,tile){
-  if(busy||phase!=='player')return;
+  if(G.busy||G.phase!=='player')return;
   if(h.moveLeft<1){setHint('Перемещение закончилось — завершите ход.');return;}
   if(!passable(GW,tile.x,tile.z,h)){setHint('Клетка занята.');return;}
   const path=astar(GW,h.x,h.z,tile.x,tile.z,h,false);
@@ -1792,8 +1679,8 @@ async function tryMove(h,tile){
   refreshUI();showReach(h);
 }
 function onLeftClick(){
-  if(phase==='explore'){
-    if(busy)return;
+  if(G.phase==='explore'){
+    if(G.busy)return;
     if(pick.inter){pick.inter.fn();return;}
     if(pick.ent&&pick.ent.alive&&pick.ent.side==='goblin'&&!pick.ent.pacified){
       if(S.patrolGroup.includes(pick.ent)&&!S.patrolDone){openDlg('patrol');return;}
@@ -1802,9 +1689,9 @@ function onLeftClick(){
     if(pick.tile)moveParty(pick.tile);
     return;
   }
-  if(!combatOn||phase!=='player'||busy||!current||current.side!=='hero')return;
-  const h=current;
-  if(targeting){resolveTargetClick();return;}
+  if(!G.combatOn||G.phase!=='player'||G.busy||!G.current||G.current.side!=='hero')return;
+  const h=G.current;
+  if(G.targeting){resolveTargetClick();return;}
   const tgt=pick.ent;
   if(tgt&&(tgt.side==='goblin'||tgt.isBarrel)){
     if(cheb(h,tgt)<=h.weapon.range&&h.action>0){
@@ -1907,8 +1794,8 @@ function renderJournal(){
 
 /* ---- диалоги ---- */
 function openDlg(npc){
-  if(combatOn||phase==='over')return;
-  busyOn();phase='dialogue';
+  if(G.combatOn||G.phase==='over')return;
+  busyOn();G.phase='dialogue';
   sfx.dialog();
   S.dlgNpc=npc;
   setHint('');
@@ -1918,13 +1805,13 @@ function openDlg(npc){
 function closeDlg(){
   $(UI.dlgBox).style.display='none';
   S.dlgNpc=null;
-  if(phase==='dialogue'){phase='explore';busyOff();}
+  if(G.phase==='dialogue'){G.phase='explore';busyOff();}
   refreshHintExplore();
 }
 function closeDlgHard(){
   $(UI.dlgBox).style.display='none';
   S.dlgNpc=null;
-  busyCount=Math.max(0,busyCount-1);busy=busyCount>0;
+  G.busyCount=Math.max(0,G.busyCount-1);G.busy=G.busyCount>0;
 }
 function gotoNode(id){showNode(id);}
 function socialCheck(req){
@@ -2134,7 +2021,7 @@ function takeCrate(){
   refreshHintExplore();
 }
 async function moveParty(tile){
-  if(busy||phase!=='explore')return;
+  if(G.busy||G.phase!=='explore')return;
   const hs=aliveHeroes();
   if(!hs.length)return;
   busyOn();
@@ -2159,7 +2046,7 @@ async function moveParty(tile){
   checkTriggers();
 }
 function checkTriggers(){
-  if(phase!=='explore'||busy||combatOn)return;
+  if(G.phase!=='explore'||G.busy||G.combatOn)return;
   const hs=aliveHeroes();
   if(!hs.length)return;
   if(!S.patrolDone&&S.patrolGroup.some(g=>g.alive)){
@@ -2173,13 +2060,13 @@ function checkTriggers(){
     questStart('prisoner');
     log('В клетке у тропы кто-то шевелится…','g-sys');
   }
-  if(mapId==='crypt'&&S.cryptGroup.some(g=>g.alive&&g.cryptBoss)){/* v0.8: триггер босса крипты */
+  if(G.mapId==='crypt'&&S.cryptGroup.some(g=>g.alive&&g.cryptBoss)){/* v0.8: триггер босса крипты */
     if(hs.some(h=>S.cryptGroup.some(g=>cheb(h,g)<=7))){openDlg('necro');return;}
   }
   refreshHintExplore();
 }
 function refreshHintExplore(){
-  if(phase!=='explore'){setHint('');return;}
+  if(G.phase!=='explore'){setHint('');return;}
   const it=nearestInteract();
   setHint(it?('E — '+it.label):'');
 }
@@ -2242,15 +2129,15 @@ $(UI.contBtn).onclick=()=>{$(UI.end).style.display='none';};
 function openExploreUI(){
   $(UI.actionbar).style.display='none';
   $(UI.turnb).textContent='';
-  $(UI.round).textContent=MAP_NAME[mapId];/* v0.8 */
+  $(UI.round).textContent=MAP_NAME[G.mapId];/* v0.8 */
   refreshInit();refreshTracker();
   refreshHintExplore();
 }
 
 /* ================= UI ================= */
 function refreshUI(){
-  if(phase==='explore'||phase==='dialogue')return;
-  const h=current&&current.side==='hero'?current:null;
+  if(G.phase==='explore'||G.phase==='dialogue')return;
+  const h=G.current&&G.current.side==='hero'?G.current:null;
   if(h){
     $(UI.pips).innerHTML=
       '<span>Действие <b>'+h.action+'</b></span>'+
@@ -2272,8 +2159,8 @@ function refreshUI(){
     const b=document.createElement('button');
     b.textContent=a.label+(a.sub?' · '+a.sub:'');
     if(a.cls)b.className=a.cls;
-    b.disabled=!a.enabled(h)||phase!=='player';
-    b.onclick=()=>{if(phase==='player'&&!busy)a.run(h);};
+    b.disabled=!a.enabled(h)||G.phase!=='player';
+    b.onclick=()=>{if(G.phase==='player'&&!G.busy)a.run(h);};
     bb.appendChild(b);
   }
   refreshParty();
@@ -2283,7 +2170,7 @@ function refreshParty(){
   el.innerHTML='';
   for(const h of units.filter(u=>u.side==='hero')){
     const card=document.createElement('div');
-    card.className='panel pcard'+(current===h&&h.alive?' active':'');
+    card.className='panel pcard'+(G.current===h&&h.alive?' active':'');
     const st=h.statuses.map(s=>
       '<span class="stb" style="background:'+STATUS[s.type].css+'">'+STATUS[s.type].tag+s.turns+'</span>').join('');
     const need=XP_NEED(h.level);
@@ -2300,7 +2187,7 @@ function refreshParty(){
 function refreshBossBar(){
   const el=$(UI.bossbar);
   if(!el)return;
-  const b=combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
+  const b=G.combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
   if(!b){el.style.display='none';return;}
   el.style.display='block';
   $(UI.bossname).textContent=b.name+' — '+b.clsName;
@@ -2309,9 +2196,9 @@ function refreshBossBar(){
 function refreshInit(){
   refreshBossBar();
   const el=$(UI.initRow);
-  if(!combatOn){el.innerHTML='';return;}
-  el.innerHTML=order.map(u=>
-    '<span class="chip '+u.side+' '+(u===current?'cur ':'')+(!u.alive?'dead':'')+'">'+u.short+' '+u.init+'</span>').join('');
+  if(!G.combatOn){el.innerHTML='';return;}
+  el.innerHTML=G.order.map(u=>
+    '<span class="chip '+u.side+' '+(u===G.current?'cur ':'')+(!u.alive?'dead':'')+'">'+u.short+' '+u.init+'</span>').join('');
 }
 function showSheet(h){
   const ab=(l,v)=>{
@@ -2371,7 +2258,7 @@ let savesFromEnd=false,importSlot=1;
 function gameSnapshot():SaveData{/* Фаза 3: формат v2 заморожен (types.ts) */
   return {
     v:SAVE_VER,when:Date.now(),
-    mapId,mapName:MAP_NAME[mapId],
+    mapId:G.mapId,mapName:MAP_NAME[G.mapId],
     gold:S.gold,discount:!!S.discount,
     flags:{
       patrolDone:!!S.patrolDone,campDone:!!S.campDone,cageSeen:!!S.cageSeen,knowsBoss:!!S.knowsBoss,
@@ -2398,7 +2285,7 @@ function readSlot(i:number):SaveData|null{
   catch(e){return null;}
 }
 function doSave(i){
-  if(combatOn||busy||phase==='transition'||phase==='over'){
+  if(G.combatOn||G.busy||G.phase==='transition'||G.phase==='over'){
     log('Сейчас нельзя сохранять: идёт бой, переход или экран поражения.','g-enemy');sfx.ui();return;
   }
   try{localStorage.setItem(slotKey(i),JSON.stringify(gameSnapshot()));}
@@ -2408,8 +2295,8 @@ function doSave(i){
 function doLoad(i){
   const sv=readSlot(i);
   if(!sv){log('Слот '+i+' пуст — сохраняйте через «Сохранить» или импортируйте JSON.','g-enemy');sfx.ui();return;}
-  if(phase==='transition'){log('Идёт переход между картами — подождите секунду.','g-enemy');return;}
-  if(busy){log('Дождитесь конца текущего действия.','g-enemy');return;}
+  if(G.phase==='transition'){log('Идёт переход между картами — подождите секунду.','g-enemy');return;}
+  if(G.busy){log('Дождитесь конца текущего действия.','g-enemy');return;}
   applyGame(sv);
 }
 function doDelete(i){
@@ -2446,7 +2333,7 @@ function onImportFile(e){
 }
 function applyGame(sv:SaveData|null){
   if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)){log('Сейв повреждён или от другой версии.','g-enemy');return;}
-  if(phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
+  if(G.phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
   if(S.dlgNpc)closeDlgHard();
   closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();
   $(UI.sheet).style.display='none';$(UI.end).style.display='none';
@@ -2486,14 +2373,14 @@ function applyGame(sv:SaveData|null){
   openExploreUI();
   refreshParty();refreshBossBar();refreshHintExplore();refreshTracker();
   bigBanner('ИГРА ЗАГРУЖЕНА');
-  log('Отряд приходит в себя: '+MAP_NAME[mapId]+'. Прогресс восстановлен из сейва.','g-heal');
+  log('Отряд приходит в себя: '+MAP_NAME[G.mapId]+'. Прогресс восстановлен из сейва.','g-heal');
   sfx.ui();
 }
 function renderSaves(){
   const el=$(UI.saveList);if(!el)return;
   el.innerHTML='';
   const hs=units.filter(u=>u.side==='hero');
-  $(UI.curSave).textContent='Текущая игра: '+MAP_NAME[mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
+  $(UI.curSave).textContent='Текущая игра: '+MAP_NAME[G.mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
   for(let i=1;i<=SLOT_N;i++){
     const sv=readSlot(i);
     const row=document.createElement('div');row.className='slot';
@@ -2524,7 +2411,7 @@ function closeSaveMenu(){
   $(UI.saves).style.display='none';
   if(savesFromEnd){
     savesFromEnd=false;
-    if(phase==='over')$(UI.end).style.display='flex';/* вернулись на экран поражения */
+    if(G.phase==='over')$(UI.end).style.display='flex';/* вернулись на экран поражения */
   }
 }
 function toggleSaveMenu(){
@@ -2545,12 +2432,12 @@ function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.ass
 function applyShadows(){
   const q=gfx.shadows;
   renderer.shadowMap.enabled=(q!=='off');
-  if(sunLight){
-    sunLight.castShadow=(q!=='off');
+  if(G.sunLight){
+    G.sunLight.castShadow=(q!=='off');
     const size=q==='high'?2048:1024;
-    if(sunLight.shadow.mapSize.x!==size){
-      sunLight.shadow.mapSize.set(size,size);
-      if(sunLight.shadow.map){sunLight.shadow.map.dispose();sunLight.shadow.map=null;}
+    if(G.sunLight.shadow.mapSize.x!==size){
+      G.sunLight.shadow.mapSize.set(size,size);
+      if(G.sunLight.shadow.map){G.sunLight.shadow.map.dispose();G.sunLight.shadow.map=null;}
     }
   }
 }
@@ -2625,7 +2512,7 @@ function castRay(e){
 }
 function updatePick(e){
   pick.tile=null;pick.ent=null;pick.inter=null;
-  if(busy||(phase!=='player'&&phase!=='explore')){showTipFor(null,e);return;}
+  if(G.busy||(G.phase!=='player'&&G.phase!=='explore')){showTipFor(null,e);return;}
   castRay(e);
   const ents=[...units.filter(u=>u.alive),...barrels.filter(b=>b.alive)];
   const hits=ray.intersectObjects(ents.map(u=>u.mesh),true);
@@ -2634,7 +2521,7 @@ function updatePick(e){
     while(o&&!o.userData.ent)o=o.parent;
     if(o)pick.ent=o.userData.ent;
   }
-  if(!pick.ent&&phase==='explore'){
+  if(!pick.ent&&G.phase==='explore'){
     const ims=interactables.filter(it=>it.mesh).map(it=>it.mesh);
     const ih=ray.intersectObjects(ims,true);
     if(ih.length){
@@ -2644,7 +2531,7 @@ function updatePick(e){
     }
   }
   if(!pick.ent&&!pick.inter){
-    const gh=ray.intersectObject(groundMesh,false);
+    const gh=ray.intersectObject(G.groundMesh,false);
     if(gh.length){
       const p=gh[0].point;
       pick.tile={x:clamp(Math.round(p.x/TILE+HALF),0,GRID-1),z:clamp(Math.round(p.z/TILE+HALF),0,GRID-1)};
@@ -2654,7 +2541,7 @@ function updatePick(e){
 }
 function updateHoverFX(e){
   const cv=renderer.domElement;
-  if(targeting){
+  if(G.targeting){
     clearDots();
     showTipFor(pick.ent||null,e);
     cv.style.cursor='crosshair';
@@ -2663,14 +2550,14 @@ function updateHoverFX(e){
   showTipFor(pick.ent||pick.inter||null,e);
   cv.style.cursor=(pick.ent||pick.inter)?'pointer':'default';
   clearDots();
-  if(phase==='player'&&pick.tile&&current&&current.side==='hero'&&!busy&&current.moveLeft>=1&&passable(GW,pick.tile.x,pick.tile.z,current)){
-    const path=astar(GW,current.x,current.z,pick.tile.x,pick.tile.z,current,false);
+  if(G.phase==='player'&&pick.tile&&G.current&&G.current.side==='hero'&&!G.busy&&G.current.moveLeft>=1&&passable(GW,pick.tile.x,pick.tile.z,G.current)){
+    const path=astar(GW,G.current.x,G.current.z,pick.tile.x,pick.tile.z,G.current,false);
     if(path&&path.length){
-      let acc=0,px=current.x,pz=current.z;
+      let acc=0,px=G.current.x,pz=G.current.z;
       for(const st of path){
         acc+=(st.x!==px&&st.z!==pz)?1.5:1;
         px=st.x;pz=st.z;
-        addDot(st.x,st.z,acc<=current.moveLeft+1e-9);
+        addDot(st.x,st.z,acc<=G.current.moveLeft+1e-9);
       }
     }
   }
@@ -2681,7 +2568,7 @@ function showTipFor(ent,e){
   let html='';
   if(ent.talkName){
     html='<b>'+ent.talkName+'</b><br>'+ent.talkDesc;
-    if(phase==='explore')html+='<br><span class="tc">E или клик — взаимодействовать</span>';
+    if(G.phase==='explore')html+='<br><span class="tc">E или клик — взаимодействовать</span>';
   }else if(ent.isBarrel){
     html='<b>'+(ent.name||'Взрывная бочка')+'</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
   }else{
@@ -2689,10 +2576,10 @@ function showTipFor(ent,e){
     if(ent.healer)html+='<br><span class="tc">Целитель: латает слуг Костепёра — бейте первым.</span>';
     if(ent.elite)html+='<br><span class="tc">Элита: крепче рядового, добыча богаче.</span>';
     if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
-    if(targeting&&(targeting.type==='attack'||targeting.type==='bolt'||targeting.type==='sneak'||targeting.type==='smite')&&ent.side==='goblin'&&current){
-      const w=(targeting.type==='attack'||targeting.type==='sneak')?current.weapon:(targeting.type==='smite'?SMITE:BOLT);
-      const ch=Math.round(hitChance(current,ent,w)*100);
-      html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(current,w).toFixed(1)+' • крит 5%</span>';
+    if(G.targeting&&(G.targeting.type==='attack'||G.targeting.type==='bolt'||G.targeting.type==='sneak'||G.targeting.type==='smite')&&ent.side==='goblin'&&G.current){
+      const w=(G.targeting.type==='attack'||G.targeting.type==='sneak')?G.current.weapon:(G.targeting.type==='smite'?SMITE:BOLT);
+      const ch=Math.round(hitChance(G.current,ent,w)*100);
+      html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(G.current,w).toFixed(1)+' • крит 5%</span>';
     }
   }
   tip.innerHTML=html;
@@ -2716,10 +2603,10 @@ function bindInput(){
     sfx.unlock();
     if(e.key==='Escape'){cancelTargeting();$(UI.sheet).style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
-      if(phase==='explore'&&!busy){const it=nearestInteract();if(it)it.fn();}
+      if(G.phase==='explore'&&!G.busy){const it=nearestInteract();if(it)it.fn();}
     }
     if(e.key==='j'||e.key==='J'||e.key==='о'||e.key==='О'){toggleJournal();}
-    if(e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л'){if(phase!=='transition')toggleSaveMenu();}/* v1.1 */
+    if(e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л'){if(G.phase!=='transition')toggleSaveMenu();}/* v1.1 */
     if(e.key==='g'||e.key==='G'||e.key==='п'||e.key==='П'){toggleGfx();}/* v1.1 */
   };
   addEventListener('keydown',onKey);
@@ -2741,31 +2628,25 @@ function loop(){
   if(fpsLimit>0){frameAcc+=rdt;if(frameAcc+1e-4<0.98/fpsLimit)return;frameAcc=0;}
   slowmo.update(rdt);
   const dt=rdt*slowmo.scale;
-  for(let i=tweens.length-1;i>=0;i--){
-    const tw=tweens[i];
-    tw.t+=dt;
-    const k=Math.min(1,tw.t/tw.dur);
-    tw.fn(k);
-    if(k>=1){tweens.splice(i,1);tw.res();}
-  }
+  tickTweens(dt);
   controls.update();
-  if(fireLight)fireLight.intensity=22+Math.sin(t*11)*4+Math.sin(t*23.7)*2.5;
-  if(flameMesh){flameMesh.scale.y=1+Math.sin(t*13)*0.18;flameMesh.rotation.y+=dt*2;}
+  if(G.fireLight)G.fireLight.intensity=22+Math.sin(t*11)*4+Math.sin(t*23.7)*2.5;
+  if(G.flameMesh){G.flameMesh.scale.y=1+Math.sin(t*13)*0.18;G.flameMesh.rotation.y+=dt*2;}
   for(const f of fires.values()){
     (f.m1.material as THREE.MeshBasicMaterial).opacity=0.4+0.18*Math.sin(t*6+f.x*1.3);
     (f.m2.material as THREE.MeshBasicMaterial).opacity=0.35+0.2*Math.sin(t*9+f.z);
     f.m2.scale.setScalar(0.5+0.12*Math.sin(t*8+f.x));
   }
-  if(shakeT>0){
-    shakeT=Math.max(0,shakeT-dt);
-    const s=shakeT*0.4;
+  if(G.shakeT>0){
+    G.shakeT=Math.max(0,G.shakeT-dt);
+    const s=G.shakeT*0.4;
     scene.position.set((Math.random()-0.5)*s,(Math.random()-0.5)*s*0.6,(Math.random()-0.5)*s);
   }else scene.position.set(0,0,0);
   fx.update(dt);
   glows.update(dt,t);
   rigs.update(dt,t);
   updateOverlays();
-  if(postFX&&bloomOn)postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый */
+  if(G.postFX&&bloomOn)G.postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый */
 }
 
 /* ================= СТАРТ ================= */
@@ -2774,6 +2655,7 @@ let disposed=false;
 (async()=>{
   try{
     console.log('[bg3] init: start');
+    initRenderer();
     await renderer.init();
     console.log('[bg3] init: done, backend=',(renderer.backend as any)?.isWebGPUBackend?'WebGPU':'WebGL2');
   }catch(err){
@@ -2784,17 +2666,8 @@ let disposed=false;
     return;
   }
   if(disposed)return;
-  /* v0.7.x: bloom-пасс (TSL, работает и на WebGL2-бэкенде); при сбое — обычный рендер */
-  try{
-    const scenePass=pass(scene,camera);
-    const sceneColor=scenePass.getTextureNode();
-    const bloomPass=bloom(sceneColor,0.45,0.55,0.82);
-    postFX=new THREE.PostProcessing(renderer);
-    postFX.outputNode=sceneColor.add(bloomPass);
-    console.log('[bg3] bloom enabled (TSL PostProcessing)');
-  }catch(e){
-    console.warn('[bg3] bloom disabled:',e);postFX=null;
-  }
+  /* v0.7.x: bloom-пасс (TSL, WebGL2-фолбэк) — сборка в render/renderer.ts */
+  await setupPostFX();
   try{
   /* v0.8: карта леса по умолчанию — сетка, мир, герои, враги, декорации */
   seedForest();
@@ -2807,8 +2680,8 @@ let disposed=false;
   initOverlays();
   bindInput();
   /* v0.7: хало и угли костра */
-  glows.campfire(W(FIREPIT[0]),W(FIREPIT[1]));
-  fx.addEmber('campfire',W(FIREPIT[0]),W(FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
+  glows.campfire(W(G.FIREPIT[0]),W(G.FIREPIT[1]));
+  fx.addEmber('campfire',W(G.FIREPIT[0]),W(G.FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
   /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и босса; гоблины — капсулы */
   void (async()=>{
     const targets=units.filter(u=>u.side==='hero'||u.isBoss);
@@ -2821,7 +2694,7 @@ let disposed=false;
     console.log('[bg3] GLTF rigs:',ok+'/'+targets.length);
     if(ok)log('Скелетные анимации подключены ('+ok+' рига).','g-sys');
   })();
-  phase='explore';
+  G.phase='explore';
   refreshUI();refreshParty();
   openExploreUI();
   /* v1.1: настройки графики + меню сохранений */

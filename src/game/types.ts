@@ -52,8 +52,8 @@ export interface Unit{
   weapon:Weapon;dagger:Weapon|null;
   armor?:string;staff?:boolean;
   statuses:Status[];
-  /* ресурсы хода */
-  actionMax:number;action?:number;bonus?:number;reaction:number;
+  /* ресурсы хода (заполняются makeUnit'ом и beginTurn; обязательны) */
+  actionMax:number;action:number;bonus:number;reaction:number;
   moveLeft:number;dashUsed?:boolean;disengaging?:boolean;
   swUsed:boolean;dawnUsed:boolean;poisonBlade:number;surge:number;
   /* заклинания/предметы */
