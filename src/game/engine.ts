@@ -10,7 +10,8 @@ import { slowmo } from './slowmo';
 import { AnimRigs, upgradeUnitRig } from './animation';
 
 /* ================= УТИЛИТЫ ================= */
-const $=q=>document.querySelector(q);
+/* TODO(refactor-p3): доменные типы Unit/Barrel/Interact вместо any[] и any-полей (types.ts) */
+const $=(q:string):HTMLElement=>document.querySelector(q) as HTMLElement;
 const d=s=>1+Math.floor(Math.random()*s);
 const roll=(n,s)=>{let t=0;for(let i=0;i<n;i++)t+=d(s);return t;};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -35,7 +36,7 @@ const STATUS={
   dodge:{name:'Уклонение',tag:'У',css:'#9fc4e8'},/* v1.2 */
   faith:{name:'Щит веры',tag:'Щ',css:'#8fb8ff'},/* v1.2 */
 };
-const S={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
+const S:any={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
   cageMesh:null,ilvaMesh:null,crateMesh:null,
   cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set()};/* v0.8+v1.1+v1.2 */
@@ -46,15 +47,15 @@ const S={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,k
 export function bootGame(){
 
 /* ================= СОСТОЯНИЕ ================= */
-let busy=false, busyCount=0, combatOn=false, phase='idle', targeting=null;
+let busy=false, busyCount=0, combatOn=false, phase='idle', targeting:any=null;
 function busyOn(){busyCount++;busy=true;}
 function busyOff(){busyCount=Math.max(0,busyCount-1);if(busyCount===0)busy=false;}
-let wave=1, pendingWave=false, round=1, turnIdx=-1, current=null;
-let order=[]; const units=[], barrels=[], fires=new Map();
-let uid=0; const gobCount={};
-const tweens=[]; let shakeT=0;
-const pick={tile:null,ent:null,inter:null};
-let groundMesh=null, fireLight=null, flameMesh=null;
+let wave=1, pendingWave=false, round=1, turnIdx=-1, current:any=null;
+let order:any[]=[]; const units:any[]=[], barrels:any[]=[], fires=new Map<string,any>();
+let uid=0; const gobCount:Record<string,number>={};
+const tweens:any[]=[]; let shakeT=0;
+const pick:{tile:any,ent:any,inter:any}={tile:null,ent:null,inter:null};
+let groundMesh:any=null, fireLight:any=null, flameMesh:any=null;
 
 /* ================= РЕНДЕРЕР / СЦЕНА ================= */
 const renderer=new THREE.WebGPURenderer({antialias:true});
@@ -73,7 +74,7 @@ function clearGroup(g){for(let i=g.children.length-1;i>=0;i--)g.remove(g.childre
 const fx=new ParticleFX(scene);
 const glows=new GlowFX(scene);
 const rigs=new AnimRigs();
-let postFX=null;
+let postFX:any=null;
 const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,0.1,220);
 camera.position.set(2,27,41);
 const controls=new OrbitControls(camera,renderer.domElement);
@@ -85,8 +86,8 @@ controls.target.set(1,0,12);
 /* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
    Одна сетка 28×28, но два набора декораций/обстановки:
    forest — тракт и лагерь Костей, crypt — подземелье босса. */
-const solid=new Set(), grass=new Set();
-let TREES=null,ROCKS=null,TENTS=null,FIREPIT=null,BARREL_POS=null;
+const solid=new Set<string>(), grass=new Set<string>();
+let TREES:any=null,ROCKS:any=null,TENTS:any=null,FIREPIT:any=null,BARREL_POS:any=null;
 const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25}, KAYA_SPOT=[15,22];/* v1.2: алтарь Кая */
 let mapId='forest';
 const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра'};
@@ -232,7 +233,7 @@ function applyAtmosphere(m){
   if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
   else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
 }
-let hemiLight=null,sunLight=null;
+let hemiLight:any=null,sunLight:any=null;
 function applyLighting(m){
   if(!hemiLight){
     hemiLight=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
@@ -819,11 +820,11 @@ async function switchMap(id){
   busyOn();phase='transition';
   sfx.portal();
   const f=$('#fade');
-  f.style.opacity=1;
+  f.style.opacity='1';
   await sleep(620);
   teardownWorld();
   buildMap(id,CRYPT.ENTER);
-  f.style.opacity=0;
+  f.style.opacity='0';
   openExploreUI();
   refreshTracker();refreshParty();refreshBossBar();
   busyOff();
@@ -847,7 +848,7 @@ async function lunge(att,def){
   await tween(0.13,k=>{const s=k*k*(3-2*k);att.mesh.position.copy(back).addScaledVector(dir,L*(1-s));});
   att.mesh.position.copy(back);
 }
-const boomPool=[];
+const boomPool:any[]=[];
 function boomFX(x,z,r){
   let m=boomPool.find(b=>!b.visible);
   if(!m){
@@ -874,7 +875,7 @@ function log(msg,cls){
   p.textContent=msg;
   const lb=$('#logbody');
   lb.appendChild(p);
-  while(lb.children.length>80)lb.removeChild(lb.firstChild);
+  while(lb.children.length>80)lb.removeChild(lb.firstChild!);
   lb.scrollTop=lb.scrollHeight;
 }
 const pv=new THREE.Vector3();
@@ -893,8 +894,8 @@ function ftextAbove(ent,text,color){
 }
 function setHint(t){$('#hint').textContent=t||'';}
 function bigBanner(text){
-  const b=$('#banner');b.textContent=text;b.style.opacity=1;
-  setTimeout(()=>{b.style.opacity=0;},2200);
+  const b=$('#banner');b.textContent=text;b.style.opacity='1';
+  setTimeout(()=>{b.style.opacity='0';},2200);
 }
 function initOverlays(){
   const ov=$('#ov');
@@ -926,7 +927,7 @@ function updateOverlays(){
 }
 
 /* ================= МАРКЕРЫ / ТОЧКИ ПУТИ ================= */
-const markerPool=[],dotPool=[];
+const markerPool:any[]=[],dotPool:any[]=[];
 let mi=0,di=0;
 const circGeo=new THREE.CircleGeometry(0.52,20);
 const dotGeo=new THREE.SphereGeometry(0.09,8,8);
@@ -968,16 +969,16 @@ function showReach(u){
 function astar(sx,sz,gx,gz,mover,ai){
   if(!passable(gx,gz,mover))return null;
   if(sx===gx&&sz===gz)return [];
-  const open=new Map(),closed=new Set();
+  const open=new Map<string,any>(),closed=new Set<string>();
   const h=(x,z)=>{const dx=Math.abs(x-gx),dz=Math.abs(z-gz);return Math.max(dx,dz)+0.5*Math.min(dx,dz);};
   open.set(key(sx,sz),{x:sx,z:sz,g:0,f:h(sx,sz),p:null});
   let it=0;
   while(open.size&&it++<4000){
-    let bn=null,bk=null;
+    let bn:any=null,bk:any=null;
     for(const [k,n] of open)if(!bn||n.f<bn.f){bn=n;bk=k;}
     open.delete(bk);closed.add(bk);
     if(bn.x===gx&&bn.z===gz){
-      const path=[];let c=bn;
+      const path:any[]=[];let c=bn;
       while(c.p){path.push({x:c.x,z:c.z});c=c.p;}
       return path.reverse();
     }
@@ -996,7 +997,7 @@ function astar(sx,sz,gx,gz,mover,ai){
   return null;
 }
 function reachNodes(mover,ai){
-  const start={x:mover.x,z:mover.z,g:0,p:null};
+  const start:any={x:mover.x,z:mover.z,g:0,p:null};
   const best=new Map([[key(mover.x,mover.z),start]]);
   const open=[start];
   let it=0;
@@ -1019,7 +1020,7 @@ function reachNodes(mover,ai){
   return best;
 }
 function nodePath(node){
-  const a=[];let c=node;
+  const a:any[]=[];let c=node;
   while(c.p){a.push({x:c.x,z:c.z});c=c.p;}
   return a.reverse();
 }
@@ -1062,7 +1063,7 @@ function tickFires(){
       if(u.alive&&Math.random()<0.5)addStatus(u,'burn',2);
     }
   }
-  const born=[];
+  const born:any[]=[];
   for(const f of fires.values()){
     for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
       if(!dx&&!dz)continue;
@@ -1107,7 +1108,7 @@ function addStatus(u,type,turns){
   else if(type==='faith')sfx.bless();else if(type==='dodge')sfx.ui();/* v1.2 */
   refreshIcons(u);refreshParty();
 }
-async function doAttack(att,def,w,opts){
+async function doAttack(att,def,w,opts?){
   opts=opts||{};
   if(!att.alive||!def.alive)return;
   busyOn();
@@ -1203,7 +1204,7 @@ function rollLoot(t){
     if(Math.random()<tbl.oil)giveToParty('oil','огненное масло из пожитков врага');
   }
   if(t.elite&&hs.length){/* реликвии элиты — по одной на героя */
-    let relic=null,cand=aliveHeroes();
+    let relic:any=null,cand=aliveHeroes();
     if(t.cls==='undead'){relic={n:'Костяной оберег',apply:h=>{h.ac+=1;h.relic='Костяной оберег';return h.short+': КД +1';}};}
     else if(t.caster){relic={n:'Пыльный фолиант',apply:h=>{h.slotsMax+=1;h.slots+=1;h.relic='Пыльный фолиант';return h.short+': +1 ячейка заклинаний';}};cand=aliveHeroes().filter(h=>h.slotsMax>0);}
     else{relic={n:'Трофейный клык',apply:h=>{h.str+=1;h.relic='Трофейный клык';return h.short+': СИЛ +1';}};cand=aliveHeroes().filter(h=>h.cls==='fighter');}
@@ -1556,7 +1557,7 @@ function planNecro(u){/* v0.8: ИИ некроманта — шквал, дис�
   if(!u.phase2&&u.hp<=u.maxhp*0.5)return{type:'phase2'};
   if(u.action>0&&heroes.filter(h=>cheb(u,h)<=1).length>=2)return{type:'nova'};
   if(u.action>0){
-    let best=null;
+    let best:any=null;
     for(const h of heroes)if(cheb(u,h)<=u.weapon.range){
       const s=evalAttack(u,h)+(h.hp<=h.maxhp*0.4?1.6:0);
       if(!best||s>best.s)best={s,target:h};
@@ -1567,7 +1568,7 @@ function planNecro(u){/* v0.8: ИИ некроманта — шквал, дис�
     const close=heroes.some(h=>cheb(u,h)<3);
     if(close){
       const nodes=reachNodes(u,true);
-      let best=null;
+      let best:any=null;
       const curD=Math.min(...heroes.map(h=>cheb(u,h)));
       for(const node of nodes.values()){
         if(node.g<=0)continue;
@@ -1580,7 +1581,7 @@ function planNecro(u){/* v0.8: ИИ некроманта — шквал, дис�
   }
   if(u.moveLeft>=1&&u.action>0){
     const nodes=reachNodes(u,true);
-    let best=null;
+    let best:any=null;
     for(const node of nodes.values()){
       if(node.g<=0)continue;
       for(const h of heroes){
@@ -1610,7 +1611,7 @@ function bestFleeNode(u){
   const heroes=units.filter(x=>x.side==='hero'&&x.alive);
   if(!heroes.length)return null;
   const nodes=reachNodes(u,true);
-  let best=null;
+  let best:any=null;
   for(const node of nodes.values()){
     if(node.g<=0)continue;
     const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
@@ -1626,7 +1627,7 @@ function planGoblin(u){
   const gobs=units.filter(x=>x.side==='goblin'&&x.alive);
   /* v1.3: ученик некроманта первым делом латает раненых слуг */
   if(u.healer&&u.action>0){
-    let hb=null;
+    let hb:any=null;
     for(const w of gobs){
       if(w===u||w.hp>=w.maxhp*0.65)continue;
       const s=(1-w.hp/w.maxhp)*3+(w.isBoss?1.2:0);
@@ -1646,7 +1647,7 @@ function planGoblin(u){
     }
   }
   if(u.action>0){
-    let best=null;
+    let best:any=null;
     for(const h of heroes)if(cheb(u,h)<=u.weapon.range){
       const s=evalAttack(u,h);
       if(!best||s>best.s)best={s,target:h};
@@ -1657,7 +1658,7 @@ function planGoblin(u){
     const close=heroes.some(h=>cheb(u,h)<3);
     if(close){
       const nodes=reachNodes(u,true);
-      let best=null;
+      let best:any=null;
       const curD=Math.min(...heroes.map(h=>cheb(u,h)));
       for(const node of nodes.values()){
         if(node.g<=0)continue;
@@ -1675,7 +1676,7 @@ function planGoblin(u){
   }
   if(u.moveLeft>=1&&u.action>0){
     const nodes=reachNodes(u,true);
-    let best=null;
+    let best:any=null;
     for(const node of nodes.values()){
       if(node.g<=0)continue;
       for(const h of heroes){
@@ -2089,7 +2090,7 @@ const DLGS={
   },
   boss(id){
     if(id==='start'){
-      const opts=[];
+      const opts:any[]=[];
       if(S.knowsBoss)opts.push({t:'[Знание Илвы] «Помнишь драконий огонь, что оставил тебе те шрамы, Грат?»',fn:bossFear});
       opts.push(
         {t:'[Запугивание СЛ 16] «Ваш лагерь станет пеплом. Уведите щенков, пока целы.»',req:{skill:'Запугивание',dc:16},ok:'cow',fail:'fight'},
@@ -2182,7 +2183,7 @@ function fleeUnits(arr){
     log(g.name+' обращается в бегство!','g-sys');
     g.alive=false;
     const m=g.mesh,el=g._el;
-    tween(0.45,k=>{m.scale.setScalar(Math.max(0.01,1-k));if(el)el.style.opacity=1-k;})
+    tween(0.45,k=>{m.scale.setScalar(Math.max(0.01,1-k));if(el)el.style.opacity=String(1-k);})
       .then(()=>removeUnit(g));
   }
 }
@@ -2195,14 +2196,14 @@ function removeUnit(u){
 }
 
 /* ---- взаимодействие и исследование ---- */
-const interactables=[];
+const interactables:any[]=[];
 function addInteract(x,z,r,label,fn,mesh,talkName,talkDesc){
   const it={x,z,r,label,fn,mesh,talkName,talkDesc};
   if(mesh)mesh.userData.it=it;
   interactables.push(it);
 }
 function nearestInteract(){
-  let best=null,bd=1e9;
+  let best:any=null,bd=1e9;
   for(const h of aliveHeroes())for(const it of interactables){
     const dd=cheb(h,it);
     if(dd<=it.r&&dd<bd){bd=dd;best=it;}
@@ -2470,7 +2471,7 @@ function showSheet(h){
     '<p style="margin-top:3px">Опыт: '+h.xp+' / '+need+'</p>';
   $('#sheet').style.display='flex';
 }
-$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('#sheet').style.display='none';});
+$('#sheet').addEventListener('click',e=>{if((e.target as HTMLElement).id==='sheet')$('#sheet').style.display='none';});
 
 /* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
    Слоты живут в localStorage (bg3w_slot_1..3), формат — обычный JSON, поэтому
@@ -2543,7 +2544,7 @@ function onImportFile(e){
   e.target.value='';
   if(!file)return;
   file.text().then(txt=>{
-    let sv=null;
+    let sv:any=null;
     try{sv=JSON.parse(txt);}catch(err){}
     if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)||!MAP_NAME[sv.mapId]){
       log('Это не файл сохранения «Врат Бальдура» (нужен JSON формата v'+SAVE_VER+').','g-enemy');return;
@@ -2610,7 +2611,7 @@ function renderSaves(){
     row.innerHTML='<div class="smeta">Слот '+i+(sv?'':' — пуст')+'</div>'+
       '<div class="ssub">'+(sv?slotMeta(sv):'Нет данных. Сохраните игру или импортируйте JSON-файл.')+'</div>';
     const btns=document.createElement('div');btns.className='sbtns';
-    const mk=(t,fn,dis,danger)=>{
+    const mk=(t,fn,dis?,danger?)=>{
       const b=document.createElement('button');b.textContent=t;b.disabled=!!dis;
       if(danger)b.className='danger';
       b.onclick=fn;btns.appendChild(b);
@@ -2727,7 +2728,7 @@ $('#gfxClose').onclick=closeGfx;
 
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
-let downPos=null;
+let downPos:any=null;
 function castRay(e){
   ptr.x=(e.clientX/innerWidth)*2-1;
   ptr.y=-(e.clientY/innerHeight)*2+1;
@@ -2740,7 +2741,7 @@ function updatePick(e){
   const ents=[...units.filter(u=>u.alive),...barrels.filter(b=>b.alive)];
   const hits=ray.intersectObjects(ents.map(u=>u.mesh),true);
   if(hits.length){
-    let o=hits[0].object;
+    let o:any=hits[0].object;
     while(o&&!o.userData.ent)o=o.parent;
     if(o)pick.ent=o.userData.ent;
   }
@@ -2748,7 +2749,7 @@ function updatePick(e){
     const ims=interactables.filter(it=>it.mesh).map(it=>it.mesh);
     const ih=ray.intersectObjects(ims,true);
     if(ih.length){
-      let o=ih[0].object;
+      let o:any=ih[0].object;
       while(o&&!o.userData.it)o=o.parent;
       if(o)pick.inter=o.userData.it;
     }
@@ -2879,13 +2880,13 @@ function loop(){
 }
 
 /* ================= СТАРТ ================= */
-const disposers=[];
+const disposers:(()=>void)[]=[];
 let disposed=false;
 (async()=>{
   try{
     console.log('[bg3] init: start');
     await renderer.init();
-    console.log('[bg3] init: done, backend=',renderer.backend?.isWebGPUBackend?'WebGPU':'WebGL2');
+    console.log('[bg3] init: done, backend=',(renderer.backend as any)?.isWebGPUBackend?'WebGPU':'WebGL2');
   }catch(err){
     console.error('[bg3] renderer.init() failed:',err);
     document.body.insertAdjacentHTML('beforeend',
@@ -2959,14 +2960,14 @@ let disposed=false;
   }
 })();
 /* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) */
-window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
+(window as any).__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   freeIlva:()=>freeIlva(),joinKaya:()=>joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]),
   gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx,
   rollLoot,LOOT};/* v1.3: +лут-таблицы для E2E */
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);
-  while(disposers.length){try{disposers.pop()();}catch(e){}}
+  while(disposers.length){const f=disposers.pop();try{if(f)f();}catch(e){}}
   try{renderer.dispose();}catch(e){}
   const cv=renderer.domElement;
   if(cv&&cv.parentNode)cv.parentNode.removeChild(cv);

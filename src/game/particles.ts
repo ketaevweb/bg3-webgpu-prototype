@@ -85,7 +85,7 @@ export class ParticleFX {
     scene.add(this.points);
   }
 
-  private spawn(x: number, y: number, z: number, o: Required<Omit<BurstOpts, 'count'>> & { vx?: number; vy?: number; vz?: number }) {
+  private spawn(x: number, y: number, z: number, o: { color: number; life: number; gravity: number; vx?: number; vy?: number; vz?: number }) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % MAX;
     this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
