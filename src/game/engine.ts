@@ -13,13 +13,16 @@ import { astar, reachNodes, nodePath, passable, unitAt, barrelAt } from './world
 import { attackMod, blessed, hitChance, avgDamage } from './systems/combat';
 import { LOOT } from './systems/loot';
 import { UI } from './hud';
-import type { Barrel, Quest, SaveData, StatusType, Unit, UnitTemplate, Weapon } from './types';
+import type { Barrel, Quest, SaveData, StatusType, Unit, Weapon } from './types';
 import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT } from './state';
 import { log, projectPos, ftextAbove, setHint, bigBanner, initOverlays, refreshIcons, updateOverlays } from './ui/overlays';
 import { initMarkers, addMarker, clearMarkers, addDot, clearDots, showReach } from './ui/markers';
 import { refreshParty, refreshBossBar, refreshInit, showSheet } from './ui/party';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, applyAtmosphere, applyLighting, clearGroup, setupPostFX } from './render/renderer';
 import { tween, faceTo, lunge, boomFX, shake, tickTweens, projMesh } from './fx/tweens';
+import { buildFigure } from './entities/figure';
+import { enemiesOf, meleeWeaponOf, aliveHeroes, placeHeroes, removeUnit } from './entities/units';
+import { buildHeroes, spawnEnemies, makeIlva, makeKaya, makeSkeleton } from './entities/roster';
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    bootGame() — оркестратор: сборка, ввод, игровой цикл, dispose.
@@ -63,8 +66,6 @@ function seedCrypt(){
 }
 
 /* passable/unitAt/barrelAt/cheb/dangerAt → utils.ts и world/grid.ts (Фаза 2) */
-function enemiesOf(u){return units.filter(o=>o.alive&&!o.isBarrel&&o.side!==u.side);}
-function meleeWeaponOf(e){return e.weapon&&e.weapon.melee?e.weapon:(e.dagger||null);}
 
 /* ================= ПОСТРОЕНИЕ МИРА ================= */
 function addTree(x,z){
@@ -181,209 +182,6 @@ function buildWorld(){
   if(G.FIREPIT)addCampfire(G.FIREPIT[0],G.FIREPIT[1]);
   for(const [x,z] of G.BARREL_POS)if(!S.barrelsUsed.has(key(x,z)))addBarrel(x,z,G.mapId==='crypt'?0x4a4238:undefined);
 }
-/* ================= ЮНИТЫ ================= */
-function buildFigure(cfg){
-  const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.3,0.55,4,10),
-    new THREE.MeshStandardMaterial({color:cfg.color,roughness:0.75}));
-  body.position.y=0.72;body.castShadow=true;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.21,12,10),
-    new THREE.MeshStandardMaterial({color:cfg.skin||(cfg.side==='goblin'?0x7ba24a:0xd9b48a),roughness:0.8}));
-  head.position.y=1.32;head.castShadow=true;
-  g.add(body,head);
-  if(cfg.staff){
-    const st=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.055,1.5,7),
-      new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:0.8}));
-    st.position.set(0.38,0.8,0.12);st.castShadow=true;
-    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8),
-      new THREE.MeshBasicMaterial({color:cfg.tipColor||0xffa040}));
-    tip.position.set(0.38,1.58,0.12);
-    g.add(st,tip);
-  }else{
-    const wep=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.85,0.14),
-      new THREE.MeshStandardMaterial({color:0xb8bcc4,roughness:0.4,metalness:0.6}));
-    wep.position.set(0.38,0.85,0.1);wep.rotation.z=-0.5;
-    g.add(wep);
-  }
-  const ring=new THREE.Mesh(new THREE.RingGeometry(0.36,0.46,24),
-    new THREE.MeshBasicMaterial({color:cfg.side==='hero'?0x5a8fc0:(cfg.side==='goblin'?0xa04a3a:0x8a7a3a),
-      transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}));
-  ring.rotation.x=-Math.PI/2;ring.position.y=0.03;
-  g.add(ring);
-  g.userData.ring=ring;
-  return g;
-}
-function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза 3: доменный тип юнита */
-  const u=Object.assign({
-    id:++G.uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
-    slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,poisonBlade:0,dawnUsed:false,/* v1.2 */
-    action:0,bonus:0,/* Фаза 4a: обязательные поля Unit (переопределяются в beginTurn) */
-  },cfg) as Unit;
-  u.mesh=buildFigure(cfg);
-  u.mesh.position.set(W(cfg.x),0,W(cfg.z));
-  u.mesh.userData.ent=u;
-  /* v0.7: внутренний риг для процедурной анимации (покачивание) —
-     внешний mesh остаётся для твинов движения/смерти, кольцо не качается */
-  const rig=new THREE.Group();
-  for(const ch of [...u.mesh.children])if(ch!==u.mesh.userData.rig&&ch!==u.mesh.userData.ring)rig.add(ch);
-  u.mesh.add(rig);
-  u.rig=rig;u.phase=srand()*6.28;
-  rigs.register(u);
-  scene.add(u.mesh);
-  units.push(u);
-  return u;
-}
-const GOB:Record<string,UnitTemplate>={
-  bruiser:{name:'Гоблин-задира',short:'Задира',hp:7,ac:13,xp:50,color:0x5d8f3f,
-    weapon:{name:'Скимитар',dice:[1,6],abil:'str',melee:true,range:1}},
-  archer:{name:'Гоблин-лучник',short:'Лучник',hp:7,ac:13,xp:50,color:0x6b7d3f,dex:14,
-    weapon:{name:'Короткий лук',dice:[1,6],abil:'dex',range:8},
-    dagger:{name:'Кинжал',dice:[1,4],abil:'str',melee:true,range:1}},
-  shaman:{name:'Гоблин-шаман',short:'Шаман',hp:9,ac:12,xp:75,color:0x7a4f9e,dex:14,keepDist:true,
-    weapon:{name:'Отравленный дротик',dice:[1,4],abil:'dex',range:6,status:{type:'poison',turns:2}},
-    dagger:{name:'Кинжал',dice:[1,4],abil:'str',melee:true,range:1}},
-  chief:{name:'Гоблин-вожак',short:'Вожак',hp:15,ac:14,xp:100,color:0x8f4a3a,
-    weapon:{name:'Тесак',dice:[1,8],abil:'str',melee:true,range:1}},
-  /* v1.3: элитный задира лагеря — бьёт больно, лут богатый */
-  veteran:{name:'Гоблин-ветеран',short:'Ветеран',hp:14,ac:14,xp:110,color:0x4f7a35,
-    weapon:{name:'Двуручный тесак',dice:[1,10],abil:'str',melee:true,range:1}},
-};
-function makeGoblin(t,x,z){
-  gobCount[t.short]=(gobCount[t.short]||0)+1;
-  const n=gobCount[t.short];
-  return makeUnit({
-    name:t.name+(n>1?' №'+n:''), short:t.short+(n>1?' '+n:''), side:'goblin',
-    cls:'goblin',clsName:'Гоблин',x,z,
-    str:12,dex:t.dex||12,con:12,int:8,wis:8,cha:8,
-    hp:t.hp,maxhp:t.hp,ac:t.ac,speed:6,xp:t.xp,color:t.color,
-    weapon:t.weapon,dagger:t.dagger||null,keepDist:!!t.keepDist,features:[],
-  });
-}
-/* ================= v0.8: НЕЖИТЬ КРИПТЫ ================= */
-const SKEL:UnitTemplate={name:'Скелет-страж',short:'Скелет',hp:11,ac:13,xp:60,color:0xcfc7b0,
-  weapon:{name:'Ржавый меч',dice:[1,6],abil:'str',melee:true,range:1}};
-function makeSkeleton(x,z){
-  gobCount[SKEL.short]=(gobCount[SKEL.short]||0)+1;
-  const n=gobCount[SKEL.short];
-  return makeUnit({
-    name:SKEL.name+(n>1?' №'+n:''),short:SKEL.short+(n>1?' '+n:''),side:'goblin',
-    cls:'undead',clsName:'Скелет',x,z,
-    str:13,dex:12,con:10,int:2,wis:8,cha:6,
-    hp:SKEL.hp,maxhp:SKEL.hp,ac:SKEL.ac,speed:6,xp:SKEL.xp,color:SKEL.color,skin:0xd8d2be,
-    weapon:SKEL.weapon,dagger:null,keepDist:false,features:[],
-  });
-}
-/* ================= v1.3: ЭЛИТА И СПЕЛЛКАСТЕРЫ КРИПТЫ =================
-   applyElite — общий «класс элиты»: крупнее, золотое кольцо,
-   двойное золото и реликвия из лут-таблицы. */
-function applyElite(u){
-  u.elite=true;
-  u.mesh.scale.multiplyScalar(1.16);
-  if(u.mesh.userData.ring)u.mesh.userData.ring.material.color.setHex(0xd8b45a);
-  u.features.push('Элита племени Костей: крепче рядового и носит добычу получше');
-  return u;
-}
-const SKEL_KNIGHT:UnitTemplate={name:'Скелет-рыцарь',short:'Рыцарь',hp:22,ac:15,xp:160,color:0xb8b09a,
-  weapon:{name:'Древний клеймор',dice:[1,8],abil:'str',melee:true,range:1}};
-function makeSkeletonKnight(x,z){
-  gobCount[SKEL_KNIGHT.short]=(gobCount[SKEL_KNIGHT.short]||0)+1;
-  const n=gobCount[SKEL_KNIGHT.short];
-  const u=makeUnit({
-    name:SKEL_KNIGHT.name+(n>1?' №'+n:''),short:SKEL_KNIGHT.short+(n>1?' '+n:''),side:'goblin',
-    cls:'undead',clsName:'Скелет-рыцарь',x,z,
-    str:15,dex:12,con:12,int:2,wis:10,cha:6,
-    hp:SKEL_KNIGHT.hp,maxhp:SKEL_KNIGHT.hp,ac:SKEL_KNIGHT.ac,speed:6,xp:SKEL_KNIGHT.xp,
-    color:SKEL_KNIGHT.color,skin:0xd8d2be,
-    weapon:SKEL_KNIGHT.weapon,dagger:null,keepDist:false,features:[],
-  });
-  return applyElite(u);
-}
-const CULT:Record<string,UnitTemplate>={
-  cultist:{name:'Культист Костепёра',short:'Культист',hp:10,ac:12,xp:90,color:0x6a4f8e,dex:14,int:14,keepDist:true,
-    weapon:{name:'Некротический сгусток',dice:[1,6],abil:'int',range:7,necro:true,status:{type:'poison',turns:2}},
-    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
-  acolyte:{name:'Ученик Костепёра',short:'Ученик',hp:14,ac:13,xp:150,color:0x4f3a72,dex:14,int:16,keepDist:true,healer:true,
-    weapon:{name:'Луч могильного холода',dice:[1,8],abil:'int',range:8,necro:true},
-    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
-};
-function makeCultist(kind,x,z){
-  const t=CULT[kind];
-  gobCount[t.short]=(gobCount[t.short]||0)+1;
-  const n=gobCount[t.short];
-  const u=makeUnit({
-    name:t.name+(n>1?' №'+n:''),short:t.short+(n>1?' '+n:''),side:'goblin',
-    cls:'cultist',clsName:kind==='acolyte'?'Ученик некроманта':'Культист',x,z,
-    str:10,dex:t.dex,con:12,int:t.int,wis:12,cha:10,
-    hp:t.hp,maxhp:t.hp,ac:t.ac,speed:6,xp:t.xp,color:t.color,skin:0xcfc2a8,
-    staff:true,tipColor:kind==='acolyte'?0x9fe8b8:0xc08fff,
-    weapon:t.weapon,dagger:t.dagger||null,keepDist:!!t.keepDist,healer:!!t.healer,features:[],
-  });
-  if(kind==='acolyte')applyElite(u);
-  return u;
-}
-function makeNecro(){
-  return makeUnit({
-    name:'Вхорил Костепёр',short:'Костепёр',cls:'necro',clsName:'Некромант',side:'goblin',
-    str:10,dex:12,con:14,int:16,wis:14,cha:14,
-    hp:46,maxhp:46,ac:15,speed:5,xp:400,x:14,z:4,color:0x3f2f55,skin:0xcac2ae,staff:true,tipColor:0x7fffc0,
-    keepDist:true,bossBrain:true,isBoss:true,cryptBoss:true,fearImmune:true,phase2:false,
-    weapon:{name:'Жезл гнили',dice:[1,8],abil:'int',range:6,necro:true,status:{type:'poison',turns:2}},
-    dagger:{name:'Костяной клинок',dice:[1,6],abil:'str',melee:true,range:1},
-    features:['Костяной шквал — 2d6 некротического всем соседям (1 раз в ход)',
-      'На половине хитов призывает скелетов из стен',
-      'Не ведает страха — запугивание бесполезно',
-      'Печать его сундука держится, пока он «жив»'],
-  });
-}
-function buildHeroes(){
-  if(units.some(u=>u.side==='hero'))return;/* герои переживают смену карт */
-  makeUnit({name:'Торик Кремень',short:'Торик',cls:'fighter',clsName:'Воин',side:'hero',
-    str:16,dex:12,con:14,int:10,wis:12,cha:10,hp:14,maxhp:14,ac:16,speed:6,
-    weapon:{name:'Длинный меч',dice:[1,8],abil:'str',melee:true,range:1},
-    dagger:{name:'Кинжал',dice:[1,4],abil:'str',melee:true,range:1},
-    armor:'Кольчуга',potions:2,x:13,z:24,color:0x8a93a6,
-    features:['Второе дыхание — бонусное действие, лечение 1d10+1 (1/бой)',
-      'Боевой стиль «Защита»: +1 КД (учтён в КД 16)',
-      'Со 2 уровня: Дополнительное действие (1/бой)',
-      'С 3 уровня: Доп. действие 2/бой']});
-  makeUnit({name:'Мирелла Янтарная',short:'Мирелла',cls:'wizard',clsName:'Волшебница',side:'hero',
-    str:8,dex:14,con:12,int:16,wis:12,cha:12,hp:10,maxhp:10,ac:12,speed:6,
-    weapon:{name:'Посох',dice:[1,6],abil:'str',melee:true,range:1},
-    dagger:{name:'Кинжал',dice:[1,4],abil:'str',melee:true,range:1},
-    armor:'Роба',potions:2,slots:3,slotsMax:3,staff:true,x:14,z:25,color:0x4a5fae,
-    features:['Огненные стрелы — заговор, 1d10+ИНТ огонь, без ячейки',
-      'Огненный шар — действие + ячейка, 3d6 огонь, радиус 2.5 кл., задевает своих!',
-      'Лечащее слово — бонус + ячейка, лечение 1d4+ИНТ',
-      'Благословение — бонус + ячейка, +1d4 к атакам союзника (3 хода)',
-      'Со 2 уровня: +5 HP, ИНТ +1, 4 ячейки; с 3 уровня — 5 ячеек']});
-}
-/* ================= v1.2: СПУТНИКИ — ИЛВА (плут) и КАЯ (жрица) ================= */
-function makeIlva(x,z){
-  return makeUnit({
-    name:'Илва Острый Глаз',short:'Илва',cls:'rogue',clsName:'Плут',side:'hero',
-    str:10,dex:16,con:12,int:12,wis:12,cha:14,hp:11,maxhp:11,ac:14,speed:6,
-    weapon:{name:'Короткий лук',dice:[1,6],abil:'dex',range:8},
-    dagger:{name:'Кинжал',dice:[1,4],abil:'dex',melee:true,range:1},
-    armor:'Кожаный доспех',potions:1,x,z,color:0x3f7a6a,
-    features:['Подлый удар — +1d6 урона, если рядом с целью есть союзник (с 3 ур. — 2d6)',
-      'Отравленный клинок — бонус: следующая ближняя атака отравляет цель (2 хода)',
-      'Уклонение — бонус: КД +3 до её следующего хода',
-      'Со 2 уровня: +6 HP, ЛОВ +1'],
-  });
-}
-function makeKaya(x,z){
-  return makeUnit({
-    name:'Кая Заря',short:'Кая',cls:'cleric',clsName:'Жрица',side:'hero',
-    str:13,dex:10,con:14,int:9,wis:16,cha:13,hp:12,maxhp:12,ac:15,speed:5,
-    weapon:{name:'Булава',dice:[1,6],abil:'str',melee:true,range:1},
-    dagger:null,armor:'Чешуйчатый доспех',potions:1,slots:2,slotsMax:2,x,z,color:0xc9b070,
-    features:['Лечение — действие + ячейка: 1d8+МДР',
-      'Щит веры — бонус + ячейка: +2 КД (3 хода)',
-      'Карание света — действие + ячейка: 2d6 излучения, дальность 6 кл.',
-      'Гнев рассвета — 1/бой: 2d6 излучения всем соседям (нежить — вдвойне)',
-      'Со 2 уровня: +6 HP, МДР +1, 3 ячейки; с 3 уровня — 4 ячейки'],
-  });
-}
 /* HERO_TINT → constants.ts (Фаза 2) */
 async function rigHero(u){/* v1.2: GLTF-риг для спутников */
   try{await upgradeUnitRig(u,{tint:HERO_TINT[u.cls]||0x5a7fb0,tintStrength:0.4,scale:1.0,yaw:Math.PI});}catch(e){}
@@ -426,26 +224,6 @@ function ensureCompanions(){/* v1.2: восстановление спутник
   }
   if(S.kayaJoined&&!units.some(u=>u.cls==='cleric')){
     const p=freeSpotNear(lead,3)||{x:lead.x,z:lead.z};joinKaya(p.x,p.z);
-  }
-}
-function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
-  for(const k in gobCount)delete gobCount[k];
-  if(G.mapId==='forest'){
-    S.patrolGroup=S.patrolDone?[]:[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
-    if(S.campDone){S.campGroup=[];return;}
-    const grat=makeGoblin(GOB.chief,21,6);
-    grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
-    grat.isBoss=true;grat.mainBoss=true;grat.str=14;
-    /* v1.3: ветеран — элита лагеря Костей */
-    S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7),applyElite(makeGoblin(GOB.veteran,22,8))];
-  }else{
-    S.patrolGroup=[];S.campGroup=[];
-    if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */
-    const necro=makeNecro();
-    /* v1.3: гарнизон крипты — культисты, ученик-целитель и элитный скелет-рыцарь */
-    S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5),
-      makeSkeletonKnight(14,6),makeCultist('cultist',11,4),makeCultist('cultist',17,4),
-      makeCultist('acolyte',15,6)];
   }
 }
 function buildForestScenery(){/* v0.8: было buildScenery + охрана прогресса + вход в крипту */
@@ -655,16 +433,6 @@ function openChest(chest){
   glows.flashAtMesh({mesh:chest},0xffd54f,1.5);
   sfx.gold();
   refreshParty();refreshTracker();
-}
-/* v0.8: размещение отряда в точках входа */
-function placeHeroes(list){
-  const hs=units.filter(u=>u.side==='hero');
-  hs.forEach((h,i)=>{
-    const p=list[i%list.length];
-    h.x=p[0];h.z=p[1];
-    h.mesh.position.set(W(p[0]),0,W(p[1]));
-    h.mesh.rotation.set(0,0,0);
-  });
 }
 /* v1.1: разбор мира вынесен из switchMap — используется и при загрузке сейва */
 function teardownWorld(){
@@ -1614,7 +1382,6 @@ function onLeftClick(){
 }
 
 /* ================= v0.6: ЗАДАНИЯ, ДИАЛОГИ, ТОРГОВЛЯ, ИССЛЕДОВАНИЕ ================= */
-function aliveHeroes(){return units.filter(u=>u.side==='hero'&&u.alive);}
 const QUESTS:Record<string,Quest>={
   main:{name:'Кости и пепел',state:'active',
     desc:'Гоблины племени Костей перекрыли торговый тракт. Разгромите их лагерь на севере и убейте вожака.',
@@ -1868,13 +1635,6 @@ function fleeUnits(arr){
     tween(0.45,k=>{m.scale.setScalar(Math.max(0.01,1-k));if(el)el.style.opacity=String(1-k);})
       .then(()=>removeUnit(g));
   }
-}
-function removeUnit(u){
-  const i=units.indexOf(u);
-  if(i>=0)units.splice(i,1);
-  scene.remove(u.mesh);
-  if(u._el)u._el.remove();
-  refreshInit();
 }
 
 /* ---- взаимодействие и исследование ---- */
