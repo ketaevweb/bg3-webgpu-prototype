@@ -8,6 +8,7 @@ import { bus } from '../bus';
 import { uiSet } from '../ui/store';
 import { log } from '../ui/overlays';
 import { refreshTracker } from '../interact/quests';
+import { addToBag } from '../systems/gear';/* v1.6: снаряжение в лавке */
 import { aliveHeroes } from '../entities/units';
 import type { ShopItem, Unit } from '../types';
 
@@ -20,6 +21,8 @@ export const SHOP:ShopItem[]=[
   {n:'Короткий лук',p:60,d:'Оружие: 1d6+ЛОВ, дальность 8 кл.',t:'weapon',w:{name:'Короткий лук',dice:[1,6],abil:'dex',range:8}},
   {n:'Кольчуга',p:150,d:'Доспех: КД 16 (Торику уже знакома, Мирелле даст КД 14).',t:'armor'},
   {n:'Кулон красноречия',p:100,d:'+1 ХАР владельцу — проверки убеждения легче.',t:'cha',v:1},
+  {n:'Чешуя великана',p:220,d:'Снаряжение: доспех +2 КД поверх носимого. Со шкуры Гаррума.',t:'gear',g:'scale_giant'},/* v1.6 */
+  {n:'Кольцо дозорного',p:180,d:'Снаряжение: талисман +1 КД. Старый знак Долгого Дозора.',t:'gear',g:'watch_ring'},/* v1.6 */
 ];
 export const price=(it:ShopItem):number=>S.discount?Math.floor(it.p*0.8):it.p;
 export function openShop(){renderShop();uiSet({shopOpen:true});sfx.dialog();}
@@ -48,6 +51,7 @@ export function applyItem(it:ShopItem,h:Unit){
   else if(it.t==='weapon')h.weapon={name:it.w!.name,dice:it.w!.dice,abil:it.w!.abil,range:it.w!.range};
   else if(it.t==='armor'){h.ac=h.cls==='fighter'?16:14;h.armor='Кольчуга';}
   else if(it.t==='cha')h.cha+=it.v||0;
+  else if(it.t==='gear'&&it.g)addToBag(it.g);/* v1.6: снаряжение падает в сумку (I — надеть) */
   log('Куплено: '+it.n+' → '+h.short+' (−'+price(it)+' зол.).','g-sys');
   refreshTracker();bus.refreshParty.call();renderShop();
 }

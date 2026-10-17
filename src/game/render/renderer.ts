@@ -10,7 +10,7 @@ import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ParticleFX } from '../particles';
 import { GlowFX } from '../glow';
-import { AnimRigs } from '../animation';
+import { AnimRigs, bindRigs } from '../animation';
 import { UI } from '../hud';
 import { $ } from '../utils';
 import { G } from '../state';
@@ -25,6 +25,7 @@ export const worldGroup=new THREE.Group();scene.add(worldGroup);
 export const fx=new ParticleFX(scene);
 export const glows=new GlowFX(scene);
 export const rigs=new AnimRigs();
+bindRigs(rigs);/* v1.6: playAttack-фоллбек анимирует тот же экземпляр */
 export const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,0.1,220);
 camera.position.set(2,27,41);
 export const controls=new OrbitControls(camera,renderer.domElement);
@@ -50,12 +51,13 @@ export function initRenderer(){
 }
 
 /* v0.8: атмосфера и свет — параметризованы по карте; v1.5: +болота */
-export function applyAtmosphere(m:'forest'|'crypt'|'swamp'){
+export function applyAtmosphere(m:'forest'|'crypt'|'swamp'|'giants'){
   if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
   else if(m==='swamp'){scene.background=new THREE.Color(0x0e1410);scene.fog=new THREE.FogExp2(0x0e1410,0.019);}
+  else if(m==='giants'){scene.background=new THREE.Color(0x121822);scene.fog=new THREE.FogExp2(0x121822,0.016);}/* v1.6: холодная синева высоты */
   else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
 }
-export function applyLighting(m:'forest'|'crypt'|'swamp'){
+export function applyLighting(m:'forest'|'crypt'|'swamp'|'giants'){
   if(!G.hemiLight||!G.sunLight){
     const hemi=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
     const sun=new THREE.DirectionalLight(0xffeecf,2.4);
@@ -74,6 +76,9 @@ export function applyLighting(m:'forest'|'crypt'|'swamp'){
   }else if(m==='swamp'){/* v1.5: мертвенно-зелёные сумерки */
     hemi.color.setHex(0x9ab88a);hemi.groundColor.setHex(0x1a2416);hemi.intensity=0.72;
     sun.color.setHex(0xcfe0a8);sun.intensity=1.5;
+  }else if(m==='giants'){/* v1.6: холодный свет высокогорья */
+    hemi.color.setHex(0xa8c0d8);hemi.groundColor.setHex(0x242a34);hemi.intensity=0.78;
+    sun.color.setHex(0xd8e4f0);sun.intensity=1.8;
   }else{
     hemi.color.setHex(0xbcd8e8);hemi.groundColor.setHex(0x2a3325);hemi.intensity=0.85;
     sun.color.setHex(0xffeecf);sun.intensity=2.4;

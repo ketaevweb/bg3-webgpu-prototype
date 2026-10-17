@@ -9,7 +9,7 @@ import type * as THREE from 'three/webgpu';
 /* --- примитивы --- */
 export type Side='hero'|'goblin';
 export type Abil='str'|'dex'|'con'|'int'|'wis'|'cha';
-export type MapId='forest'|'crypt'|'swamp';/* v1.5: +болота культистов */
+export type MapId='forest'|'crypt'|'swamp'|'giants';/* v1.6: +перевал великанов */
 export type StatusType='burn'|'poison'|'bless'|'fear'|'dodge'|'faith';
 export type QuestState='hidden'|'active'|'done';
 
@@ -56,6 +56,8 @@ export interface Unit{
   actionMax:number;action:number;bonus:number;reaction:number;
   moveLeft:number;dashUsed?:boolean;disengaging?:boolean;
   swUsed:boolean;dawnUsed:boolean;poisonBlade:number;surge:number;
+  /* v1.6: надетое снаряжение (id из GEAR); бонусы учтены в ac/maxhp/weapon */
+  gear?:{weapon?:string;armor?:string;trinket?:string};
   /* заклинания/предметы */
   slots:number;slotsMax:number;potions:number;oil?:number;relic?:string|null;
   /* флаги роли/ИИ */
@@ -63,6 +65,7 @@ export interface Unit{
   summoned?:boolean;summoner?:Unit|null;
   bossBrain?:boolean;isBoss?:boolean;mainBoss?:boolean;cryptBoss?:boolean;
   swampBoss?:boolean;/* v1.5: Ульва, Матерь Топей */
+  giantBoss?:boolean;/* v1.6: Гаррум Камнегрыз */
   phase2?:boolean;fearImmune?:boolean;isBarrel?:true;
   pacified?:boolean;/* v0.6: запуган — реакция атаки недоступна */
   /* кэш DOM-полоски над головой (updateOverlays) */
@@ -100,7 +103,10 @@ export interface GameState{
   hasCrate:boolean;ilvaFreed:boolean;mainShown:boolean;
   chestLooted:boolean;necroSlain:boolean;kayaJoined:boolean;
   swampDone:boolean;olkhaJoined:boolean;/* v1.5 */
-  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];
+  giantsDone:boolean;giantsChest:boolean;/* v1.6 */
+  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];
+  /* v1.6: сумка отряда — ненадетые предметы снаряжения (id GEAR) */
+  bag:string[];
   dlgNpc:string|null;
   cageMesh:THREE.Object3D|null;ilvaMesh:THREE.Object3D|null;crateMesh:THREE.Object3D|null;
   kayaMesh:THREE.Object3D|null;olkhaMesh:THREE.Object3D|null;/* v1.5 */
@@ -114,6 +120,7 @@ export interface HeroSave{
   str:number;dex:number;con:number;int:number;wis:number;cha:number;
   slotsMax:number;potions:number;oil:number;
   armor?:string;relic?:string|null;
+  gear?:{weapon?:string;armor?:string;trinket?:string};/* v1.6: надетое снаряжение */
   weapon:Weapon|null;
   x?:number;z?:number;
 }
@@ -123,6 +130,8 @@ export interface SaveFlags{
   kayaJoined:boolean;
   /* v1.5: новые флаги — опциональные, сейв v2 остаётся совместимым */
   swampDone?:boolean;olkhaJoined?:boolean;
+  /* v1.6: перевал великанов + сундук с секирой */
+  giantsDone?:boolean;giantsChest?:boolean;
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -133,6 +142,7 @@ export interface SaveData{
   barrelsUsed:string[];
   quests:Record<string,SaveQuest>;
   heroes:HeroSave[];
+  bag?:string[];/* v1.6: сумка отряда — опционально, v2 совместим */
 }
 
 /* курсор выбора тайла/сущности (raycast) */
@@ -180,8 +190,8 @@ export interface ActionDef{
 /* товар лавки Дамрока (SHOP) */
 export interface ShopItem{
   n:string;p:number;d:string;
-  t:'potion'|'oil'|'ac'|'weapon'|'armor'|'cha';
-  v?:number;w?:Weapon;
+  t:'potion'|'oil'|'ac'|'weapon'|'armor'|'cha'|'gear';
+  v?:number;w?:Weapon;g?:string;/* v1.6: g — id снаряжения (GEAR) для t:'gear' */
 }
 
 /* план ИИ (planGoblin/planNecro → aiTurn) */
@@ -220,6 +230,12 @@ export interface Bg3Debug{
   cloudPull:(i:number)=>Promise<void>;
   /* v1.5: болота + друид + серверные скрижали + E2E-прицеливание */
   joinOlkha:(x?:number,z?:number)=>unknown;
+  /* v1.6: снаряжение (E2E) */
+  bag:()=>string[];
+  giveGear:(id:string,cls:string)=>void;
+  unequipGear:(cls:string,slot:'weapon'|'armor'|'trinket')=>void;
+  openBag:()=>void;
+  gearKeys:()=>string[];
   serverGet:(i:number)=>Promise<SaveData|null>;
   serverPut:(i:number,sv:SaveData)=>Promise<boolean>;
   serverPull:(i:number)=>Promise<void>;

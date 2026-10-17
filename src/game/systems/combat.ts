@@ -40,10 +40,11 @@ export function avgDamage(u:Unit, w:Weapon){
    UI-refresh — через bus. Импорты теперь однонаправленные. */
 import { key, clamp, mod } from '../utils';
 import { W } from '../constants';
-import { lunge, faceTo, tween, boomFX } from '../fx/tweens';
+import { lunge, faceTo, tween, boomFX, shake } from '../fx/tweens';
 import { roll } from '../rng';
 import { sfx } from '../audio';
 import { slowmo } from '../slowmo';
+import { playAttack } from '../animation';/* v1.6: атак-анимация (клип/процедура) */
 import { fx, glows } from '../render/renderer';
 import { ftextAbove, log, refreshIcons } from '../ui/overlays';
 import { S, units, barrels, grass, fires, busyOn, busyOff } from '../state';
@@ -59,8 +60,9 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
   if(att.side==='hero')bus.tutEvent.call('attack');/* v1.4: шаг обучения «Атака» */
   faceTo(att,def.mesh.position);
   sfx.swing(w);
-  /* v0.7.x: выпад корпусом (работает и для GLTF-рига) */
-  void tween(0.26,k=>{if(att.rig)att.rig.rotation.x=Math.sin(k*Math.PI)*0.5;});
+  /* v1.6: атак-анимация — Mixamo-клип, если есть, иначе процедурный замах;
+    v0.7.x: выпад корпусом (lunge) остаётся поверх анимации */
+  playAttack(att);
   await lunge(att,def);
   const m=attackMod(att,w),bl=blessed(att);
   const nat=d(20),total=nat+m+bl,crit=nat===20;
@@ -131,6 +133,14 @@ export function die(t:Unit,_src:Unit|null){
     fx.burstAtMesh(t,{count:44,color:0x8fd36a,speed:3.6,size:0.15,life:1.1,gravity:0.6});
     glows.flashAtMesh(t,0x8fd36a,2.4);
     log('Тина оседает: болота больше не шепчут. Зелёный свет идола гаснет.','g-sys');
+  }
+  if(t.giantBoss){/* v1.6: Гаррум Камнегрыз — перевал свободен */
+    S.giantsDone=true;
+    questObj('giants','boss');questDone('giants');
+    fx.burstAtMesh(t,{count:44,color:0xb0b8c0,speed:3.6,size:0.15,life:1.1,gravity:0.6});
+    glows.flashAtMesh(t,0xb0b8c0,2.4);
+    shake(0.5);
+    log('Гаррум оседает грудой камней. Перевал великанов свободен!','g-sys');
   }
   checkEnd();
 }

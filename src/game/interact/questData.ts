@@ -23,6 +23,9 @@ export const QUESTS:Record<string,Quest>={
   swamp:{name:'Шёпот глубин',state:'hidden',/* v1.5 */
     desc:'За криптой тракт тонет в трясине: культисты Глубинного завелись на болотах, и жрица ихняя Ульва будит тину песнями. Дамрок говорил: гниловар огня не боится — а вот громовой разряд ей вреден.',
     objs:[{k:'enter',t:'Найти источник шёпота на болотах',done:false},{k:'boss',t:'Уничтожить Ульву, Матерь Топей',done:false}]},
+  giants:{name:'Перевал великанов',state:'hidden',/* v1.6 */
+    desc:'Северный тракт к цитадели Долгого Дозора проходит через перевал, где обустроились огры. Их вожак Гаррум Камнегрыз швыряет валуны в каждого, кто подойдёт к мосту. Дорога на север должна быть свободна.',
+    objs:[{k:'enter',t:'Пройти на перевал и найти вожака',done:false},{k:'boss',t:'Победить Гаррума Камнегрыза',done:false}]},
 };
 export const QUEST_REWARD:Record<string,string>={
   main:'300 XP, 150 зол.',
@@ -30,4 +33,15 @@ export const QUEST_REWARD:Record<string,string>={
   crate:'150 XP, 100 зол., вечная скидка',
   crypt:'300 XP, 150 зол., перстень Костепёра',
   swamp:'350 XP, 200 зол., Болотный жемчуг',
+  giants:'400 XP, 250 зол., Каменное сердце',
 };
+
+/* v1.6 (фикс из E2E): сброс квестов в исходное — нужен чистому ремоуту
+   (dispose→resetState): модульные состояния QUESTS переживали ремоут,
+   из-за чего после Fast-Refresh квесты оставались «done». */
+export function resetQuests(){
+  QUESTS.main.state='active';QUESTS.main.objs.forEach(o=>{o.done=false;});
+  for(const id of ['prisoner','crate','crypt','swamp','giants']){
+    QUESTS[id].state='hidden';QUESTS[id].objs.forEach(o=>{o.done=false;});
+  }
+}

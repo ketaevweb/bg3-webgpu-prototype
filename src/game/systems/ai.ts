@@ -205,10 +205,20 @@ export async function aiTurn(u:Unit){
   while(G.combatOn&&u.alive&&guard++<6){
     const plan:AIPlan|null=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
-    if(plan.type==='phase2'){/* v0.8: подъём мёртвых; v1.5: Ульва поднимает утопленников */
+    if(plan.type==='phase2'){/* v0.8: подъём мёртвых; v1.5: Ульва поднимает утопленников; v1.6: Гаррум каменеет */
       u.phase2=true;
       const swamp=u.swampBoss===true;
-      bigBanner(swamp?'ФАЗА 2: ТРЯСИНА ПРОСЫПАЕТСЯ':'ФАЗА 2: ПОДЪЁМ МЁРТВЫХ');
+      const giant=u.giantBoss===true;
+      bigBanner(swamp?'ФАЗА 2: ТРЯСИНА ПРОСЫПАЕТСЯ':(giant?'ФАЗА 2: ГОРЫ ДРОЖАТ':'ФАЗА 2: ПОДЪЁМ МЁРТВЫХ'));
+      if(giant){
+        u.ac+=3;
+        log('Гаррум: «КАМЕНЬ — МОЯ КОЖА!» Шкура великана твердеет: КД '+u.ac+'.','g-enemy');
+        sfx.nova();
+        fx.burstAtMesh(u,{count:44,color:0xb0b8c0,speed:3.0,size:0.15,life:1.2,gravity:-0.6});
+        glows.flashAtMesh(u,0xb0b8c0,2.6);
+        shake(0.5);
+        await sleep(700);continue;
+      }
       log(swamp?'Ульва: «ТОНИТЕ. ТОНИТЕ ВСЕ!»':'Костепёр: «ВСТАНЬТЕ, МОИ ВЕРНЫЕ КОСТИ!»','g-enemy');
       sfx.bones();
       fx.burstAtMesh(u,{count:44,color:swamp?0x8fd36a:0x9fe8b8,speed:3.2,size:0.15,life:1.2,gravity:-1.1});
@@ -223,8 +233,24 @@ export async function aiTurn(u:Unit){
       }
       await sleep(700);continue;
     }
-    if(plan.type==='nova'){/* v0.8: костяной шквал */
+    if(plan.type==='nova'){/* v0.8: костяной шквал; v1.6: у Гаррума — оползень */
       u.action--;
+      const giant=u.giantBoss===true;
+      if(giant){
+        log('ОПОЛЗЕНЬ! Гаррум обрушивает каменный град вокруг себя!','g-enemy');
+        sfx.nova();shake(0.45);
+        const cx=W(u.x),cz=W(u.z);
+        fx.burst(cx,0.9,cz,{count:42,color:0xb0b8c0,speed:4.4,life:0.9,gravity:2.2,spread:0.8});
+        fx.burst(cx,0.4,cz,{count:16,color:0x8a8578,speed:3.0,life:0.8,gravity:1.4,spread:0.6});
+        glows.flash(cx,cz,3.0,0xd8d8d0);
+        for(const h of aliveHeroes())if(cheb(u,h)<=1){
+          const dmg=roll(2,6);
+          ftextAbove(h,'−'+dmg,'#b8c0c8');
+          log('Каменный град бьёт '+h.name+': '+dmg+' урона.','g-enemy');
+          damageUnit(h,dmg,u);
+        }
+        await sleep(500);continue;
+      }
       log('КОСТЯНОЙ ШКВАЛ! Костепёр выплёскивает могильную силу вокруг себя!','g-enemy');
       sfx.nova();
       shake(0.4);

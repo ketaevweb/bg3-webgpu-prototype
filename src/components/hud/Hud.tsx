@@ -7,15 +7,16 @@
 import { useUi } from '@/game/ui/store';
 import { LogPanel, PartyCards, QuestTracker, ActionBar } from './panels';
 import { DialogBox, ShopPanel, JournalPanel, ChoicePanel } from './dialogs';
-import { GfxPanel, SavesPanel, EndScreen, SheetModal } from './menus';
+import { GfxPanel, SavesPanel, EndScreen, SheetModal, BagPanel } from './menus';
 
-/* ---- системные кнопки: звук / графика / сохранения ---- */
+/* ---- системные кнопки: звук / графика / сохранения / снаряжение ---- */
 function SysButtons(){
   const sys=useUi(s=>s.sys);
   return <>
     <button id="sndBtn" title="Звук вкл/выкл" onClick={sys.onSnd}>{sys.sndIcon}</button>
     <button id="gfxBtn" title="Настройки графики (G)" onClick={sys.onGfx}>⚙</button>
     <button id="saveBtn" title="Сохранения (K)" onClick={sys.onSaves}>💾</button>
+    <button id="bagBtn" title="Снаряжение (I)" onClick={sys.onBag}>🎒</button>
   </>;
 }
 
@@ -107,6 +108,7 @@ export default function Hud(){
     <ChoicePanel/>
     <GfxPanel/>
     <SavesPanel/>
+    <BagPanel/>
     <EndScreen/>
     <SheetModal/>
   </>;

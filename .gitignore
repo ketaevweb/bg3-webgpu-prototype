@@ -9,3 +9,4 @@ db/
 .zscripts/
 tool-results/
 next-env.d.ts
+upload/

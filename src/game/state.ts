@@ -11,13 +11,15 @@
 import type * as THREE from 'three/webgpu';
 import type { FireTile, GameState, GridWorld, Interact, MapId, Phase, PickState, TargetingState, Unit } from './types';
 import { resetUi } from './ui/store';
+import { resetQuests } from './interact/questData';/* v1.6: QUESTS — модульное состояние, чистый ремоут */
 
 /* ---- метапрогресс и флаги квестов (S) ---- */
 export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
   cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,
   cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set<string>(),
-  swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null};/* v0.8+v1.1+v1.2+v1.5 */
+  swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
+  giantsDone:false,giantsChest:false,giantsGroup:[],bag:[]};/* v0.8+v1.1+v1.2+v1.5+v1.6 */
 
 /* ---- runtime-контекст (G) ---- */
 export const G:{
@@ -56,7 +58,7 @@ export const interactables:Interact[]=[];
 
 /* ---- константы карт (v0.8: лес ↔ крипта; v1.5: +болота) ---- */
 export const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25}, KAYA_SPOT=[15,22];/* v1.2: алтарь Кая */
-export const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра',swamp:'Болота культистов'};
+export const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра',swamp:'Болота культистов',giants:'Перевал великанов'};
 export const CRYPT={
   PILLARS:[[6,8],[10,8],[17,8],[21,8],[6,18],[10,18],[17,18],[21,18]],
   SARCS:[[4,13],[23,13],[8,2],[19,2]],
@@ -73,6 +75,18 @@ export const SWAMP={
   IDOL:[14,8],OLKHA:[15,8],BOSS:[14,5],ALTAR:[14,3],
   EXIT:[14,25],ENTER:[[14,24],[13,24],[15,24],[14,23]],TRAIL:[26,21],
 };
+/* v1.6: перевал великанов — горная расщелина с мостом через обрыв,
+   огрский лагерь (костёр, сундук, кости) и пещера Гаррума на севере.
+   TRAIL — подножие на лесу (северо-запад, [2,4]); CHASM — непроходимый
+   обрыв поперёк карты, BRIDGE — проход по мосту (x 13..14). */
+export const GIANTS={
+  CHASM:[13,14],/* z-ряды обрыва */
+  BRIDGE:[[13,13],[14,13],[13,14],[14,14]],/* проходимые клетки моста */
+  CAMP:[19,6],CHEST:[21,7],BONES:[[16,8],[23,9],[12,5]],
+  CAVE:[14,2],BOSS:[14,7],
+  PILLARS:[[8,4],[10,8],[20,3]],
+  EXIT:[14,25],ENTER:[[14,24],[13,24],[15,24],[14,23]],TRAIL:[2,4],
+};
 
 /* ---- чистый ремоут (REFACTORING.md §4: dispose() → resetState()) ----
    Возвращает S/G/контейнеры в состояние первого запуска; хэндлы рендера
@@ -84,7 +98,8 @@ export function resetState(){
     hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
     cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,
     cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set<string>(),
-    swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null});
+    swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
+    giantsDone:false,giantsChest:false,giantsGroup:[],bag:[]});
   Object.assign(G,{busy:false,busyCount:0,combatOn:false,phase:'idle' as Phase,targeting:null,
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,
@@ -93,6 +108,7 @@ export function resetState(){
   units.length=0;barrels.length=0;fires.clear();
   pick.tile=null;pick.ent=null;pick.inter=null;
   solid.clear();grass.clear();
+  resetQuests();/* v1.6: квесты — в исходное (ремоут-контракт) */
   for(const k in gobCount)delete gobCount[k];
   interactables.length=0;
 }

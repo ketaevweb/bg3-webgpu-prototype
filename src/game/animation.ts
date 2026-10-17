@@ -8,6 +8,8 @@
  * ============================================================ */
 import * as THREE from 'three/webgpu';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+/* ВАЖНО: без импорта fx/tweens — здесь цикл animation→tweens→renderer→animation;
+   процедурный замах анимируется собственным списком в AnimRigs.update (ниже). */
 
 export const ENABLE_GLTF = true;
 
@@ -24,6 +26,7 @@ type RigUnit = {
   _actions?: Record<string, THREE.AnimationAction>;
   _currentAnim?: string;
   _gltfRig?: boolean;
+  _attackT?: number;/* v1.6: во время атак-клипа update() не переключает анимацию */
 };
 
 /* ---------- кэш загрузки GLTF (одна модель на всех) ---------- */
@@ -51,6 +54,28 @@ async function loadRigWithFallback(): Promise<{ scene: THREE.Group; animations: 
 }
 
 /* ---------- публичный апгрейд юнита ---------- */
+
+/* v1.6: опциональный Mixamo-клип атаки — положите GLB с клипом (скелет
+   mixamorig, как у Soldier) в public/models/rig/attack.glb — и все риги
+   будут играть его при атаке; без файла — процедурный замах (см. ниже). */
+const ATTACK_URL = '/models/rig/attack.glb';
+let attackClip: THREE.AnimationClip | null = null;
+let attackClipChecked = false;
+export async function loadAttackClip(): Promise<boolean> {
+  if (attackClipChecked) return !!attackClip;
+  attackClipChecked = true;
+  try {
+    const head = await fetch(ATTACK_URL, { method: 'HEAD' });
+    if (!head.ok) return false;
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const gltf = await new GLTFLoader().loadAsync(ATTACK_URL);
+    attackClip = gltf.animations?.[0] ?? null;
+    if (attackClip) console.log('[bg3] attack clip loaded:', attackClip.name || 'unnamed');
+    return !!attackClip;
+  } catch {
+    return false;
+  }
+}
 
 export type RigOpts = {
   tint?: number;        // цвет-подкраска текстуры (класс/фракция)
@@ -105,6 +130,13 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
     if (idle) actions.idle = mixer.clipAction(idle);
     if (walk) actions.walk = mixer.clipAction(walk);
     if (run) actions.run = mixer.clipAction(run);
+    if (attackClip) {/* v1.6: Mixamo-клип атаки (одноразовый, возврат в Idle по finished) */
+      const atk = mixer.clipAction(attackClip);
+      atk.setLoop(THREE.LoopOnce, 1);
+      atk.clampWhenFinished = false;
+      actions.attack = atk;
+      mixer.addEventListener('finished', () => { unit._currentAnim = 'idle'; });
+    }
 
     unit._mixer = mixer;
     unit._actions = actions;
@@ -120,9 +152,16 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
 
 export class AnimRigs {
   private units = new Set<RigUnit>();
+  /* v1.6: активные процедурные замахи (fallback без Mixamo-клипа) */
+  private swings: { u: RigUnit; t: number; dur: number }[] = [];
 
   register(u: RigUnit) { this.units.add(u); }
   unregister(u: RigUnit) { this.units.delete(u); }
+  /* v1.6: поставить процедурный замах в очередь */
+  queueSwing(u: RigUnit, dur = 0.34) {
+    if (this.swings.some(s => s.u === u)) return;/* не спамим: один замах за раз */
+    this.swings.push({ u, t: 0, dur });
+  }
 
   private setAnim(u: RigUnit, next: string) {
     if (u._currentAnim === next) return;
@@ -136,9 +175,26 @@ export class AnimRigs {
   }
 
   update(dt: number, t: number) {
+    /* v1.6: процедурные замахи — наклон корпуса рига синусом (fire-and-forget) */
+    for (let i = this.swings.length - 1; i >= 0; i--) {
+      const s = this.swings[i];
+      s.t += dt;
+      const k = Math.min(1, s.t / s.dur);
+      if (s.u.rig) s.u.rig.rotation.x = -0.55 * Math.sin(k * Math.PI);
+      if (k >= 1 || !s.u.alive) {
+        if (s.u.rig) s.u.rig.rotation.x = 0;
+        this.swings.splice(i, 1);
+      }
+    }
     for (const u of this.units) {
       if (!u.alive) continue;
       if (u._gltfRig && u._mixer) {
+        // v1.6: во время атак-клипа не переключаем анимацию
+        if (u._attackT && u._attackT > 0) {
+          u._attackT -= dt;
+          u._mixer.update(dt);
+          continue;
+        }
         // GLTF-риг: Idle/Walk/Run с кроссфейдом
         this.setAnim(u, u.moving ? (u._actions?.run ? 'run' : 'walk') : 'idle');
         u._mixer.update(dt);
@@ -153,4 +209,27 @@ export class AnimRigs {
       u.rig.rotation.z = Math.sin(t * 1.7 + ph) * 0.02;
     }
   }
+}
+
+/* ---------- v1.6: атак-анимация ----------
+   Приоритет — Mixamo-клип (если public/models/rig/attack.glb существует);
+   иначе процедурный замах: наклон корпуса рига вперёд-назад (виден и на
+   капсулах, и на GLTF-ригах). Не блокирует боевую логику (fire-and-forget). */
+export function playAttack(unit: RigUnit): void {
+  if (!unit.alive || !unit.rig) return;
+  const atk = unit._actions?.attack;
+  if (unit._gltfRig && unit._mixer && atk) {
+    unit._attackT = Math.min(0.9, atk.getClip().duration);
+    atk.reset().fadeIn(0.05).play();
+    return;
+  }
+  /* процедурный fallback — очередь замахов, анимирует AnimRigs.update */
+  rigInstance().queueSwing(unit);
+}
+/* доступ к единственному экземпляру AnimRigs (создаётся в renderer.ts) */
+let _rigs: AnimRigs | null = null;
+export function bindRigs(r: AnimRigs) { _rigs = r; }
+function rigInstance(): AnimRigs {
+  if (!_rigs) _rigs = new AnimRigs();
+  return _rigs;
 }

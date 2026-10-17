@@ -30,6 +30,7 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       hasCrate:!!S.hasCrate,ilvaFreed:!!S.ilvaFreed,chestLooted:!!S.chestLooted,necroSlain:!!S.necroSlain,
       kayaJoined:!!S.kayaJoined,/* v1.2 */
       swampDone:!!S.swampDone,olkhaJoined:!!S.olkhaJoined,/* v1.5: опциональные поля — v2 совместим */
+      giantsDone:!!S.giantsDone,giantsChest:!!S.giantsChest,/* v1.6 */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -37,9 +38,11 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       cls:h.cls,level:h.level,xp:h.xp,hp:h.hp,maxhp:h.maxhp,ac:h.ac,
       str:h.str,dex:h.dex,con:h.con,int:h.int,wis:h.wis,cha:h.cha,
       slotsMax:h.slotsMax||0,potions:h.potions,oil:h.oil||0,armor:h.armor,relic:h.relic||null,/* v1.3 */
+      gear:h.gear?{...h.gear}:undefined,/* v1.6: надетое снаряжение */
       weapon:h.weapon?{name:h.weapon.name,dice:h.weapon.dice,abil:h.weapon.abil,range:h.weapon.range,melee:!!h.weapon.melee}:null,
       x:h.x,z:h.z,
     })),
+    bag:[...S.bag],/* v1.6: сумка отряда */
   };
 }
 
@@ -56,6 +59,8 @@ export function applyGame(sv:SaveData|null){
   S.hasCrate=!!fl.hasCrate;S.ilvaFreed=!!fl.ilvaFreed;S.chestLooted=!!fl.chestLooted;S.necroSlain=!!fl.necroSlain;
   S.kayaJoined=!!fl.kayaJoined;/* v1.2 */
   S.swampDone=!!fl.swampDone;S.olkhaJoined=!!fl.olkhaJoined;/* v1.5: в старых сейвах полей нет — дефолт false */
+  S.giantsDone=!!fl.giantsDone;S.giantsChest=!!fl.giantsChest;/* v1.6 */
+  S.bag=Array.isArray(sv.bag)?sv.bag.filter((id:unknown)=>typeof id==='string'):[];/* v1.6 */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
     const svq=sv.quests&&sv.quests[id];
@@ -66,7 +71,7 @@ export function applyGame(sv:SaveData|null){
   }
   cancelTargeting();
   teardownWorld();
-  buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='crypt'?'crypt':'forest'),null);/* v1.5: +болота */
+  buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='giants'?'giants':(sv.mapId==='crypt'?'crypt':'forest')),null);/* v1.5: +болота; v1.6: +перевал */
   ensureCompanions();/* v1.2: восстановить Илву и Каю по флагам сейва */
   ensureOlkha();/* v1.5: восстановить Ольху по флагу сейва */
   for(const hd of sv.heroes){
@@ -78,6 +83,7 @@ export function applyGame(sv:SaveData|null){
     (['str','dex','con','int','wis','cha'] as const).forEach(a=>{if(typeof hd[a]==='number')h[a]=hd[a];});
     h.slotsMax=hd.slotsMax||0;h.slots=h.slotsMax;
     h.potions=hd.potions||0;h.oil=hd.oil||0;h.armor=hd.armor||h.armor;h.relic=hd.relic||null;/* v1.3: реликвия элиты */
+    h.gear=hd.gear&&typeof hd.gear==='object'?{weapon:hd.gear.weapon,armor:hd.gear.armor,trinket:hd.gear.trinket}:undefined;/* v1.6: бонусы уже учтены в сохранённых ac/maxhp/weapon — повторно НЕ применяем */
     if(hd.weapon&&hd.weapon.dice)h.weapon={name:hd.weapon.name,dice:hd.weapon.dice,abil:hd.weapon.abil,range:hd.weapon.range,melee:!!hd.weapon.melee};
     h.statuses=[];h.swUsed=false;h.surge=0;
     if(typeof hd.x==='number'&&typeof hd.z==='number'){

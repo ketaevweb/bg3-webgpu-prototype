@@ -112,6 +112,7 @@ export const DLGS:Record<string,DlgFn>={
         {t:'[Убеждение СЛ 12] «Героям положена скидка, сам знаешь.»',req:{skill:'Убеждение',dc:12},ok:'discok',fail:'discfail'},
         {t:'«Что известно о крипте в кургане?»',show:()=>QUESTS.main.state==='done'&&QUESTS.crypt.state==='hidden',fn:()=>gotoNode('cryptinfo')},
         {t:'«Что за песня доносится с восточных болот?»',show:()=>QUESTS.crypt.state==='done'&&QUESTS.swamp.state==='hidden',fn:()=>gotoNode('swampinfo')},/* v1.5 */
+        {t:'«Тропа на северо-запад — куда она ведёт?»',show:()=>QUESTS.swamp.state==='done'&&QUESTS.giants.state==='hidden',fn:()=>gotoNode('giantsinfo')},/* v1.6 */
         {t:'«До встречи.»',end:true},
       ]};
     if(id==='story')return{name:'Дамрок Бочкарь',
@@ -129,6 +130,9 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='swampinfo')return{name:'Дамрок Бочкарь',/* v1.5 */
       text:'И слыхал, и сплюнул. На востоке тракт утонул — культисты Глубинного там завелись, жрица ихняя тину будит. Гать я ещё подлатаю, доски держат. Только возьми кого-то, кто громом швыряет: гниловар огня не боится, а вот молния ей — как кочерга по зубам.',
       opts:[{t:'«Зачистим и болота.»',fn:()=>{questStart('swamp');gotoNode('start');}}]};
+    if(id==='giantsinfo')return{name:'Дамрок Бочкарь',/* v1.6 */
+      text:'Не ходи туда, ой не ходи... Хотя тебе-то что, ты герои. Слыхал: перевал на северо-запад огры заняли, а старшой ихний Гаррум Камнегрыз валунами издалека кидается. Большие, аги! Но жадные: вожак свой сундук с добром при лагере держит. Разгоните — и дорога к дозорным откроется.',
+      opts:[{t:'«Перевал будет наш.»',fn:()=>{questStart('giants');gotoNode('start');}}]};
   },
   ilva(id){
     if(id==='start')return{name:'Илва (в клетке)',
@@ -198,6 +202,21 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='ulva')return{name:'Ольха (прикована к идолу)',
       text:'Жрица Глубинного. Отравила родники — и топь пошла расти. Хлыст её жжётся ядом, а на полсмерти она поднимает утопленников. Возьмите в отряд того, кто бьёт громом: молния ей вреднее огня.',
       opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinOlkha(SWAMP.OLKHA[0],SWAMP.OLKHA[1]);}}]};
+  },
+  giantboss(id){/* v1.6: вожак великанов */
+    if(id==='start')return{name:'Гаррум Камнегрыз',
+      text:'Кто топчет мой перевал? Мясо... мелкое мясо с железом. Досчитай до ста, мясцо, — я в тебя брошу камень размером с тебя.',
+      opts:[
+        {t:'[Запугивание СЛ 17] «Дозор снёс Грата, Костепёра и Матерь Топей. Хочешь следующим?»',req:{skill:'Запугивание',dc:17},ok:'scared',fail:'fight'},
+        {t:'«Мост — наш, и тропа тоже!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти за мост.»',end:true,fn:()=>{log('Гаррум провожает вас голодным взглядом и грызёт камень.','g-enemy');}},
+      ]};
+    if(id==='scared')return{name:'Гаррум Камнегрыз',
+      text:'П-пустые слова! КАМЕНЬ. НЕ. БОИТСЯ!',
+      opts:[{t:'«Что ж, по-старому.»',fn:()=>startCombat(S.giantsGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Гаррум Камнегрыз',
+      text:'ГРА-А-АВ! КАМНИ НА ГОТОВЕ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.giantsGroup.filter(g=>g.alive))}]};
   },
 };
 export function bossFear(){

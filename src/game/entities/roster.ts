@@ -2,7 +2,7 @@
    Шаблоны врагов (GOB/SKEL/SKEL_KNIGHT/CULT), фабрики, элита,
    отряд героев и спавн врагов по карте/прогрессу.
    Перенесено дословно из engine.ts. */
-import { S, G, gobCount, units, SWAMP } from '../state';
+import { S, G, gobCount, units, SWAMP, GIANTS } from '../state';
 import { makeUnit } from './units';
 import type { Unit, UnitTemplate } from '../types';
 
@@ -202,6 +202,39 @@ export function makeOlkha(x:number,z:number){
       'Со 2 уровня: +6 HP, МДР +1, 3 ячейки; с 3 уровня — 4 ячейки'],
   });
 }
+/* ================= v1.6: ПЕРЕВАЛ ВЕЛИКАНОВ — ОГРЫ, ГАРРУМ =================
+   Огры — крупные капсулы (mesh масштаб 1.4), бьют больно; Гаррум —
+   босс с валунами (дальний бой) и каменной кожей на полсмерти. */
+const OGRE:UnitTemplate={name:'Огр перевала',short:'Огр',hp:30,ac:13,xp:220,color:0x8a6a4a,
+  weapon:{name:'Дубище',dice:[2,6],abil:'str',melee:true,range:1}};
+export function makeOgre(x:number,z:number){
+  gobCount[OGRE.short]=(gobCount[OGRE.short]||0)+1;
+  const n=gobCount[OGRE.short];
+  const u=makeUnit({
+    name:OGRE.name+(n>1?' №'+n:''),short:OGRE.short+(n>1?' '+n:''),side:'goblin',
+    cls:'ogre',clsName:'Огр',x,z,
+    str:17,dex:10,con:16,int:6,wis:8,cha:6,
+    hp:OGRE.hp,maxhp:OGRE.hp,ac:OGRE.ac,speed:5,xp:OGRE.xp,color:OGRE.color,skin:0xb8a084,
+    weapon:OGRE.weapon,dagger:null,keepDist:false,features:['От слова «нет» ломает мост вместе с теми, кто на нём стоит'],
+  });
+  u.mesh.scale.setScalar(1.42);/* огр выше героя на голову */
+  return u;
+}
+export function makeGarrum(){
+  return makeUnit({
+    name:'Гаррум Камнегрыз',short:'Гаррум',cls:'giant',clsName:'Великан',side:'goblin',
+    str:19,dex:12,con:18,int:8,wis:10,cha:12,
+    hp:64,maxhp:64,ac:14,speed:6,xp:500,x:GIANTS.BOSS[0],z:GIANTS.BOSS[1],
+    color:0x6a5a4a,skin:0xa89884,
+    keepDist:true,bossBrain:true,isBoss:true,giantBoss:true,fearImmune:true,phase2:false,
+    weapon:{name:'Брошенный валун',dice:[2,6],abil:'str',range:6},
+    dagger:{name:'Громовая дубина',dice:[2,6],abil:'str',melee:true,range:1},
+    features:['Швыряет валуны на шесть клеток — встречает гостей ещё на подходе',
+      'На половине хитов каменеет: КД +3',
+      'Оползень — каменный град вокруг него (всем соседям)',
+      'Не ведает страха — запугивание бесполезно'],
+  });
+}
 export function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(G.mapId==='forest'){
@@ -217,6 +250,10 @@ export function spawnEnemies(){/* v0.8: враги зависят от карт�
     if(S.swampDone){S.swampGroup=[];return;}/* убитая Ульва не поднимается вновь */
     S.swampGroup=[makeUlva(),makeCultist('deep',10,6),makeCultist('deep',18,6),makeCultist('acolyte',11,4),
       makeDrowned(10,12),makeDrowned(18,12),makeDrowned(14,12)];
+  }else if(G.mapId==='giants'){/* v1.6: гарнизон перевала — огры и Гаррум Камнегрыз */
+    S.patrolGroup=[];S.campGroup=[];
+    if(S.giantsDone){S.giantsGroup=[];return;}/* убитый Гаррум не встаёт вновь */
+    S.giantsGroup=[makeGarrum(),makeOgre(10,8),makeOgre(18,8),applyElite(makeOgre(21,5))];
   }else{
     S.patrolGroup=[];S.campGroup=[];
     if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */

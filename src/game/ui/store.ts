@@ -49,6 +49,10 @@ export interface SlotRowView{
 }
 /* v1.4: карточка обучения («Наставник») — продвигается реальными действиями игрока */
 export interface TutView{title:string;text:string;i:number;n:number;onSkip:()=>void}
+/* v1.6: панель снаряжения — предметы в сумке + слоты героев */
+export interface BagItemView{n:string;d:string;slot:string;equip:()=>void}
+export interface BagSlotView{label:string;item:string|null;remove:()=>void}
+export interface BagHeroView{name:string;clsName:string;slots:BagSlotView[]}
 export interface GfxSegView{name:string;active:boolean;pick:()=>void}
 export interface GfxRowView{label:string;segs:GfxSegView[]}
 export interface GfxPresetView{name:string;pick:()=>void}
@@ -58,6 +62,7 @@ export interface TopbarView{round:string;turn:string;turnColor:string|null}
 export interface SysView{
   sndIcon:string;
   onSnd:()=>void;onGfx:()=>void;onSaves:()=>void;onLoadFromEnd:()=>void;
+  onBag:()=>void;/* v1.6: панель снаряжения */
 }
 
 export interface UiState{
@@ -71,6 +76,7 @@ export interface UiState{
   dlg:DlgView|null;choice:ChoiceView|null;sheet:SheetView|null;
   end:EndView|null;endHidden:boolean;
   shopOpen:boolean;shopRows:ShopRowView[];
+  bagOpen:boolean;bagItems:BagItemView[];bagParty:BagHeroView[];/* v1.6 */
   journalOpen:boolean;journalItems:JournalItemView[];
   gfxOpen:boolean;gfxPresets:GfxPresetView[];gfxRows:GfxRowView[];
   savesOpen:boolean;savesCur:string;savesSlots:SlotRowView[];
@@ -80,6 +86,7 @@ export interface UiState{
   sys:SysView;
   shopOnClose:()=>void;journalOnClose:()=>void;
   gfxOnClose:()=>void;savesOnClose:()=>void;choiceOnClose:()=>void;
+  bagOnClose:()=>void;/* v1.6 */
   onImportFile:(e:{target:HTMLInputElement})=>void;
 }
 
@@ -94,6 +101,7 @@ const initial={
   dlg:null as DlgView|null,choice:null as ChoiceView|null,sheet:null as SheetView|null,
   end:null as EndView|null,endHidden:false,
   shopOpen:false,shopRows:[] as ShopRowView[],
+  bagOpen:false,bagItems:[] as BagItemView[],bagParty:[] as BagHeroView[],
   journalOpen:false,journalItems:[] as JournalItemView[],
   gfxOpen:false,gfxPresets:[] as GfxPresetView[],gfxRows:[] as GfxRowView[],
   savesOpen:false,savesCur:'',savesSlots:[] as SlotRowView[],
@@ -104,9 +112,9 @@ const initial={
 const noop=()=>{};
 const noBinds={
   sys:{
-    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,
+    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,
   } as SysView,
-  shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,
+  shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,bagOnClose:noop,
   onImportFile:(()=>{}) as (e:{target:HTMLInputElement})=>void,
 };
 
@@ -136,5 +144,6 @@ export function resetUi(){
   uiSet({...initial,
     sys:b.sys,shopOnClose:b.shopOnClose,journalOnClose:b.journalOnClose,
     gfxOnClose:b.gfxOnClose,savesOnClose:b.savesOnClose,choiceOnClose:b.choiceOnClose,
+    bagOnClose:b.bagOnClose,
     onImportFile:b.onImportFile});
 }

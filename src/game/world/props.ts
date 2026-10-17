@@ -6,7 +6,8 @@ import { srand } from '../rng';
 import { key } from '../utils';
 import { GRID, TILE, W } from '../constants';
 import { worldGroup, applyLighting } from '../render/renderer';
-import { G, S, solid, grass, barrels, CRYPT, SWAMP } from '../state';
+import { G, S, solid, grass, barrels, CRYPT, SWAMP, GIANTS } from '../state';
+import { placePine, placeDeadPine, placeBoulder } from './nature';
 import type { Barrel } from '../types';
 
 /* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
@@ -57,6 +58,32 @@ export function seedSwamp(){
       if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
       if(solid.has(key(x,z)))continue;
       if(srand()<0.78)grass.add(key(x,z));
+    }
+  }
+  for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
+}
+/* v1.6: перевал великанов — сосны, валуны, обрыв с мостом, огрский лагерь */
+export function seedGiants(){
+  G.TREES=[[4,8],[6,17],[9,21],[24,17],[25,10],[20,21],[3,22],[10,10],[22,13],[5,12],[17,22],[26,20],[7,2],[23,2],[2,9],[11,17]];
+  G.ROCKS=[[6,15],[22,13],[15,18],[11,3],[24,24],[8,12],[19,16],[4,19]];
+  G.TENTS=[];G.FIREPIT=null;G.BARREL_POS=[[17,10],[23,12],[9,16]];
+  solid.clear();grass.clear();
+  for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
+  /* обрыв поперёк карты (z 13..14) — проход только по мосту (x 13..14) */
+  for(let x=1;x<GRID-1;x++)for(const z of GIANTS.CHASM){
+    if(GIANTS.BRIDGE.some(p=>p[0]===x&&p[1]===z))continue;
+    solid.add(key(x,z));
+  }
+  for(const [x,z] of GIANTS.PILLARS)solid.add(key(x,z));
+  solid.add(key(GIANTS.CAVE[0],GIANTS.CAVE[1]));
+  solid.add(key(GIANTS.CHEST[0],GIANTS.CHEST[1]));
+  /* редкая трава у лагеря, входа и моста */
+  for(const [cx,cz] of [[19,6],[2,4],[14,20]]){
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      const x=cx+dx,z=cz+dz;
+      if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
+      if(solid.has(key(x,z)))continue;
+      if(srand()<0.5)grass.add(key(x,z));
     }
   }
   for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
@@ -166,8 +193,8 @@ export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет
 export function buildWorld(){
   applyLighting(G.mapId);
   /* v1.5: цвет грунта/заплаток — по карте (лес/крипта/болото) */
-  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:0x3a5530);
-  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:0x324a2a);
+  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:(G.mapId==='giants'?0x4a4640:0x3a5530));
+  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:(G.mapId==='giants'?0x403c37:0x324a2a));
   G.groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
     new THREE.MeshStandardMaterial({color:groundColor,roughness:1}));
   G.groundMesh.rotation.x=-Math.PI/2;G.groundMesh.receiveShadow=true;
@@ -195,6 +222,28 @@ export function buildWorld(){
         worldGroup.add(t);
       }
     }
+  }else if(G.mapId==='giants'){/* v1.6: каменная крошка + серая трава перевала */
+    const tuftG=new THREE.ConeGeometry(0.14,0.42,4);
+    const tuftM=new THREE.MeshStandardMaterial({color:0x6a7a55,roughness:1});
+    for(const k of grass){
+      const [x,z]=k.split('_').map(Number);
+      if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
+      for(let i=0;i<2;i++){
+        const t=new THREE.Mesh(tuftG,tuftM);
+        t.position.set(W(x)+(srand()-0.5),0.18,W(z)+(srand()-0.5));
+        t.rotation.z=(srand()-0.5)*0.5;
+        t.castShadow=true;
+        worldGroup.add(t);
+      }
+    }
+    const gravM=new THREE.MeshStandardMaterial({color:0x5a564e,roughness:1});
+    for(let i=0;i<12;i++){
+      const m=new THREE.Mesh(new THREE.DodecahedronGeometry(0.14+srand()*0.12,0),gravM);
+      m.position.set((srand()-0.5)*GRID*TILE*0.85,0.06,(srand()-0.5)*GRID*TILE*0.85);
+      m.rotation.set(srand()*3,srand()*3,0);
+      m.castShadow=true;
+      worldGroup.add(m);
+    }
   }else if(G.mapId==='swamp'){/* v1.5: лужи стоячей воды + камыш */
     const watM=new THREE.MeshStandardMaterial({color:0x1d3a3a,roughness:0.25,metalness:0.15});
     for(let i=0;i<14;i++){
@@ -217,8 +266,15 @@ export function buildWorld(){
       }
     }
   }
-  for(const [x,z] of G.TREES)(G.mapId==='swamp'?addDeadTree:addTree)(x,z);
-  for(const [x,z] of G.ROCKS)addRock(x,z);
+  for(const [x,z] of G.TREES){
+    if(G.mapId==='swamp')addDeadTree(x,z);
+    else if(G.mapId==='giants')(srand()<0.75?placePine:placeDeadPine)(x,z);
+    else addTree(x,z);
+  }
+  for(const [x,z] of G.ROCKS){
+    if(G.mapId==='giants')placeBoulder(x,z,0.85+srand()*0.6);
+    else addRock(x,z);
+  }
   for(const [x,z] of G.TENTS)addTent(x,z);
   if(G.FIREPIT)addCampfire(G.FIREPIT[0],G.FIREPIT[1]);
   for(const [x,z] of G.BARREL_POS)if(!S.barrelsUsed.has(key(x,z)))addBarrel(x,z,G.mapId==='crypt'?0x4a4238:undefined);

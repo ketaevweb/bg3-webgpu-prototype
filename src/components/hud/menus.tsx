@@ -77,6 +77,45 @@ export function SavesPanel(){
   );
 }
 
+/* ---- v1.6: панель снаряжения — сумка отряда + слоты героев ---- */
+export function BagPanel(){
+  const open=useUi(s=>s.bagOpen);
+  const items=useUi(s=>s.bagItems);
+  const party=useUi(s=>s.bagParty);
+  const onClose=useUi(s=>s.bagOnClose);
+  if(!open)return null;
+  return (
+    <div id="bag" className="panel" style={{display:'block'}}>
+      <h3>Снаряжение отряда</h3>
+      <div id="bagBody">
+        {party.map((p,i)=>(
+          <div key={'h'+i} className="baghero">
+            <div className="bhn">{p.name} <span className="bhc">· {p.clsName}</span></div>
+            <div className="bhslots">
+              {p.slots.map((sl,j)=>(
+                <span key={j} className="bhslot">
+                  <i>{sl.label}:</i> {sl.item??'—'}
+                  {sl.item&&<button title="Снять в сумку" onClick={sl.remove}>×</button>}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="bagsep">Сумка отряда {items.length?`(${items.length})`:'— пуста'}</div>
+        {items.length===0&&<div className="bagempty">Снаряжение падает сюда: сундук на перевале, лавка Дамрока и награды за задания.</div>}
+        {items.map((it,i)=>(
+          <div key={'i'+i} className="bagitem">
+            <div className="bin"><b>{it.n}</b><span className="bsl">{it.slot}</span></div>
+            <div className="bid">{it.d}</div>
+            <button onClick={it.equip}>Надеть…</button>
+          </div>
+        ))}
+      </div>
+      <button style={{marginTop:'6px'}} onClick={onClose}>Закрыть (I)</button>
+    </div>
+  );
+}
+
 /* ---- экран победы/поражения ---- */
 export function EndScreen(){
   const end=useUi(s=>s.end);

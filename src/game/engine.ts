@@ -5,7 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
-import { upgradeUnitRig } from './animation';
+import { upgradeUnitRig, loadAttackClip } from './animation';
 import { clamp, cheb } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
@@ -32,6 +32,7 @@ import { gameSnapshot } from './save/snapshot';
 import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu } from './save/slots';
 import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/settings';
 import { closeShop, closeChoice } from './interact/shop';
+import { toggleBag, equipItem, unequipSlot, addToBag, GEAR } from './systems/gear';/* v1.6: снаряжение */
 import { initTutorial, tutState } from './ui/tutorial';/* v1.4: наставник */
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
 import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
@@ -166,6 +167,7 @@ function bindInput(){
     if(e.key==='j'||e.key==='J'||e.key==='о'||e.key==='О'){toggleJournal();}
     if(e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л'){if(G.phase!=='transition')toggleSaveMenu();}/* v1.1 */
     if(e.key==='g'||e.key==='G'||e.key==='п'||e.key==='П'){toggleGfx();}/* v1.1 */
+    if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){toggleBag();}/* v1.6: снаряжение */
   };
   addEventListener('keydown',onKey);
   const onResize=()=>{
@@ -241,8 +243,10 @@ let disposed=false;
     glows.campfire(W(G.FIREPIT[0]),W(G.FIREPIT[1]));
     fx.addEmber('campfire',W(G.FIREPIT[0]),W(G.FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
   }
-  /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и босса; гоблины — капсулы */
+  /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и боссов; гоблины — капсулы.
+    v1.6: перед ригами грузим опциональный Mixamo-клип атаки (attack.glb) */
   void (async()=>{
+    await loadAttackClip();
     const targets=units.filter(u=>u.side==='hero'||u.isBoss);
     let ok=0;
     for(const u of targets){
@@ -266,14 +270,14 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.5 «Болота культистов»: третья карта, друид Ольха и серверные скрижали.','g-sys');
+  log('BG3 Web-прототип v1.6 «Перевал великанов»: четвёртая карта, снаряжение с эффектами и атак-анимации.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
-  log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, а на восточных болотах поёт жрица Глубин. Элита носит реликвии!','g-sys');
+  log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, а на перевале (северо-запад) камни грызёт великан Гаррум. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
-  log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы (теперь и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
-  log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), а после неё — утопленный тракт на болота (восток).','g-sys');
+  log('ЛКМ — идти отрядом • E — говорить/осматривать • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
+  log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), а за болотами — тропа на перевал (северо-запад).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.5 boot complete');
+  console.log('[bg3] v1.6 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -293,7 +297,14 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
     pick.tile={x,z};
     pick.ent=units.find(u=>u.alive&&!u.isBarrel&&u.x===x&&u.z===z)||null;
     await resolveTargetClick();
-  }};
+  },
+  /* v1.6: снаряжение для E2E */
+  bag:()=>[...S.bag],
+  giveGear:(id,cls)=>{const h=units.find(u=>u.cls===cls&&u.side==='hero');if(!h)return;if(!S.bag.includes(id))addToBag(id);equipItem(id,h);},
+  unequipGear:(cls,slot)=>{const h=units.find(u=>u.cls===cls&&u.side==='hero');if(h)unequipSlot(h,slot);},
+  openBag:()=>toggleBag(),
+  gearKeys:()=>Object.keys(GEAR),
+};
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);

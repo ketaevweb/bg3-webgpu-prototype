@@ -5,13 +5,14 @@
 import { $, sleep } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
-import { G, CRYPT, SWAMP, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
+import { G, CRYPT, SWAMP, GIANTS, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { setActionbarVisible, setRound } from '../ui/store';
 import { worldGroup, fx, glows, controls, clearGroup, applyAtmosphere } from '../render/renderer';
-import { seedForest, seedCrypt, seedSwamp, buildWorld } from './props';
+import { seedForest, seedCrypt, seedSwamp, seedGiants, buildWorld } from './props';
 import { buildForestScenery, buildCryptScenery } from '../interact/explore';
 import { buildSwampScenery, buildSwampTrail, startSwampQuest } from '../interact/swamp';
+import { buildGiantsScenery, buildGiantsTrail, startGiantsQuest } from '../interact/giants';
 import { spawnEnemies } from '../entities/roster';
 import { removeUnit, placeHeroes } from '../entities/units';
 import { QUESTS, questStart, questObj, refreshTracker } from '../interact/quests';
@@ -59,9 +60,18 @@ export function buildMap(id:MapId,spots:number[][]|null){
     const ub=units.find(u=>u.swampBoss);
     if(ub)void upgradeUnitRig(ub,{tint:0x4a6a4f,tintStrength:0.5,scale:1.16,yaw:Math.PI});
     log('Болота культистов. Зелёный туман, тина по колено и песня из глубины.','g-sys');
+  }else if(id==='giants'){/* v1.6: перевал великанов */
+    seedGiants();applyAtmosphere('giants');
+    buildWorld();buildGiantsScenery();spawnEnemies();
+    if(spots)placeHeroes(spots);
+    controls.target.set(14,0,14);
+    startGiantsQuest();
+    const gb=units.find(u=>u.giantBoss);
+    if(gb)void upgradeUnitRig(gb,{tint:0x8a7a5f,tintStrength:0.5,scale:1.3,yaw:Math.PI});
+    log('Перевал великанов. Холодный ветер, грохот камней и хруст костей у огрского костра.','g-sys');
   }else{
     seedForest();applyAtmosphere('forest');
-    buildWorld();buildForestScenery();buildSwampTrail();/* v1.5: гать на болота */
+    buildWorld();buildForestScenery();buildSwampTrail();buildGiantsTrail();/* v1.5: гать на болота; v1.6: тропа на перевал */
     spawnEnemies();
     if(spots)placeHeroes(spots);
     controls.target.set(1,0,12);
@@ -80,7 +90,7 @@ export async function switchMap(id:MapId):Promise<void>{
   f.style.opacity='1';
   await sleep(620);
   teardownWorld();
-  buildMap(id,id==='swamp'?SWAMP.ENTER:CRYPT.ENTER);/* v1.5: точки входа по карте */
+  buildMap(id,id==='swamp'?SWAMP.ENTER:(id==='giants'?GIANTS.ENTER:CRYPT.ENTER));/* v1.5: болота; v1.6: перевал */
   f.style.opacity='0';
   bus.openExploreUI.call();
   refreshTracker();bus.refreshParty.call();bus.refreshBossBar.call();

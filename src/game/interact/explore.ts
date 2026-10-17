@@ -375,6 +375,9 @@ export function checkTriggers(){
   if(G.mapId==='swamp'&&!S.swampDone&&S.swampGroup.some(g=>g.alive&&g.isBoss)){/* v1.5: триггер Матери Топей */
     if(hs.some(h=>S.swampGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('swampboss');return;}
   }
+  if(G.mapId==='giants'&&!S.giantsDone&&S.giantsGroup.some(g=>g.alive&&g.isBoss)){/* v1.6: триггер Гаррума */
+    if(hs.some(h=>S.giantsGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('giantboss');return;}
+  }
   refreshHintExplore();
 }
 export function refreshHintExplore(){

@@ -10,6 +10,7 @@ import { useUi, uiSet } from '../ui/store';
 import { bigBanner, log } from '../ui/overlays';
 import { aliveHeroes } from '../entities/units';
 import { awardXP } from '../systems/progression';
+import { addToBag } from '../systems/gear';/* v1.6: Каменное сердце — в сумку */
 import { QUESTS, QUEST_REWARD } from './questData';
 
 /* реэкспорт данных — существующие импорты (engine/snapshot/maps/dialog/shop)
@@ -49,6 +50,11 @@ export function questDone(id:string){
       ||aliveHeroes().find(h=>h.slotsMax>0&&!h.relic)
       ||aliveHeroes().find(h=>!h.relic);
     if(c){c.wis+=1;c.relic='Болотный жемчуг';log('Болотный жемчуг переходит к '+c.short+': МДР +1.','g-heal');}
+  }
+  if(id==='giants'){/* v1.6: Каменное сердце — талисман в сумку отряда (I — снаряжение) */
+    gainGold(250);awardXP(400);
+    addToBag('stone_heart');
+    log('Сердце великана ещё тёплое — наденьте его через панель снаряжения (I).','g-heal');
   }
   bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
