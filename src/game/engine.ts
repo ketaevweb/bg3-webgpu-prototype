@@ -14,12 +14,12 @@ import { attackMod, blessed, hitChance, avgDamage } from './systems/combat';
 import { LOOT } from './systems/loot';
 import { UI } from './hud';
 import type { Barrel, Quest, SaveData, StatusType, Unit, Weapon } from './types';
-import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT } from './state';
+import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT, resetState } from './state';
 import { log, projectPos, ftextAbove, setHint, bigBanner, initOverlays, refreshIcons, updateOverlays } from './ui/overlays';
 import { initMarkers, addMarker, clearMarkers, addDot, clearDots, showReach } from './ui/markers';
 import { refreshParty, refreshBossBar, refreshInit, showSheet } from './ui/party';
-import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, applyAtmosphere, applyLighting, clearGroup, setupPostFX } from './render/renderer';
-import { tween, faceTo, lunge, boomFX, shake, tickTweens, projMesh } from './fx/tweens';
+import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, applyAtmosphere, applyLighting, clearGroup, setupPostFX } from './render/renderer';
+import { tween, faceTo, lunge, boomFX, shake, tickTweens, projMesh, clearTweens } from './fx/tweens';
 import { buildFigure } from './entities/figure';
 import { enemiesOf, meleeWeaponOf, aliveHeroes, placeHeroes, removeUnit } from './entities/units';
 import { buildHeroes, spawnEnemies, makeIlva, makeKaya, makeSkeleton } from './entities/roster';
@@ -2241,7 +2241,7 @@ let disposed=false;
   try{
     console.log('[bg3] init: start');
     initRenderer();
-    await renderer.init();
+    await ensureRendererInit();/* Фаза 4a: синглтон рендера — init один раз (ремоут переиспользует) */
     console.log('[bg3] init: done, backend=',(renderer.backend as any)?.isWebGPUBackend?'WebGPU':'WebGL2');
   }catch(err){
     console.error('[bg3] renderer.init() failed:',err);
@@ -2315,7 +2315,13 @@ return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);
   while(disposers.length){const f=disposers.pop();try{if(f)f();}catch(e){}}
-  try{renderer.dispose();}catch(e){}
+  /* Фаза 4a: рендерер/сцена — синглтоны приложения; состояние — в resetState (§4) */
+  for(const u of [...units])u.mesh.removeFromParent();
+  clearGroup(worldGroup);
+  fx.clearEmbers();glows.clear();
+  clearMarkers();clearDots();
+  clearTweens();
+  resetState();
   const cv=renderer.domElement;
   if(cv&&cv.parentNode)cv.parentNode.removeChild(cv);
 };

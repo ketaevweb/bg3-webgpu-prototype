@@ -57,3 +57,23 @@ export const CRYPT={
   URNS:[[11,10],[17,10]],
   THRONE:[14,3],CHEST:[14,1],EXIT:[14,26],ENTER:[[13,25],[14,25],[12,24],[15,24]],/* v1.2: 4 места отряда */
 };
+
+/* ---- чистый ремоут (REFACTORING.md §4: dispose() → resetState()) ----
+   Возвращает S/G/контейнеры в состояние первого запуска; хэндлы рендера
+   (hemiLight/sunLight/postFX) сохраняются — это синглтоны render/renderer.ts. */
+export function resetState(){
+  Object.assign(S,{gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
+    hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
+    cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,
+    cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set<string>()});
+  Object.assign(G,{busy:false,busyCount:0,combatOn:false,phase:'idle' as Phase,targeting:null,
+    round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
+    groundMesh:null,fireLight:null,flameMesh:null,
+    mapId:'forest' as MapId,
+    TREES:null,ROCKS:null,TENTS:null,FIREPIT:null,BARREL_POS:null,order:[]});
+  units.length=0;barrels.length=0;fires.clear();
+  pick.tile=null;pick.ent=null;pick.inter=null;
+  solid.clear();grass.clear();
+  for(const k in gobCount)delete gobCount[k];
+  interactables.length=0;
+}

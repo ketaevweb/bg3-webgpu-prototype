@@ -33,6 +33,14 @@ controls.maxPolarAngle=1.32; controls.minPolarAngle=0.15;
 controls.minDistance=8; controls.maxDistance=62;
 controls.target.set(1,0,12);
 
+let inited=false;
+/* инициализация рендерера — один раз на время жизни приложения (ремоут переиспользует синглтон) */
+export async function ensureRendererInit(){
+  if(inited)return;
+  await renderer.init();
+  inited=true;
+}
+
 /* DOM-подключение canvas — вызывается из bootGame() (HUD уже в DOM) */
 export function initRenderer(){
   renderer.setSize(innerWidth,innerHeight);

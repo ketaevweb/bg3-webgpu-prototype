@@ -14,6 +14,7 @@ let mi=0,di=0;
 const circGeo=new THREE.CircleGeometry(0.52,20);
 const dotGeo=new THREE.SphereGeometry(0.09,8,8);
 export function initMarkers(){
+  if(markerPool.length)return;/* синглтоны сцены — пул создаётся один раз */
   for(let i=0;i<210;i++){
     const m=new THREE.Mesh(circGeo,new THREE.MeshBasicMaterial(
       {color:0xffffff,transparent:true,opacity:0.3,depthWrite:false}));

@@ -18,6 +18,8 @@ export function tickTweens(dt:number){
     if(k>=1){tweens.splice(i,1);tw.res();}
   }
 }
+/* сброс незавершённых твинов при dispose (промысы остаются висеть — как раньше умирало замыкание) */
+export function clearTweens(){tweens.length=0;}
 export function faceTo(u:{mesh:THREE.Object3D},p:{x:number;z:number}){
   const dx=p.x-u.mesh.position.x,dz=p.z-u.mesh.position.z;
   if(dx||dz)u.mesh.rotation.y=Math.atan2(dx,dz);
