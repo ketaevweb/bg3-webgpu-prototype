@@ -31,10 +31,14 @@ import { gameSnapshot } from './save/snapshot';
 import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu } from './save/slots';
 import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/settings';
 import { closeShop, closeChoice } from './interact/shop';
+import { initTutorial, tutState } from './ui/tutorial';/* v1.4: наставник */
+import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
+import { cloudPull } from './save/slots';
 /* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
 import './ui/party';/* refreshParty/refreshInit/refreshBossBar/openExploreUI */
 import './ui/actionbar';/* refreshUI */
 import './systems/ai';/* aiTurn (turns зовёт через bus — иначе модуль не загрузится) */
+import './ui/tutorial';/* v1.4: биндинг bus.tutEvent (реализация — ui/tutorial.ts) */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    bootGame() — оркестратор: сборка, ввод, игровой цикл, dispose.
@@ -250,8 +254,9 @@ let disposed=false;
   G.phase='explore';
   bus.refreshUI.call();bus.refreshParty.call();
   bus.openExploreUI.call();
-  /* v1.1: настройки графики + меню сохранений (view-модели стора) */
+  /* v1.1: настройки графики + меню сохранений (view-модели стора); v1.4: наставник */
   loadGfx();applyGfx();renderGfx();renderSaves();
+  initTutorial();
   /* v0.7: звук — биндинг в стор (React-кнопка #sndBtn, Фаза 6) */
   const onSnd=()=>{
     sfx.unlock();sfx.setMuted(!sfx.isMuted());
@@ -259,23 +264,26 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.3 «Слуги Костепёра»: партия четырёх героев, элитные враги и лут-таблицы — добыча выпадает из каждого врага.','g-sys');
+  log('BG3 Web-прототип v1.4 «Наставник дозора»: обучение по шагам и облачные скрижали — сейвы дублируются в IndexedDB.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, а в крипте ждут культисты, ученик-целитель и скелет-рыцарь. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.3 boot complete');
+  console.log('[bg3] v1.4 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
 })();
-/* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) — тип Bg3Debug */
+/* v0.8+v1.1+v1.2+v1.4: отладочный хук (E2E-проверки в консоли браузера) — тип Bg3Debug */
 window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   freeIlva:()=>freeIlva(),joinKaya:(x,z)=>joinKaya(x??KAYA_SPOT[0]+1,z??KAYA_SPOT[1]),
   gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx,
-  rollLoot,LOOT};/* v1.3: +лут-таблицы для E2E */
+  rollLoot,LOOT,/* v1.3: +лут-таблицы для E2E */
+  moveParty:(x,z)=>{void moveParty({x,z});},/* v1.4: шаг обучения «Ход отряда» */
+  tut:()=>tutState(),/* v1.4: инспектор наставника (только чтение) */
+  cloudGet,cloudPut,cloudPull};/* v1.4: облачные скрижали для E2E */
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);

@@ -333,6 +333,7 @@ export async function moveParty(tile:{x:number;z:number}):Promise<void>{
   const hs=aliveHeroes();
   if(!hs.length)return;
   busyOn();
+  bus.tutEvent.call('move');/* v1.4: шаг обучения «Ход отряда» */
   setHint('');
   for(let i=0;i<hs.length;i++){
     const h=hs[i];

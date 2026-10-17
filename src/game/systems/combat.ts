@@ -56,6 +56,7 @@ import type { ExplodeOpts, Unit, Weapon } from '../types';
 export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:number;aoo?:boolean}={}){
   if(!att.alive||!def.alive)return;
   busyOn();
+  if(att.side==='hero')bus.tutEvent.call('attack');/* v1.4: шаг обучения «Атака» */
   faceTo(att,def.mesh.position);
   sfx.swing(w);
   /* v0.7.x: выпад корпусом (работает и для GLTF-рига) */

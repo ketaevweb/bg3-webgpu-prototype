@@ -33,6 +33,7 @@ export function enterTarget(type:TargetType){
   if(!h||h.side!=='hero'||!h.alive)return;
   if(G.targeting&&G.targeting.type===type){cancelTargeting();return;}
   G.targeting={type};
+  if(type!=='attack')bus.tutEvent.call('spell');/* v1.4: шаг обучения «Способность» */
   clearMarkers();clearDots();
   if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'){/* v1.2: +подлый удар и карание */
     const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:9);

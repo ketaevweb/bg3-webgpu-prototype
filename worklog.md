@@ -182,3 +182,25 @@ Work Log:
 Stage Summary:
 - Фаза 6 закрыта: HUD_HTML → React+zustand, стор-граница без циклов и без three в бандле HUD, императивные покадровые слои сохранены; DoD рефакторинга (0–5) + опциональная Фаза 6 выполнены; поведение v1.3 сохранено, кроме исправленного латентного бага bolt→SMITE (v1.2)
 - Следующий шаг: фича-работа v1.4 в готовых слоях (обучение, облако сейвов, баланс) — по отдельной команде
+
+---
+Task ID: 10
+Agent: main (Z.ai)
+Task: v1.4 «Наставник дозора» — релиз по дорожной карте README (обучение, облако сохранений, полировка)
+
+Work Log:
+- Контекст: рефакторинг p0–p6 полностью завершён (теги refactor-p1…p6, engine.ts 293 строки) — подтверждено git tag/log до старта; «v1.4» трактован как игровой релиз по дорожной карте README («v1.4 — обучение, облако сохранений, полировка, баланс»)
+- ОБУЧЕНИЕ (ui/tutorial.ts, 79 строк): карточка «Наставник» 7 шагов (move/talk/fight/attack/spell/end/save) продвигается ТОЛЬКО реальными действиями игрока; события — через новый слот bus.tutEvent (вызовы: explore.moveParty, dialog.openDlg, turns.startCombat/endTurn (guard hero), combat.doAttack (guard side), targeting.enterTarget (guard !attack), slots.doSave); прыжок вперёд (idx>=step → step=idx+1), anti-rewind (idx<step — игнор); прогресс localStorage bg3w_tut_v1 {step,done} — формат сейва v2 НЕ затронут; initTutorial() из bootGame (side-effect импорт не повторяется при ремоуте); view-модель TutView в store (tut), React-компонент TutCard в Hud.tsx (#tut, панель .panel), стили game.css §v1.4; sfx.bless() на завершение/пропуск
+- ОБЛАКО (save/cloud.ts, 55 строк): IndexedDB «bg3w_cloud»/store slots, promise-обёртка tx() без исключений наружу (недоступность → null/false, сейв не ломается); doSave — автозеркало (лог «Зеркало сейва — в облачной скрижали»/«недоступна»), cloudPull/cloudPush в slots.ts; SlotRowView +cloudHas/cloudWhen/onCloudPull/onCloudPush; refreshCloudMeta — асинхронные uiSet поверх рядов; SavesPanel: строка «☁ в облаке: <дата>» + кнопки «В облако»/«Из облака» (title-подсказки)
+- БАГФИКС ИИ (латентный v0.4, вскрыт E2E дальним startCombat): planGoblin/planNecro не имели плана «просто сближения» — план move искал только атакующие позиции, при дистанции героя > moveLeft+range враг навечно замирал («ускоряется!» каждый ход без шага); фикс: fallback-блок перед dash в обоих планах (узел, минимизирующий dmin до ближайшего героя при улучшении curD); E2E-регресс: Грат (21,6) → сближение d 17→15→13→11→9
+- Полировка: приветственный лог v1.4, console.log '[bg3] v1.4 boot complete', layout.tsx метаданные (title/keywords), README (шапка v1.4, структура +tutorial/+cloud, механики v1.4, дорожная карта v1.5, технологии: zustand+IndexedDB, 26 модулей)
+- __bg3 расширено (тип Bg3Debug): moveParty(x,z), tut() — инспектор {step,done} только чтение, cloudGet/cloudPut/cloudPull для E2E
+- Гейты: tsc 0; ESLint src/game+components/hud 0/0; scripts/cycles.js → NO CYCLES; модули ≤400 (engine 301, tutorial 79, cloud 55)
+- E2E (agent-browser, React-UI): boot '[bg3] v1.4 boot complete' WebGL2 bloom rigs 3/3, 0 page-errors; туториал: карточка «шаг 1 из 7» → moveParty → шаг 2 → E у Кая (диалог открылся, dlgName) → шаг 3 → startCombat патруля → шаг 4 «Атака» → клик-атака по Грату из HP-полоски (u._el rect +30px) → килл Задиры → шаг 5 «Способность»; «Огненные стрелы» → таргетинг-хинт; startCombat №2 → jump-forward до «Скрижаль судьбы» (шаг 7) — прыжок и anti-rewind подтверждены; reload → tut step=6 восстановлен из LS; клик-атака Торика (болт Миреллы 23/КД14 урон 8) → Грат мёртв → квест «Кости и пепел» 300XP+150зол → «=== ПОБЕДА! ===»; сейвы на экране победы корректно запрещены (guard phase over); reload → K → «Сохранить» слот 1 → tut {step:7,done:true} + карточка скрыта + лог «Обучение завершено!…» + «Зеркало сейва — в облачной скрижали»; cloudGet(1) → v2 forest 60зол 2 героя; localStorage.removeItem → cloudPull(1) → слот восстановлен (лог с датой) → панель: «☁ в облаке: 17.10.2026, 19:53:47», 7 кнопок (В облако/Из облака активны при данных); doLoad(1) → 1:1 (map forest, gold 60, hp [14,10]); switchMap crypt (7 врагов) ↔ forest (8); финальный reload → boot чистый, tut НЕ появляется (done), errors 0
+- Инструментальный приём E2E: пик юнитов — pointermove-сканирование по тултипу (#tip) / cursor 'pointer'; клик = dispatch PointerEvent pointerdown/up на canvas (agent-browser mouse не доходил); координаты — rect HP-полоски юнита (u._el) +30px вниз; кнопки React — DOM b.click() (find text нестабилен); анти-джамп: const-декларации eval'ов живут в page-контексте — IIFE-обёртка
+- Git: коммит v1.4 + тег v1.4 + push (token-процедура: set-url → push → set-url restore → rg 'ghp_' чисто)
+
+Stage Summary:
+- v1.4 «Наставник дозора» выпущен: обучение на реальных действиях (7 шагов, bus.tutEvent, LS-прогресс), облачные скрижали (IndexedDB-зеркало, pull/push, метки в панели), багфикс ИИ-сближения; формат сейва v2 и баланс не изменены
+- Первый фича-релиз на пост-рефакторинговой архитектуре: новая система = 2 листа (tutorial 79, cloud 55) + слот шины + 6 точек вызова — god-файл не вырос (301 строка)
+- Следующий шаг: v1.5 — третья карта (болота культистов) и/или серверные скрижали (API-роут)

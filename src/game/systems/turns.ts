@@ -52,6 +52,7 @@ export function startCombat(group:Unit[]){
   if(!group.length)return;
   S.combatGroup=group;
   G.combatOn=true;
+  bus.tutEvent.call('fight');/* v1.4: шаг обучения «Первый бой» */
   log('=== БОЙ НАЧИНАЕТСЯ ===','g-sys');
   sfx.stinger('combat');
   if(S.combatGroup.some(g=>g.cryptBoss)){/* v0.8: аутро босса крипты */
@@ -114,6 +115,8 @@ export function beginTurn(u:Unit){
 }
 export function endTurn(){
   if(!G.combatOn)return;
+  /* v1.4: шаг обучения «Конец хода» — только когда завершается ход героя */
+  if(G.current&&G.current.alive&&G.current.side==='hero')bus.tutEvent.call('end');
   G.targeting=null;clearMarkers();clearDots();
   let steps=0;
   while(steps<=G.order.length*2){

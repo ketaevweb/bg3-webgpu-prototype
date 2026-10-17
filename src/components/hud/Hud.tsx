@@ -56,6 +56,21 @@ function Hint(){
   return <div id="hint">{hint}</div>;
 }
 
+/* ---- v1.4: карточка наставника (шаг продвигается реальными действиями игрока) ---- */
+function TutCard(){
+  const tut=useUi(s=>s.tut);
+  if(!tut)return null;
+  return (
+    <div id="tut" className="panel">
+      <h3>{tut.title}</h3>
+      <div className="tutn">Наставник · шаг {tut.i} из {tut.n}</div>
+      <div id="tutText">{tut.text}</div>
+      <div className="tutbar"><i style={{width:(tut.i/tut.n*100)+'%'}}/></div>
+      <button onClick={tut.onSkip}>Пропустить обучение</button>
+    </div>
+  );
+}
+
 /* ---- большой баннер (ПОБЕДА / НОВОЕ ЗАДАНИЕ / УРОВЕНЬ) ---- */
 function Banner(){
   const banner=useUi(s=>s.banner);
@@ -77,6 +92,7 @@ export default function Hud(){
   return <>
     <SysButtons/>
     <TopBar/>
+    <TutCard/>
     <BossBar/>
     <LogPanel/>
     <PartyCards/>

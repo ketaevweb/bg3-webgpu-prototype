@@ -67,6 +67,21 @@ export function planNecro(u:Unit):AIPlan|null{/* v0.8: ИИ некроманта
     }
     if(best)return{type:'move',path:nodePath(best.v)};
   }
+  /* v1.4: fallback сближения — план move выше ищет только атакующие позиции,
+     поэтому при дистанции героя > moveLeft+range кастер стоял на месте
+     (латентный баг v0.4, вскрыт E2E v1.4 дальним стартом боя) */
+  if(u.moveLeft>=1){
+    const nodes=reachNodes(GW,u,true);
+    let best:Scored<AStarNode>|null=null;
+    const curD=Math.min(...heroes.map(h=>cheb(u,h)));
+    for(const node of nodes.values()){
+      if(node.g<=0)continue;
+      const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
+      const s=-dmin*0.9-node.g*0.1;
+      if(!best||s>best.s)best={s,v:node};
+    }
+    if(best&&Math.min(...heroes.map(h=>cheb(best.v,h)))<curD)return{type:'move',path:nodePath(best.v)};
+  }
   if(u.bonus>0&&u.action>0)return{type:'dash'};
   return null;
 }
@@ -165,6 +180,21 @@ export function planGoblin(u:Unit):AIPlan|null{
       }
     }
     if(best)return{type:'move',path:nodePath(best.v)};
+  }
+  /* v1.4: fallback сближения (см. planNecro) — гоблин идёт к ближайшему
+     герою, если атакующей позиции не нашлось; без него дальний бой
+     залипал: «ускоряется» каждый ход без единого шага */
+  if(u.moveLeft>=1){
+    const nodes=reachNodes(GW,u,true);
+    let best:Scored<AStarNode>|null=null;
+    const curD=Math.min(...heroes.map(h=>cheb(u,h)));
+    for(const node of nodes.values()){
+      if(node.g<=0)continue;
+      const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
+      const s=-dmin*0.9-node.g*0.1;
+      if(!best||s>best.s)best={s,v:node};
+    }
+    if(best&&Math.min(...heroes.map(h=>cheb(best.v,h)))<curD)return{type:'move',path:nodePath(best.v)};
   }
   if(u.bonus>0&&u.action>0)return{type:'dash'};
   return null;

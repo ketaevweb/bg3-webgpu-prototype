@@ -208,5 +208,11 @@ export interface Bg3Debug{
   toggleGfx:()=>void;
   rollLoot:(t:Unit)=>void;
   LOOT:Record<string,{readonly gold:readonly [number,number];readonly potion:number;readonly oil:number}>;
+  /* v1.4: наставник + облачные скрижали (E2E) */
+  moveParty:(x:number,z:number)=>void;
+  tut:()=>{step:number;done:boolean};
+  cloudGet:(i:number)=>Promise<SaveData|null>;
+  cloudPut:(i:number,sv:SaveData)=>Promise<boolean>;
+  cloudPull:(i:number)=>Promise<void>;
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

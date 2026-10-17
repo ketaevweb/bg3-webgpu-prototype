@@ -30,4 +30,7 @@ export const bus={
   checkTriggers:new Slot<[]>(),
   switchMap:new Slot<[MapId]>(),
   aiTurn:new Slot<[Unit]>(),
+  /* v1.4: обучение (реализация — ui/tutorial.ts; события реальных действий
+     игрока шлют explore/dialog/turns/combat/targeting/slots) */
+  tutEvent:new Slot<[string]>(),
 };

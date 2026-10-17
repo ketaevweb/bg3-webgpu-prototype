@@ -1,15 +1,20 @@
-/* ================= SLOTS (Фазы 4–6 рефакторинга) =================
+/* ================= SLOTS (Фазы 4–6 рефакторинга + v1.4) =================
    3 слота localStorage + экспорт/импорт JSON + меню сохранений.
    Фаза 5: closeSaveMenu переехал сюда из applyGame; sv типизирован.
    Фаза 6: DOM-рендер заменён view-моделью zustand-стора; биндинги
    sys.onSaves/onLoadFromEnd/savesOnClose/onImportFile; скрытый
-   input#importFile живёт в React-панели (ref — в сторе). 1:1. */
+   input#importFile живёт в React-панели (ref — в сторе). 1:1.
+   v1.4: облачные скрижали — каждый doSave дублируется в IndexedDB
+   (save/cloud.ts), кнопки «В облако»/«Из облака» в панели сейвов;
+   шаг обучения 'save' — через шину bus.tutEvent. */
 import { SAVE_VER, SLOT_N } from '../constants';
 import { sfx } from '../audio';
+import { bus } from '../bus';
 import { G, S, units, MAP_NAME } from '../state';
 import { useUi, uiSet } from '../ui/store';
 import { log } from '../ui/overlays';
 import { gameSnapshot, applyGame } from './snapshot';
+import { cloudPut, cloudGet } from './cloud';
 import type { SaveData } from '../types';
 
 /* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
@@ -33,9 +38,18 @@ export function doSave(i:number){
   if(G.combatOn||G.busy||G.phase==='transition'||G.phase==='over'){
     log('Сейчас нельзя сохранять: идёт бой, переход или экран поражения.','g-enemy');sfx.ui();return;
   }
-  try{localStorage.setItem(slotKey(i),JSON.stringify(gameSnapshot()));}
+  const sv=gameSnapshot();
+  try{localStorage.setItem(slotKey(i),JSON.stringify(sv));}
   catch{log('Не удалось сохранить — хранилище браузера недоступно.','g-enemy');return;}
-  log('Игра сохранена в слот '+i+'.','g-heal');sfx.ui();renderSaves();
+  log('Игра сохранена в слот '+i+'.','g-heal');sfx.ui();
+  bus.tutEvent.call('save');/* v1.4: шаг обучения «Скрижаль судьбы» */
+  /* v1.4: асинхронное зеркало в облачную скрижаль (IndexedDB) */
+  void cloudPut(i,sv).then(ok=>{
+    if(ok)log('Зеркало сейва — в облачной скрижали (IndexedDB).','g-sys');
+    else log('Облачная скрижаль недоступна (IndexedDB) — сейв остался только в этом браузере.','g-sys');
+    renderSaves();
+  });
+  renderSaves();
 }
 export function doLoad(i:number){
   const sv=readSlot(i);
@@ -83,12 +97,37 @@ export function onImportFile(e:{target:HTMLInputElement}){
   });
 }
 
+/* ---- v1.4: облачные скрижали (IndexedDB-зеркало слотов) ---- */
+export async function cloudPull(i:number):Promise<void>{
+  const sv=await cloudGet(i);
+  if(!sv){log('Облачная скрижаль '+i+' пуста — сначала отправьте туда сейв.','g-enemy');sfx.ui();return;}
+  try{localStorage.setItem(slotKey(i),JSON.stringify(sv));}
+  catch{log('Не удалось восстановить — хранилище браузера недоступно.','g-enemy');return;}
+  log('Облачный сейв восстановлен в слот '+i+': '+slotMeta(sv),'g-heal');sfx.ui();renderSaves();
+}
+export async function cloudPush(i:number):Promise<void>{
+  const sv=readSlot(i);
+  if(!sv){log('Слот '+i+' пуст — нечего отправлять в облако.','g-enemy');sfx.ui();return;}
+  const ok=await cloudPut(i,sv);
+  log(ok?'Слот '+i+' отправлен в облачную скрижаль.':'Облачная скрижаль недоступна (IndexedDB).',ok?'g-sys':'g-enemy');
+  sfx.ui();renderSaves();
+}
+/* мета облачных слотов подтягивается асинхронно — дописывается в уже
+   отрисованные ряды (uiSet на каждый слот, без перезаписи колбэков) */
+async function refreshCloudMeta(){
+  for(let i=1;i<=SLOT_N;i++){
+    const sv=await cloudGet(i);
+    uiSet(s=>({savesSlots:s.savesSlots.map(r=>r.i===i?{...r,cloudHas:!!sv,cloudWhen:sv?new Date(sv.when).toLocaleString('ru-RU'):null}:r)}));
+  }
+}
+
 
 export function renderSaves(){
   const hs=units.filter(u=>u.side==='hero');
   const cur='Текущая игра: '+MAP_NAME[G.mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
   const slots:{i:number;has:boolean;meta:string;sub:string;
-    onSave:()=>void;onLoad:()=>void;onExport:()=>void;onImport:()=>void;onDelete:()=>void}[]=[];
+    onSave:()=>void;onLoad:()=>void;onExport:()=>void;onImport:()=>void;onDelete:()=>void;
+    cloudHas:boolean;cloudWhen:string|null;onCloudPull:()=>void;onCloudPush:()=>void}[]=[];
   for(let i=1;i<=SLOT_N;i++){
     const sv=readSlot(i);
     slots.push({
@@ -100,9 +139,13 @@ export function renderSaves(){
       onExport:()=>doExport(i),
       onImport:()=>doImport(i),
       onDelete:()=>doDelete(i),
+      cloudHas:false,cloudWhen:null,
+      onCloudPull:()=>{void cloudPull(i);},
+      onCloudPush:()=>{void cloudPush(i);},
     });
   }
   uiSet({savesCur:cur,savesSlots:slots});
+  void refreshCloudMeta();/* v1.4: облачные меты — асинхронно поверх рядов */
 }
 export function openSaveMenu(fromEnd:boolean){
   savesFromEnd=!!fromEnd;

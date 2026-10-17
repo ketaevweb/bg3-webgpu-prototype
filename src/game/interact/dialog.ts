@@ -27,6 +27,7 @@ export function openDlg(npc:string){
   busyOn();G.phase='dialogue';
   sfx.dialog();
   S.dlgNpc=npc;
+  bus.tutEvent.call('talk');/* v1.4: шаг обучения «Разговор» */
   setHint('');
   showNode('start');
 }
