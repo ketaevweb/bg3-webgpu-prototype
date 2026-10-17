@@ -78,3 +78,22 @@ Work Log:
 Stage Summary:
 - engine.ts компилируется под strict (strictNullChecks), tsc --noEmit = 0 ошибок; поведение идентично v1.3
 - Следующий шаг: «рефакторинг 2» — Фаза 2 (чистые листья: rng/utils/constants/grid/боевая математика/лут)
+
+---
+Task ID: 5
+Agent: main (Z.ai)
+Task: Рефакторинг, Фаза 2 — чистые листья (rng/utils/constants/world-grid/боевая математика/лут-таблицы)
+
+Work Log:
+- Карта кода: счётчики вызовов сняты до правок (passable ×6 движковых, astar ×4, reachNodes ×6, unitAt/barrelAt ×1+1; cheb/key/mod/roll/d/W/attackMod… — сигнатуры без изменений, только импорт)
+- Ключевое наблюдение: srand (mulberry32, сид 20251017) используется ТОЛЬКО для декора мира, бой/лут — на Math.random (d/roll/ri) — детерминизм мира сохраняется модульным синглтоном rng.ts
+- Новые модули (все — именованные экспорты, без default): rng.ts (mulberry32/srand/d/roll/ri, 24 строки), utils.ts ($/clamp/mod/sleep/key/cheb, 21), constants.ts (TILE/GRID/HALF/W/XP_NEED/RANGE_FB|OIL/STATUS as const/HERO_TINT as const/SAVE_VER/SLOT_N, 35), world/grid.ts (GridWorld{solid,units,barrels,fires} + passable/unitAt/barrelAt/dangerAt/astar/reachNodes/nodePath — чистые функции с явным контекстом, 105), systems/combat.ts (attackMod/blessed/hitChance/avgDamage — pure, 33), systems/loot.ts (LOOT as const + тип LootKey, 14)
+- Решение: W() живёт в constants.ts, а не utils.ts — зависит от TILE/HALF, а листья не импортируют других листьев; GridWorld — предтеча GameCtx (p4a), в engine создан один раз после объявления контейнеров (они никогда не переприсваиваются, только мутируются — проверено grep'ом)
+- engine.ts: удалены перенесённые определения (~115 строк), добавлены импорты, `const GW:GridWorld={solid,units,barrels,fires}`; sed-правка 18 вызовов (passable/unitAt/barrelAt/astar/reachNodes — GW первым аргументом); удалён мёртвый топ-левел BARREL_POS (тенился let'ом в замыкании со времён v0.8); rollLoot/giveToParty остались в engine до p4d (нужны log/fx/glows/refreshParty)
+- tsc --noEmit: 0 ошибок с первого прохода; engine.ts 2975 → 2860 строк (+232 в 6 модулях)
+- E2E-гейт (agent-browser): boot '[bg3] v1.3 boot complete' WebGL2+bloom, rigs 3/3; бой: инициатива 9, ИИ сближается рывками (astar/reachNodes на GW), атака Скимитаром «10 против КД 12 — промах» (боевая математика из systems/combat), урон прошёл (Мирелла 10→3); rollLoot прямой вызов: гоблинская таблица +7 золота (60→67); doSave во время боя корректно отказал (guard combatOn); doSave(1) → JSON v2 (fighter hp14/wizard hp10, золото 60) → порча hp → doLoad(1) восстановил 1-в-1; switchMap('crypt') — гарнизон 7 + Костепёр, обратно в лес — 10 юнитов; ДЕТЕРМИНИЗМ: reload → фазы/позиции всех 10 юнитов совпали до 6 знака (сид srand цел); ошибок консоли нет; скриншот .zscripts/verify-refactor-p2.png
+- Git: коммит + тег refactor-p2; пуш в приватный ketaevweb/bg3-webgpu-prototype с токеном из чата, remote URL очищен после пуша
+
+Stage Summary:
+- Фаза 2 закрыта: 6 чистых модулей-листьев, GridWorld-контекст для сетки, боевая математика и лут-таблицы типизированы и вынесены; поведение идентично v1.3
+- Следующий шаг: «рефакторинг 3» — Фаза 3 (types.ts: Unit/Weapon/Status/Quest/SaveData; UI-реестр в hud.ts; noImplicitAny для новых каталогов; совместимость сейва v2 байт-в-байт)
