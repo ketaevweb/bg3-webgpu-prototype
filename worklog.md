@@ -97,3 +97,24 @@ Work Log:
 Stage Summary:
 - Фаза 2 закрыта: 6 чистых модулей-листьев, GridWorld-контекст для сетки, боевая математика и лут-таблицы типизированы и вынесены; поведение идентично v1.3
 - Следующий шаг: «рефакторинг 3» — Фаза 3 (types.ts: Unit/Weapon/Status/Quest/SaveData; UI-реестр в hud.ts; noImplicitAny для новых каталогов; совместимость сейва v2 байт-в-байт)
+
+---
+Task ID: 6
+Agent: main (Z.ai)
+Task: Рефакторинг, Фаза 3 — доменные типы (types.ts), типизация S/юнитов/сейва, UI-реестр id
+
+Work Log:
+- Инвентаризация: 47 строковых DOM-id в engine (все есть в HUD_HTML) + #loadBtn2; 7 фаз цикла (idle/ai/dialogue/explore/over/player/transition); поля S вкл. ранее не описанный kayaMesh
+- types.ts (новый, лист, ~120 строк): Side/Abil/MapId/StatusType/QuestState/Phase; Status, Weapon (dice/abil/range/melee/fire/smite/necro/status); Unit (~50 полей: ресурсы хода, флаги ИИ/роли, pacified, _el, mesh/rig/phase); Barrel=Unit&{isBarrel:true} (бочка — частичный юнит, полный entity — p4c); UnitTemplate=Partial<Unit>&{name,short,hp,ac,xp,color} — контекстная типизация фабрик GOB/SKEL/SKEL_KNIGHT/CULT; FireTile (g/m1/m2 — Group/Mesh); Interact; Quest/QuestObj; GameState (все 21 поля S); HeroSave/SaveFlags/SaveQuest/SaveData (формат v2 ЗАМОРОЖЕН); PickState
+- engine.ts: контейнеры units/order/barrels: Unit[], fires: Map<string,FireTile>, pick: PickState, S: GameState (kayaMesh добавлен), mapId: MapId, phase: Phase; current/targeting остались any c TODO(p4a); makeUnit(cfg:Partial<Unit>&{x,z}):Unit c cast; addBarrel → as unknown as Barrel (частичный юнит, TODO p4c); BOLT/SMITE: Weapon; QUESTS/QUEST_REWARD: Record<string,…>; gameSnapshot():SaveData, readSlot():SaveData|null, slotMeta(sv:SaveData), applyGame(sv:SaveData|null) + (['str'…] as const) для abil-цикла
+- UI-реестр: hud.ts + export const UI={…52 id} as const + тип UiId; sed 52× $('#id') → $(UI.id) — строковых селекторов в engine больше НЕТ (проверено rg)
+- Листья p2 переведены с any на доменные типы: grid.ts (GridWorld.units/barrels: Unit[], mover/forUnit: Unit, AStarNode{x,z,g,f,p}), combat.ts (attackMod/blessed/hitChance/avgDamage на Unit/Weapon)
+- Итерации tsc: 33 → 16 → 0 ошибок. Точечные эквивалентные фиксы: fires.get(k) c if(f)-guard (после has(k)), querySelector<HTMLElement>('.ubar i') c if(bar), (f.m1.material as MeshBasicMaterial), im=S.ilvaMesh as Object3D в freeIlva/takeCrate (сцена гарантированно стоит), showNode: S.dlgNpc?DLGS[S.dlgNpc]:undefined, A* dev-инвариант if(!bn||!bk)break, reachNodes-узлы получили f:0 (поле не используется Dijkstra-логикой)
+- tsconfig-рампа: noImplicitAny глобально НЕ включал (95 неявных any-параметров engine — это Фаза 5); новые каталоги (world/, systems/, types.ts) полностью явно типизированы по построению
+- Остаточные any в engine: 32 (рендер-пулы/свет/postFX, AI-кандидаты best:any ×8, raycast, current/targeting, relic) — все адресуются при переезде систем в Фазах 4a–4f; any в types/grid — только в комментариях
+- E2E-гейт (agent-browser): boot '[bg3] v1.3 boot complete' WebGL2+bloom rigs 3/3; UI-реестр живой — панели gfx (open/close) и saves открываются кликами; бой: старт, инициатива, ИИ действует; doSave во время боя корректно отказал (guard combatOn); doSave(2)/doLoad(2) вне боя: v2, 2 героя (Торик:14/Мирелла:10), золото 60; switchMap('crypt') — босс на месте; БАЙТ-СОВМЕСТИМОСТЬ: gameSnapshot до/после типизации — JSON идентичен 1019 == 1019 байт (без поля when); ошибок консоли нет; скриншот .zscripts/verify-refactor-p3.png
+- Git: коммит + тег refactor-p3; пуш в приватный ketaevweb/bg3-webgpu-prototype, remote URL очищен
+
+Stage Summary:
+- Фаза 3 закрыта: единый источник доменных типов (types.ts), юниты/сейв/S/контейнеры типизированы, строковые DOM-id заменены реестром UI, листья p2 — на доменных типах; сейв v2 байт-в-байт совместим
+- Следующий шаг: «рефакторинг 4» — Фаза 4a (state.ts: S→GameState-модуль + GameCtx, fx/tweens) и далее 4b–4h по одному коммиту на подсистему
