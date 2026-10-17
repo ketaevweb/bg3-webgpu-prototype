@@ -1,40 +1,25 @@
-/* ================= QUESTS (Фаза 4 рефакторинга) =================
-   Журнал заданий, награды, золото, трекер. Цикл импортов
-   quests⇄progression — на уровне функций (ESM-safe).
-   Перенесено дословно из engine.ts. */
+/* ================= QUESTS (Фазы 4–5 рефакторинга) =================
+   Журнал заданий, награды, золото, трекер. Фаза 5: данные (QUESTS/
+   QUEST_REWARD) переехали в лист interact/questData.ts (разрыв цикла
+   quests⇄progression — progression.showEnd читает данные); refreshParty —
+   через шину bus; refreshTracker привязан к шине (progression зовёт через
+   bus). Перенесено дословно из engine.ts. */
 import { $ } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
 import { S } from '../state';
+import { bus } from '../bus';
 import { bigBanner, log } from '../ui/overlays';
-import { refreshParty } from '../ui/party';
 import { aliveHeroes } from '../entities/units';
 import { awardXP } from '../systems/progression';
-import type { Quest } from '../types';
+import { QUESTS, QUEST_REWARD } from './questData';
 
-/* ================= v0.6: ЗАДАНИЯ, ДИАЛОГИ, ТОРГОВЛЯ, ИССЛЕДОВАНИЕ ================= */
-export const QUESTS:Record<string,Quest>={
-  main:{name:'Кости и пепел',state:'active',
-    desc:'Гоблины племени Костей перекрыли торговый тракт. Разгромите их лагерь на севере и убейте вожака.',
-    objs:[{k:'boss',t:'Убить вожака Грата Костолома',done:false}]},
-  prisoner:{name:'Свободу разведчице',state:'hidden',
-    desc:'Западнее гоблинского лагеря в клетке томится Илва — разведчица Долгого Дозора.',
-    objs:[{k:'free',t:'Освободить Илву',done:false}]},
-  crate:{name:'Похищенный товар',state:'hidden',
-    desc:'Гоблины утащили у Дамрока ящик с товаром. Он где-то в их лагере.',
-    objs:[{k:'find',t:'Найти ящик в лагере',done:false},{k:'return',t:'Вернуть ящик Дамроку',done:false}]},
-  crypt:{name:'Сердце крипты',state:'hidden',/* v0.8 */
-    desc:'Мертвецы тракта — не гоблинская работа. Под курганом на северо-востоке открылась крипта, где сидит некромант Вхорил Костепёр и дёргает за ниточки своих костяных кукол.',
-    objs:[{k:'enter',t:'Спуститься в крипту',done:false},{k:'boss',t:'Уничтожить Костепёра',done:false}]},
-};
-export const QUEST_REWARD:Record<string,string>={
-  main:'300 XP, 150 зол.',
-  prisoner:'150 XP, 100 зол., кулон красноречия',
-  crate:'150 XP, 100 зол., вечная скидка',
-  crypt:'300 XP, 150 зол., перстень Костепёра',
-};
-export function questActive(id){return QUESTS[id].state==='active';}
-export function questStart(id){
+/* реэкспорт данных — существующие импорты (engine/snapshot/maps/dialog/shop)
+   продолжают работать; новые модули могут импортировать прямо из questData */
+export { QUESTS, QUEST_REWARD };
+
+export const questActive=(id:string):boolean=>QUESTS[id].state==='active';
+export function questStart(id:string){
   const q=QUESTS[id];
   if(q.state!=='hidden')return;
   q.state='active';
@@ -42,13 +27,13 @@ export function questStart(id){
   log('Новое задание: «'+q.name+'».','g-sys');
   refreshTracker();
 }
-export function questObj(id,k){
+export function questObj(id:string,k:string){
   const q=QUESTS[id];
   if(q.state==='hidden')q.state='active';
   const o=q.objs.find(o=>o.k===k);
   if(o&&!o.done){o.done=true;log('«'+q.name+'»: '+o.t+' — выполнено!','g-heal');refreshTracker();}
 }
-export function questDone(id){
+export function questDone(id:string){
   const q=QUESTS[id];
   if(q.state==='done')return;
   q.state='done';
@@ -62,9 +47,9 @@ export function questDone(id){
   if(id==='crypt'){gainGold(150);awardXP(300);log('Крипта очистилась — мертвецы тракта больше не поднимутся.','g-heal');}
   bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
-  refreshTracker();refreshParty();
+  refreshTracker();bus.refreshParty.call();
 }
-export function gainGold(n){S.gold+=n;refreshTracker();sfx.gold();}
+export function gainGold(n:number){S.gold+=n;refreshTracker();sfx.gold();}
 export function refreshTracker(){
   $(UI.goldTxt).textContent='Золото: '+S.gold+(S.discount?' · скидка 20%':'');
   const el=$(UI.qbody);el.innerHTML='';
@@ -96,3 +81,6 @@ export function renderJournal(){
     el.appendChild(d);
   }
 }
+
+/* ---- регистрация на шине (Фаза 5: progression → refreshTracker без цикла) ---- */
+bus.refreshTracker.bind(refreshTracker);

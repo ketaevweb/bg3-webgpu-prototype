@@ -1,20 +1,21 @@
-/* ================= SNAPSHOT (Фаза 4 рефакторинга) =================
+/* ================= SNAPSHOT (Фазы 4–5 рефакторинга) =================
    Снимок игры (формат v2 ЗАМОРОЖЕН, types.ts) и восстановление (applyGame).
-   Перенесено дословно из engine.ts. */
+   Фаза 5: цикл slots⇄snapshot разорван — closeSaveMenu переехал в вызовы
+   doLoad (slots.ts); openExploreUI/refreshParty/refreshBossBar — через шину
+   bus. Перенесено дословно из engine.ts. */
 import { SAVE_VER, W } from '../constants';
 import { $, clamp } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
 import { S, G, units, MAP_NAME } from '../state';
+import { bus } from '../bus';
 import { QUESTS, closeJournal, refreshTracker } from '../interact/quests';
 import { closeDlgHard } from '../interact/dialog';
 import { closeShop, closeChoice } from '../interact/shop';
 import { closeGfx } from './settings';
-import { closeSaveMenu } from './slots';
 import { cancelTargeting } from '../ui/targeting';
 import { teardownWorld, buildMap } from '../world/maps';
 import { ensureCompanions, refreshHintExplore } from '../interact/explore';
-import { openExploreUI, refreshParty, refreshBossBar } from '../ui/party';
 import { bigBanner, log } from '../ui/overlays';
 import type { SaveData } from '../types';
 
@@ -45,7 +46,7 @@ export function applyGame(sv:SaveData|null){
   if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)){log('Сейв повреждён или от другой версии.','g-enemy');return;}
   if(G.phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
   if(S.dlgNpc)closeDlgHard();
-  closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();
+  closeJournal();closeShop();closeChoice();closeGfx();
   $(UI.sheet).style.display='none';$(UI.end).style.display='none';
   S.gold=sv.gold||0;S.discount=!!sv.discount;
   const fl=sv.flags||{};
@@ -80,8 +81,8 @@ export function applyGame(sv:SaveData|null){
       h.mesh.position.set(W(h.x),0,W(h.z));h.mesh.rotation.set(0,0,0);
     }
   }
-  openExploreUI();
-  refreshParty();refreshBossBar();refreshHintExplore();refreshTracker();
+  bus.openExploreUI.call();
+  bus.refreshParty.call();bus.refreshBossBar.call();refreshHintExplore();refreshTracker();
   bigBanner('ИГРА ЗАГРУЖЕНА');
   log('Отряд приходит в себя: '+MAP_NAME[G.mapId]+'. Прогресс восстановлен из сейва.','g-heal');
   sfx.ui();

@@ -1,21 +1,22 @@
-/* ================= PROGRESSION (Фаза 4 рефакторинга) =================
-   Конец боя, победа, XP/уровни, экран финала. Цикл импортов
-   quests⇄progression — на уровне функций (ESM-safe).
-   Перенесено дословно из engine.ts. */
+/* ================= PROGRESSION (Фазы 4–5 рефакторинга) =================
+   Конец боя, победа, XP/уровни, экран финала. Фаза 5: цикл
+   quests⇄progression разорван — данные квестов из листа questData.ts,
+   refreshTracker/checkTriggers — через шину bus; цикл progression→party
+   разорван (openExploreUI/refreshParty/refreshBossBar — через bus);
+   healUnit — из vitals.ts (разрыв progression→combat). Перенесено дословно. */
 import { $ } from '../utils';
 import { roll } from '../rng';
 import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, units } from '../state';
 import { XP_NEED } from '../constants';
+import { bus } from '../bus';
 import { bigBanner, log } from '../ui/overlays';
 import { aliveHeroes, removeUnit } from '../entities/units';
-import { healUnit } from './combat';
+import { healUnit } from './vitals';
 import { tween } from '../fx/tweens';
 import { fx, glows } from '../render/renderer';
-import { refreshParty, refreshBossBar, openExploreUI } from '../ui/party';
-import { refreshTracker, QUESTS } from '../interact/quests';
-import { checkTriggers } from '../interact/explore';
+import { QUESTS } from '../interact/questData';
 import type { Unit } from '../types';
 
 /* ================= ВОЛНЫ / ОПЫТ / УРОВНИ ================= */
@@ -40,21 +41,21 @@ export function victorySequence(){
     const m=s.mesh;
     tween(0.5,k=>{m.scale.setScalar(Math.max(0.01,1-k));m.rotation.z=1.1*k;}).then(()=>removeUnit(s));
   }
-  openExploreUI();
-  refreshBossBar();
+  bus.openExploreUI.call();
+  bus.refreshBossBar.call();
   if(S.combatGroup.some(g=>g.isBoss))setTimeout(()=>showEnd(true),2000);
-  else checkTriggers();
+  else bus.checkTriggers.call();
 }
-export function awardXP(n){
+export function awardXP(n:number){
   for(const h of aliveHeroes()){
     h.xp+=n;
     while(h.xp>=XP_NEED(h.level)&&h.level<3)levelUp(h);
   }
   log('Отряд получает '+n+' XP.','g-sys');
   sfx.xp();
-  refreshParty();refreshTracker();
+  bus.refreshParty.call();bus.refreshTracker.call();
 }
-export function levelUp(h){
+export function levelUp(h:Unit){
   h.level++;
   if(h.cls==='fighter'){
     h.maxhp+=8;h.hp+=8;
@@ -86,9 +87,9 @@ export function levelUp(h){
   sfx.levelUp();
   fx.burstAtMesh(h,{count:40,color:0xffd54f,speed:3,size:0.15,life:1.1,gravity:-1.4});
   glows.flashAtMesh(h,0xffd54f,1.6);
-  refreshParty();
+  bus.refreshParty.call();
 }
-export function showEnd(win){
+export function showEnd(win:boolean){
   const e=$(UI.end);
   $(UI.contBtn).style.display=win?'block':'none';
   e.style.display='flex';

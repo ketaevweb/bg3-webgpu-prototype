@@ -55,22 +55,24 @@ export function applyAtmosphere(m:'forest'|'crypt'){
   else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
 }
 export function applyLighting(m:'forest'|'crypt'){
-  if(!G.hemiLight){
-    G.hemiLight=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
-    G.sunLight=new THREE.DirectionalLight(0xffeecf,2.4);
-    G.sunLight.position.set(14,22,8);G.sunLight.castShadow=true;
-    G.sunLight.shadow.mapSize.set(2048,2048);
-    G.sunLight.shadow.camera.left=-24;G.sunLight.shadow.camera.right=24;
-    G.sunLight.shadow.camera.top=24;G.sunLight.shadow.camera.bottom=-24;
-    G.sunLight.shadow.camera.near=1;G.sunLight.shadow.camera.far=60;
-    scene.add(G.hemiLight,G.sunLight);
+  if(!G.hemiLight||!G.sunLight){
+    const hemi=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
+    const sun=new THREE.DirectionalLight(0xffeecf,2.4);
+    sun.position.set(14,22,8);sun.castShadow=true;
+    sun.shadow.mapSize.set(2048,2048);
+    sun.shadow.camera.left=-24;sun.shadow.camera.right=24;
+    sun.shadow.camera.top=24;sun.shadow.camera.bottom=-24;
+    sun.shadow.camera.near=1;sun.shadow.camera.far=60;
+    scene.add(hemi,sun);
+    G.hemiLight=hemi;G.sunLight=sun;
   }
+  const hemi=G.hemiLight,sun=G.sunLight;/* синглтоны — установлены выше */
   if(m==='crypt'){
-    G.hemiLight.color.setHex(0x7c8ca4);G.hemiLight.groundColor.setHex(0x1a1826);G.hemiLight.intensity=0.68;
-    G.sunLight.color.setHex(0x9fb4d8);G.sunLight.intensity=1.05;
+    hemi.color.setHex(0x7c8ca4);hemi.groundColor.setHex(0x1a1826);hemi.intensity=0.68;
+    sun.color.setHex(0x9fb4d8);sun.intensity=1.05;
   }else{
-    G.hemiLight.color.setHex(0xbcd8e8);G.hemiLight.groundColor.setHex(0x2a3325);G.hemiLight.intensity=0.85;
-    G.sunLight.color.setHex(0xffeecf);G.sunLight.intensity=2.4;
+    hemi.color.setHex(0xbcd8e8);hemi.groundColor.setHex(0x2a3325);hemi.intensity=0.85;
+    sun.color.setHex(0xffeecf);sun.intensity=2.4;
   }
 }
 export function clearGroup(g:THREE.Group){for(let i=g.children.length-1;i>=0;i--)g.remove(g.children[i]);}

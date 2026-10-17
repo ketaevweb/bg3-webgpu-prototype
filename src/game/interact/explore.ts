@@ -1,32 +1,32 @@
-/* ================= EXPLORE (Фаза 4 рефакторинга) =================
+/* ================= EXPLORE (Фазы 4–5 рефакторинга) =================
    Спутники (Илва/Кая), сцены леса и крипты, сундук, интеракты,
-   триггеры, перемещение отряда. Цикл импортов explore⇄maps —
-   на уровне функций (ESM-safe). Перенесено дословно из engine.ts. */
+   триггеры, перемещение отряда. Фаза 5: циклы explore⇄maps и
+   explore⇄dialog разорваны — switchMap/openDlg зовутся через шину bus
+   (реализации — world/maps.ts и interact/dialog.ts); UI-refresh — через
+   bus; параметры типизированы. Перенесено дословно из engine.ts. */
 import * as THREE from 'three/webgpu';
-import { $, key, cheb } from '../utils';
+import { key, cheb } from '../utils';
 import { W, HERO_TINT } from '../constants';
 import { d } from '../rng';
 import { sfx } from '../audio';
 import { G, S, units, solid, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, CRYPT, GW, busyOn, busyOff } from '../state';
+import { bus } from '../bus';
 import { worldGroup, fx, glows } from '../render/renderer';
 import { astar, passable, freeSpotNear } from '../world/grid';
 import { addCampfire, addRock, addBarrel } from '../world/props';
-import { switchMap } from '../world/maps';
 import { tween } from '../fx/tweens';
 import { makeIlva, makeKaya } from '../entities/roster';
 import { buildFigure } from '../entities/figure';
 import { aliveHeroes } from '../entities/units';
 import { bigBanner, log, setHint } from '../ui/overlays';
-import { refreshParty, refreshInit } from '../ui/party';
 import { questStart, questObj, questDone, gainGold, refreshTracker, QUESTS } from '../interact/quests';
-import { openDlg } from '../interact/dialog';
 import { animateMove } from '../systems/movement';
 import { upgradeUnitRig } from '../animation';
-import type { Interact } from '../types';
+import type { Interact, Unit } from '../types';
 
-/* HERO_TINT → constants.ts (Фаза 2) */
-export async function rigHero(u){/* v1.2: GLTF-риг для спутников */
-  try{await upgradeUnitRig(u,{tint:HERO_TINT[u.cls]||0x5a7fb0,tintStrength:0.4,scale:1.0,yaw:Math.PI});}catch(e){}
+/* HERO_TINT → constants.ts (Фаза 2); cls-ключ вне словаря — базовый тинт */
+export async function rigHero(u:Unit):Promise<void>{/* v1.2: GLTF-риг для спутников */
+  try{await upgradeUnitRig(u,{tint:(HERO_TINT as Record<string,number|undefined>)[u.cls]||0x5a7fb0,tintStrength:0.4,scale:1.0,yaw:Math.PI});}catch{}
 }
 export function dismissKayaScene(){/* v1.2: убрать алтарь после ухода Кая в отряд */
   if(S.kayaMesh){S.kayaMesh.removeFromParent();S.kayaMesh=null;}
@@ -35,17 +35,17 @@ export function dismissKayaScene(){/* v1.2: убрать алтарь после
   solid.delete(key(KAYA_SPOT[0],KAYA_SPOT[1]));solid.delete(key(KAYA_SPOT[0]+1,KAYA_SPOT[1]));
   glows.detach('kaya');fx.removeEmber('kaya');
 }
-export function joinIlva(x,z){
+export function joinIlva(x:number,z:number):Unit|null{
   if(units.some(u=>u.cls==='rogue'))return null;
   const u=makeIlva(x,z);
   bigBanner('ИЛВА ПРИСОЕДИНИЛАСЬ');
   log('Илва: «Долг Дозору. Идите за мной — я знаю здесь каждый куст.»','g-heal');
   fx.burstAtMesh(u,{count:26,color:0x7fd0a0,speed:2.6,size:0.12,life:0.9,gravity:-1});
   sfx.bless();void rigHero(u);
-  refreshParty();refreshInit();refreshHintExplore();
+  bus.refreshParty.call();bus.refreshInit.call();refreshHintExplore();
   return u;
 }
-export function joinKaya(x,z){
+export function joinKaya(x:number,z:number):Unit|null{
   if(units.some(u=>u.cls==='cleric'))return null;
   dismissKayaScene();
   S.kayaJoined=true;/* v1.2: флаг для сейва */
@@ -55,17 +55,17 @@ export function joinKaya(x,z){
   fx.burstAtMesh(u,{count:26,color:0xffd54f,speed:2.6,size:0.12,life:0.9,gravity:-1});
   glows.flashAtMesh(u,0xffd54f,1.4);
   sfx.bless();void rigHero(u);
-  refreshParty();refreshInit();refreshHintExplore();
+  bus.refreshParty.call();bus.refreshInit.call();refreshHintExplore();
   return u;
 }
 export function ensureCompanions(){/* v1.2: восстановление спутников при загрузке сейва по флагам */
   const lead=units.find(u=>u.side==='hero');
   if(!lead)return;
   if(S.ilvaFreed&&!units.some(u=>u.cls==='rogue')){
-    const p=freeSpotNear(lead,3)||{x:lead.x,z:lead.z};joinIlva(p.x,p.z);
+    const p=freeSpotNear(GW,lead,3)||{x:lead.x,z:lead.z};joinIlva(p.x,p.z);
   }
   if(S.kayaJoined&&!units.some(u=>u.cls==='cleric')){
-    const p=freeSpotNear(lead,3)||{x:lead.x,z:lead.z};joinKaya(p.x,p.z);
+    const p=freeSpotNear(GW,lead,3)||{x:lead.x,z:lead.z};joinKaya(p.x,p.z);
   }
 }
 export function buildForestScenery(){/* v0.8: было buildScenery + охрана прогресса + вход в крипту */
@@ -91,7 +91,7 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
   cart.position.set(W(MERCHANT.x+1),0,W(MERCHANT.z+1));
   worldGroup.add(cart);
   solid.add(key(MERCHANT.x+1,MERCHANT.z+1));
-  addInteract(MERCHANT.x,MERCHANT.z,2.6,'Поговорить с Дамроком',()=>openDlg('damrock'),dam,
+  addInteract(MERCHANT.x,MERCHANT.z,2.6,'Поговорить с Дамроком',()=>bus.openDlg.call('damrock'),dam,
     'Дамрок Бочкарь','Торговец. Товар, сплетни и награды за услуги.');
   if(!S.ilvaFreed){
     const cage=new THREE.Group();
@@ -111,7 +111,7 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
     ilva.scale.setScalar(0.92);
     ilva.position.set(W(CAGE.x),0,W(CAGE.z));
     worldGroup.add(ilva);
-    addInteract(CAGE.x,CAGE.z,2.4,'Поговорить с пленницей',()=>openDlg('ilva'),ilva,
+    addInteract(CAGE.x,CAGE.z,2.4,'Поговорить с пленницей',()=>bus.openDlg.call('ilva'),ilva,
       'Илва','Пленница в клетке. Похожа на разведчицу.');
     S.cageMesh=cage;S.ilvaMesh=ilva;
   }
@@ -149,7 +149,7 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
     kayaFig.position.set(W(KAYA_SPOT[0]+1),0,W(KAYA_SPOT[1]));
     worldGroup.add(kayaFig);
     solid.add(key(KAYA_SPOT[0]+1,KAYA_SPOT[1]));
-    addInteract(KAYA_SPOT[0],KAYA_SPOT[1],2.6,'Поговорить с Кая',()=>openDlg('kaya'),alt,
+    addInteract(KAYA_SPOT[0],KAYA_SPOT[1],2.6,'Поговорить с Кая',()=>bus.openDlg.call('kaya'),alt,
       'Кая Заря','Жрица Рассвета. Молится у придорожного алтаря — ищет попутчиков на север.');
     S.kayaMesh=kayaFig;
   }
@@ -178,7 +178,7 @@ export function enterCrypt(){
     setHint('Крипта откроется после разгрома лагеря гоблинов.');
     return;
   }
-  void switchMap('crypt');
+  void bus.switchMap.call('crypt');
 }
 export function buildCryptScenery(){/* v0.8: подземелье босса */
   const pilM=new THREE.MeshStandardMaterial({color:0x555560,roughness:1});
@@ -253,11 +253,11 @@ export function buildCryptScenery(){/* v0.8: подземелье босса */
   }
   out.position.set(W(ex[0]),0,W(ex[1]));
   worldGroup.add(out);
-  addInteract(ex[0],ex[1],2.2,'Подняться на тракт',()=>{void switchMap('forest');},out,
+  addInteract(ex[0],ex[1],2.2,'Подняться на тракт',()=>{void bus.switchMap.call('forest');},out,
     'Лестница на тракт','Слабый серый свет и шум ветра — наверху дневной тракт.');
   for(const [x,z] of CRYPT.URNS)addBarrel(x,z,0x4a4238);
 }
-export function openChest(chest){
+export function openChest(chest:THREE.Object3D){
   if(S.chestLooted)return;
   if(units.some(u=>u.cryptBoss&&u.alive)){
     setHint('Печать держится, пока Костепёр «жив».');
@@ -274,26 +274,26 @@ export function openChest(chest){
   fx.burstAtMesh({mesh:chest},{count:34,color:0xffd54f,speed:3.2,size:0.13,life:1.0,gravity:-1.2});
   glows.flashAtMesh({mesh:chest},0xffd54f,1.5);
   sfx.gold();
-  refreshParty();refreshTracker();
+  bus.refreshParty.call();refreshTracker();
 }
 /* v1.1: разбор мира вынесен из switchMap — используется и при загрузке сейва */
 
 
 /* ---- взаимодействие и исследование ---- */
-export function addInteract(x,z,r,label,fn,mesh,talkName,talkDesc){
-  const it={x,z,r,label,fn,mesh,talkName,talkDesc};
+export function addInteract(x:number,z:number,r:number,label:string,fn:()=>void,mesh?:THREE.Object3D|null,talkName?:string,talkDesc?:string){
+  const it:Interact={x,z,r,label,fn,mesh,talkName,talkDesc};
   if(mesh)mesh.userData.it=it;
   interactables.push(it);
 }
-export function nearestInteract(){
-  let best:any=null,bd=1e9;
+export function nearestInteract():Interact|null{
+  let best:Interact|null=null,bd=1e9;
   for(const h of aliveHeroes())for(const it of interactables){
     const dd=cheb(h,it);
     if(dd<=it.r&&dd<bd){bd=dd;best=it;}
   }
   return best;
 }
-export async function freeIlva(){
+export async function freeIlva():Promise<void>{
   if(S.ilvaFreed||!S.ilvaMesh)return;
   S.ilvaFreed=true;
   busyOn();
@@ -328,7 +328,7 @@ export function takeCrate(){
   log('Вы забираете ящик Дамрока. Отнесите его хозяину на юг.','g-sys');
   refreshHintExplore();
 }
-export async function moveParty(tile){
+export async function moveParty(tile:{x:number;z:number}):Promise<void>{
   if(G.busy||G.phase!=='explore')return;
   const hs=aliveHeroes();
   if(!hs.length)return;
@@ -358,10 +358,10 @@ export function checkTriggers(){
   const hs=aliveHeroes();
   if(!hs.length)return;
   if(!S.patrolDone&&S.patrolGroup.some(g=>g.alive)){
-    if(hs.some(h=>S.patrolGroup.some(g=>cheb(h,g)<=6))){openDlg('patrol');return;}
+    if(hs.some(h=>S.patrolGroup.some(g=>cheb(h,g)<=6))){bus.openDlg.call('patrol');return;}
   }
   if(!S.campDone&&S.campGroup.some(g=>g.alive)){
-    if(hs.some(h=>S.campGroup.some(g=>cheb(h,g)<=7))){openDlg('boss');return;}
+    if(hs.some(h=>S.campGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('boss');return;}
   }
   if(!S.cageSeen&&!S.ilvaFreed&&hs.some(h=>cheb(h,{x:CAGE.x,z:CAGE.z})<=6)){
     S.cageSeen=true;
@@ -369,7 +369,7 @@ export function checkTriggers(){
     log('В клетке у тропы кто-то шевелится…','g-sys');
   }
   if(G.mapId==='crypt'&&S.cryptGroup.some(g=>g.alive&&g.cryptBoss)){/* v0.8: триггер босса крипты */
-    if(hs.some(h=>S.cryptGroup.some(g=>cheb(h,g)<=7))){openDlg('necro');return;}
+    if(hs.some(h=>S.cryptGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('necro');return;}
   }
   refreshHintExplore();
 }
@@ -378,3 +378,6 @@ export function refreshHintExplore(){
   const it=nearestInteract();
   setHint(it?('E — '+it.label):'');
 }
+
+/* ---- регистрация на шине (Фаза 5: progression → checkTriggers без цикла) ---- */
+bus.checkTriggers.bind(checkTriggers);

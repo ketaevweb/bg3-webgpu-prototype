@@ -1,18 +1,18 @@
-/* ================= MAPS (Фаза 4 рефакторинга) =================
+/* ================= MAPS (Фазы 4–5 рефакторинга) =================
    teardown/buildMap/switchMap — пересборка мира между лесом и криптой.
-   Цикл импортов explore⇄maps — на уровне функций (ESM-safe), см. REFACTORING.md.
-   Перенесено дословно из engine.ts. */
+   Фаза 5: цикл explore⇄maps разорван — explore зовёт switchMap через шину
+   bus (здесь привязка); UI-refresh — через bus. Перенесено дословно. */
 import { $, sleep } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
-import { G, S, CRYPT, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
+import { G, CRYPT, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
+import { bus } from '../bus';
 import { worldGroup, fx, glows, controls, clearGroup, applyAtmosphere } from '../render/renderer';
-import { seedForest, seedCrypt, buildWorld, addBarrel } from './props';
+import { seedForest, seedCrypt, buildWorld } from './props';
 import { buildForestScenery, buildCryptScenery } from '../interact/explore';
 import { spawnEnemies } from '../entities/roster';
 import { removeUnit, placeHeroes } from '../entities/units';
 import { QUESTS, questStart, questObj, refreshTracker } from '../interact/quests';
-import { refreshParty, refreshBossBar, openExploreUI } from '../ui/party';
 import { initOverlays, log, setHint } from '../ui/overlays';
 import { cancelTargeting } from '../ui/targeting';
 import { removeFire } from '../systems/statuses';
@@ -32,11 +32,11 @@ export function teardownWorld(){
   G.groundMesh=null;G.fireLight=null;G.flameMesh=null;
   G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;
   $(UI.actionbar).style.display='none';
-  refreshBossBar();
+  bus.refreshBossBar.call();
 }
 /* v1.1: сборка карты без фейда — общее ядро switchMap и загрузки сейва.
    spots — точки размещения героев (null — не трогать позиции). */
-export function buildMap(id,spots){
+export function buildMap(id:MapId,spots:number[][]|null){
   G.mapId=id;
   if(id==='crypt'){
     seedCrypt();applyAtmosphere('crypt');
@@ -60,7 +60,7 @@ export function buildMap(id,spots){
   $(UI.round).textContent=MAP_NAME[G.mapId];
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
-export async function switchMap(id){
+export async function switchMap(id:MapId):Promise<void>{
   if(G.busy||G.mapId===id||G.phase==='transition')return;
   busyOn();G.phase='transition';
   sfx.portal();
@@ -70,7 +70,10 @@ export async function switchMap(id){
   teardownWorld();
   buildMap(id,CRYPT.ENTER);
   f.style.opacity='0';
-  openExploreUI();
-  refreshTracker();refreshParty();refreshBossBar();
+  bus.openExploreUI.call();
+  refreshTracker();bus.refreshParty.call();bus.refreshBossBar.call();
   busyOff();
 }
+
+/* ---- регистрация на шине (Фаза 5: explore → switchMap без цикла) ---- */
+bus.switchMap.bind(switchMap);

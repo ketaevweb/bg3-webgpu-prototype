@@ -1,20 +1,23 @@
-/* ================= TARGETING (Фаза 4 рефакторинга) =================
+/* ================= TARGETING (Фазы 4–5 рефакторинга) =================
    Выбор цели/клетки, отмена, применение (resolveTargetClick), тултип.
-   BOLT/SMITE — общие боевые «заговоры». Перенесено дословно из engine.ts. */
+   BOLT/SMITE — общие боевые «заговоры». Фаза 5: refreshUI — через шину bus
+   (разрыв цикла targeting→actionbar); explode — из combat (переехал из
+   abilities). Перенесено дословно из engine.ts. */
 import { $, cheb, mod } from '../utils';
 import { roll } from '../rng';
 import { UI } from '../hud';
 import { GRID, RANGE_FB, RANGE_OIL, STATUS } from '../constants';
 import { G, units, barrels, pick, GW, busyOn, busyOff } from '../state';
+import { bus } from '../bus';
 import { addMarker, clearMarkers, clearDots, showReach } from '../ui/markers';
 import { setHint, log, ftextAbove } from '../ui/overlays';
 import { passable } from '../world/grid';
-import { doAttack, healUnit, hitChance, avgDamage } from '../systems/combat';
-import { castFireball, explode } from '../systems/abilities';
+import { doAttack, hitChance, avgDamage, explode } from '../systems/combat';
+import { healUnit } from '../systems/vitals';
+import { castFireball } from '../systems/abilities';
 import { addStatus } from '../systems/statuses';
 import { aliveHeroes } from '../entities/units';
-import { refreshUI } from '../ui/actionbar';
-import type { Unit, Weapon, Interact } from '../types';
+import type { Interact, TargetType, Unit, Weapon } from '../types';
 
 export const BOLT:Weapon={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
 export const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
@@ -25,7 +28,7 @@ export const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis
    принимают GW первым аргументом (явный контекст сетки). */
 
 
-export function enterTarget(type){
+export function enterTarget(type:TargetType){
   const h=G.current;
   if(!h||h.side!=='hero'||!h.alive)return;
   if(G.targeting&&G.targeting.type===type){cancelTargeting();return;}
@@ -33,14 +36,14 @@ export function enterTarget(type){
   clearMarkers();clearDots();
   if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'){/* v1.2: +подлый удар и карание */
     const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:9);
-    let any=false;
+    let hasTgt=false;
     const cands=[...units.filter(x=>x.side==='goblin'&&x.alive),...barrels.filter(b=>b.alive)];
-    for(const e of cands)if(cheb(h,e)<=range){addMarker(e.x,e.z,0xe06c55,0.62);any=true;}
+    for(const e of cands)if(cheb(h,e)<=range){addMarker(e.x,e.z,0xe06c55,0.62);hasTgt=true;}
     const hintTxt=type==='attack'?'Выберите цель для атаки'
       :type==='sneak'?'Подлый удар: выберите цель (фланг — +1d6)'
       :type==='smite'?'Карание света: выберите цель'
       :'Огненные стрелы: выберите цель';
-    setHint(any?(hintTxt+' (ПКМ / Esc — отмена)'):'Вне зоны действия!');
+    setHint(hasTgt?(hintTxt+' (ПКМ / Esc — отмена)'):'Вне зоны действия!');
   }else if(type==='fireball'){
     for(let x=1;x<GRID-1;x++)for(let z=1;z<GRID-1;z++){
       if(cheb(h,{x,z})<=RANGE_FB&&passable(GW,x,z,h))addMarker(x,z,0xff9a4d,0.5);
@@ -56,12 +59,12 @@ export function enterTarget(type){
     setHint(type==='bless'?'Благословение: выберите союзника (ПКМ — отмена)':(type==='cure'?'Лечение: выберите союзника (ПКМ — отмена)':'Лечащее слово: выберите союзника (ПКМ — отмена)'));
   }
 }
-export function cancelTargeting(){
+export function cancelTargeting():void{
   G.targeting=null;
   clearMarkers();clearDots();setHint('');
   if(G.combatOn&&G.phase==='player'&&G.current&&G.current.alive)showReach(G.current);
 }
-export async function resolveTargetClick(){
+export async function resolveTargetClick():Promise<void>{
   const h=G.current,t=G.targeting;
   if(!t||!h)return;
   if(t.type==='attack'||t.type==='bolt'||t.type==='sneak'||t.type==='smite'){
@@ -81,7 +84,7 @@ export async function resolveTargetClick(){
       h.slots--;
       await doAttack(h,tgt,SMITE);
     }
-    refreshUI();showReach(h);
+    bus.refreshUI.call();showReach(h);
   }else if(t.type==='fireball'){
     if(!pick.tile){setHint('Выберите клетку!');return;}
     if(cheb(h,pick.tile)>RANGE_FB){setHint('Слишком далеко!');return;}
@@ -90,7 +93,7 @@ export async function resolveTargetClick(){
     busyOn();
     await castFireball(h,pick.tile.x,pick.tile.z);
     busyOff();
-    refreshUI();showReach(h);
+    bus.refreshUI.call();showReach(h);
   }else if(t.type==='oil'){
     if(!pick.tile){setHint('Выберите клетку!');return;}
     if(cheb(h,pick.tile)>RANGE_OIL){setHint('Слишком далеко!');return;}
@@ -98,7 +101,7 @@ export async function resolveTargetClick(){
     h.action--;h.oil=(h.oil||0)-1;/* Фаза 4a: oil — опциональное поле */
     log(h.name+' метает огненное масло!','g-fire');
     explode(pick.tile.x,pick.tile.z,{dice:[1,6],radius:1.5});
-    refreshUI();showReach(h);
+    bus.refreshUI.call();showReach(h);
   }else{
     const ally=pick.ent;
     if(!ally||ally.side!=='hero'){setHint('Выберите союзника!');return;}
@@ -112,29 +115,32 @@ export async function resolveTargetClick(){
       addStatus(ally,'bless',3);
       ftextAbove(ally,'Благословение','#ffd54f');
     }
-    refreshUI();showReach(h);
+    bus.refreshUI.call();showReach(h);
   }
 }
 
 
-export function showTipFor(ent,e){
+export function showTipFor(ent0:Unit|Interact|null,e:PointerEvent){
   const tip=$(UI.tip);
-  if(!ent){tip.style.display='none';return;}
+  if(!ent0){tip.style.display='none';return;}
   let html='';
-  if(ent.talkName){
-    html='<b>'+ent.talkName+'</b><br>'+ent.talkDesc;
+  if('talkName' in ent0){/* интерактивная точка мира */
+    html='<b>'+ent0.talkName+'</b><br>'+ent0.talkDesc;
     if(G.phase==='explore')html+='<br><span class="tc">E или клик — взаимодействовать</span>';
-  }else if(ent.isBarrel){
-    html='<b>'+(ent.name||'Взрывная бочка')+'</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
   }else{
-    html='<b>'+ent.name+'</b>'+(ent.elite?' · ЭЛИТА':'')+'<br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
-    if(ent.healer)html+='<br><span class="tc">Целитель: латает слуг Костепёра — бейте первым.</span>';
-    if(ent.elite)html+='<br><span class="tc">Элита: крепче рядового, добыча богаче.</span>';
-    if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
-    if(G.targeting&&(G.targeting.type==='attack'||G.targeting.type==='bolt'||G.targeting.type==='sneak'||G.targeting.type==='smite')&&ent.side==='goblin'&&G.current){
-      const w=(G.targeting.type==='attack'||G.targeting.type==='sneak')?G.current.weapon:(G.targeting.type==='smite'?SMITE:BOLT);
-      const ch=Math.round(hitChance(G.current,ent,w)*100);
-      html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(G.current,w).toFixed(1)+' • крит 5%</span>';
+    const ent=ent0 as Unit;/* интеракты всегда имеют talkName — здесь только юниты */
+    if(ent.isBarrel){
+      html='<b>'+(ent.name||'Взрывная бочка')+'</b><br>Детонирует от любого удара: 3d6 огня в радиусе 2.5 кл. Не любит огонь!';
+    }else{
+      html='<b>'+ent.name+'</b>'+(ent.elite?' · ЭЛИТА':'')+'<br>HP: '+ent.hp+'/'+ent.maxhp+' • КД '+ent.ac;
+      if(ent.healer)html+='<br><span class="tc">Целитель: латает слуг Костепёра — бейте первым.</span>';
+      if(ent.elite)html+='<br><span class="tc">Элита: крепче рядового, добыча богаче.</span>';
+      if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
+      if(G.targeting&&(G.targeting.type==='attack'||G.targeting.type==='bolt'||G.targeting.type==='sneak'||G.targeting.type==='smite')&&ent.side==='goblin'&&G.current){
+        const w=(G.targeting.type==='attack'||G.targeting.type==='sneak')?G.current.weapon:(G.targeting.type==='smite'?SMITE:BOLT);
+        const ch=Math.round(hitChance(G.current,ent,w)*100);
+        html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(G.current,w).toFixed(1)+' • крит 5%</span>';
+      }
     }
   }
   tip.innerHTML=html;

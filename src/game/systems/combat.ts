@@ -4,9 +4,7 @@
    doAttack/damageUnit/healUnit/addStatus переезжают сюда в Фазе 4d
    (нужен контекст G и fx/HUD). */
 
-import { clamp, mod } from '../utils';
 import { d } from '../rng';
-import type { Unit, Weapon } from '../types';
 
 /* модификатор атаки: характеристика оружия + мастерство; яд/страх штрафуют */
 export function attackMod(u:Unit, w:Weapon){
@@ -34,28 +32,28 @@ export function avgDamage(u:Unit, w:Weapon){
 }
 
 
-/* ================= БОЕВОЕ ЯДРО (Фаза 4 рефакторинга) =================
-   doAttack/damageUnit/healUnit/die — перенесено дословно из engine.ts
-   (текст уже с G.-префиксами). Циклы импортов с statuses/abilities/
-   progression/quests — на уровне функций (ESM-safe). */
-import { lunge, faceTo, tween } from '../fx/tweens';
+/* ================= БОЕВОЕ ЯДРО (Фазы 4–5 рефакторинга) =================
+   doAttack/damageUnit/die — перенесено дословно из engine.ts (4d).
+   Фаза 5: explode/explodeBarrel переехали из abilities.ts (die зовёт
+   взрыв бочки — прямой импорт combat→abilities замыкал цикл);
+   healUnit переехал в vitals.ts (progression→combat замыкал цикл);
+   UI-refresh — через bus. Импорты теперь однонаправленные. */
+import { key, clamp, mod } from '../utils';
+import { W } from '../constants';
+import { lunge, faceTo, tween, boomFX } from '../fx/tweens';
 import { roll } from '../rng';
 import { sfx } from '../audio';
 import { slowmo } from '../slowmo';
 import { fx, glows } from '../render/renderer';
 import { ftextAbove, log, refreshIcons } from '../ui/overlays';
-import { G, S, busyOn, busyOff } from '../state';
-import { refreshInit, refreshParty, refreshBossBar } from '../ui/party';
-import { addStatus } from './statuses';
-import { explodeBarrel } from './abilities';
+import { S, units, barrels, grass, fires, busyOn, busyOff } from '../state';
+import { bus } from '../bus';
+import { addStatus, igniteTile } from './statuses';
 import { awardXP, checkEnd } from './progression';
 import { rollLoot } from './loot';
 import { questObj, questDone } from '../interact/quests';
-import { removeUnit } from '../entities/units';
-import type { Barrel } from '../types';
-
-export async function doAttack(att,def,w,opts?){
-  opts=opts||{};
+import type { ExplodeOpts, Unit, Weapon } from '../types';
+export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:number;aoo?:boolean}={}){
   if(!att.alive||!def.alive)return;
   busyOn();
   faceTo(att,def.mesh.position);
@@ -94,30 +92,18 @@ export async function doAttack(att,def,w,opts?){
       addStatus(def,'poison',2);
     }
   }
-  if(opts.aoo)refreshInit();
+  if(opts.aoo)bus.refreshInit.call();
   busyOff();
 }
-export function damageUnit(t,dmg,src){
+export function damageUnit(t:Unit,dmg:number,src:Unit|null){
   if(!t||!t.alive)return;
   t.hp-=dmg;
-  refreshBossBar();/* v0.8: боссбар живёт в реальном времени */
+  bus.refreshBossBar.call();/* v0.8: боссбар живёт в реальном времени */
   if(t.hp<=0)die(t,src);
 }
-export function healUnit(u,amt,why){
-  if(!u.alive)return;
-  const before=u.hp;
-  u.hp=Math.min(u.maxhp,u.hp+amt);
-  refreshBossBar();/* v0.8 */
-  ftextAbove(u,'+'+(u.hp-before),'#8fd36a');
-  sfx.heal();
-  fx.burstAtMesh(u,{count:18,color:0x8fd36a,speed:1.5,size:0.11,life:0.9,gravity:-1.1});
-  glows.flashAtMesh(u,0x8fd36a,1.1);
-  log(u.name+' восстанавливает '+(u.hp-before)+' HP ('+why+').','g-heal');
-  refreshParty();
-}
 
 
-export function die(t,src){
+export function die(t:Unit,_src:Unit|null){
   if(!t.alive)return;
   if(t.isBarrel){explodeBarrel(t);return;}
   t.alive=false;t.hp=0;
@@ -127,7 +113,7 @@ export function die(t,src){
   fx.burstAtMesh(t,{count:22,color:0x7a2f2f,speed:2.4,size:0.12,life:0.7});
   const m=t.mesh;
   tween(0.5,k=>{m.rotation.z=1.35*k*k;m.position.y=-0.12*k;});
-  refreshIcons(t);refreshInit();refreshParty();
+  refreshIcons(t);bus.refreshInit.call();bus.refreshParty.call();
   if(t.side==='goblin'&&t.xp)awardXP(t.xp);
   if(t.side==='goblin')rollLoot(t);/* v1.3: лут-таблицы вместо фиксированных 3-9 золота */
   if(t.mainBoss){questObj('main','boss');questDone('main');}/* v0.8: Грат — босс основного квеста */
@@ -139,4 +125,44 @@ export function die(t,src){
     log('Могильная печать на сундуке у трона рассыпается!','g-sys');
   }
   checkEnd();
+}
+
+/* ================= ВЗРЫВЫ (Фаза 5: из abilities.ts — die→бочка без цикла) ================= */
+export function explode(tx:number,tz:number,opts:ExplodeOpts={}){
+  const dice=opts.dice||[3,6],radius=opts.radius||2.5;
+  const dmg=roll(dice[0],dice[1]);
+  const cx=W(tx),cz=W(tz);
+  boomFX(cx,cz,radius);
+  /* v0.7: партиклы взрыва, хало-вспышка, звук, микро-слоумо */
+  fx.explosion(cx,cz,radius);
+  glows.flash(cx,cz,radius*1.5,0xffa040);
+  sfx.explosion();
+  slowmo.trigger(0.4,0.4);
+  log('ВЗРЫВ! Урон '+dmg+' в радиусе '+radius+' кл.','g-fire');
+  for(const u of units)if(u.alive&&!u.isBarrel){
+    if(Math.hypot(u.x-tx,u.z-tz)<=radius+0.35){
+      ftextAbove(u,'−'+dmg,'#ff8a50');
+      damageUnit(u,dmg,null);
+      if(u.alive&&Math.random()<0.6)addStatus(u,'burn',2);
+    }
+  }
+  for(const b of barrels)if(b.alive&&Math.hypot(b.x-tx,b.z-tz)<=radius+0.35){
+    setTimeout(()=>explodeBarrel(b),240);
+  }
+  let lit=0;
+  const R=Math.ceil(radius);
+  for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++){
+    if(Math.hypot(dx,dz)>radius)continue;
+    if(grass.has(key(tx+dx,tz+dz))&&!fires.has(key(tx+dx,tz+dz))){igniteTile(tx+dx,tz+dz,3);lit++;}
+  }
+  if(lit)log('Трава вспыхивает ('+lit+' кл.)!','g-fire');
+  checkEnd();
+}
+export function explodeBarrel(b:Unit){/* b — Barrel (Unit с isBarrel:true); сужение опционального литерала через параметр не проходит */
+  if(!b.alive)return;
+  b.alive=false;
+  const m=b.mesh;
+  tween(0.15,k=>{m.scale.setScalar(1+0.6*k);}).then(()=>m.removeFromParent());/* v0.8 */
+  log('Взрывная бочка детонирует!','g-fire');
+  explode(b.x,b.z,{dice:[3,6],radius:2.5});
 }

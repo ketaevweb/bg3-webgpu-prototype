@@ -1,16 +1,18 @@
-/* ================= PARTY (Фаза 4b рефакторинга) =================
+/* ================= PARTY (Фазы 4b–5 рефакторинга) =================
    Карточки отряда, боссбар, полоса инициативы, лист персонажа.
-   openExploreUI приедет в 4d (зависит от refreshTracker из interact/quests).
-   Перенесено дословно из engine.ts. */
+   Фаза 5: refreshParty/refreshInit/refreshBossBar/openExploreUI живут на
+   шине bus (разрыв циклов systems/entities/interact → ui); реализации
+   привязываются здесь, потребители зовут bus.*.call(). Перенесено дословно. */
 import { UI } from '../hud';
 import { $, mod } from '../utils';
 import { units, G, S, MAP_NAME } from '../state';
 import { STATUS, XP_NEED } from '../constants';
+import { bus } from '../bus';
 import { refreshTracker } from '../interact/quests';
 import { refreshHintExplore } from '../interact/explore';
 import type { Unit } from '../types';
 
-export function refreshParty(){
+function renderParty(){
   const el=$(UI.party);
   el.innerHTML='';
   for(const h of units.filter(u=>u.side==='hero')){
@@ -29,7 +31,7 @@ export function refreshParty(){
   }
 }
 /* v0.8: боссбар сверху экрана */
-export function refreshBossBar(){
+function renderBossBar(){
   const el=$(UI.bossbar);
   if(!el)return;
   const b=G.combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
@@ -38,8 +40,8 @@ export function refreshBossBar(){
   $(UI.bossname).textContent=b.name+' — '+b.clsName;
   $(UI.bossfill).style.width=Math.max(0,b.hp/b.maxhp*100)+'%';
 }
-export function refreshInit(){
-  refreshBossBar();
+function renderInit(){
+  renderBossBar();
   const el=$(UI.initRow);
   if(!G.combatOn){el.innerHTML='';return;}
   el.innerHTML=G.order.map(u=>
@@ -94,10 +96,16 @@ export function showSheet(h:Unit){
 }
 
 /* v0.8: переключение UI в режим исследования (после боя/карты/загрузки) */
-export function openExploreUI(){
+function showExploreUI(){
   $(UI.actionbar).style.display='none';
   $(UI.turnb).textContent='';
   $(UI.round).textContent=MAP_NAME[G.mapId];/* v0.8 */
-  refreshInit();refreshTracker();
+  renderInit();refreshTracker();
   refreshHintExplore();
 }
+
+/* ---- регистрации на шине (Фаза 5: разрыв циклов на ui) ---- */
+bus.refreshParty.bind(renderParty);
+bus.refreshInit.bind(renderInit);
+bus.refreshBossBar.bind(renderBossBar);
+bus.openExploreUI.bind(showExploreUI);

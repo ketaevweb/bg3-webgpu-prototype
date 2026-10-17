@@ -25,6 +25,11 @@ bun run dev        # → http://localhost:3000
 
 ## 🗂 Структура
 
+После рефакторинга (REFACTORING.md, фазы 0–5) движок — оркестратор на ~300 строк,
+игровые системы разложены по слоям; граф зависимостей ацикличен (проверка
+`node scripts/cycles.js` → `NO CYCLES`), строгий TS (`noImplicitAny`, `allowJs:false`),
+без `any`. Связь «вверх по слою» — через шину поздних связей `bus.ts`.
+
 ```
 src/
   app/
@@ -33,20 +38,73 @@ src/
   components/
     GameClient.tsx      # React-обёртка: HUD + boot/dispose движка
   game/
-    engine.js           # игровой движок (v0.6-фичи + v0.7/v0.8 + v1.1 сейвы/графика + v1.2 партия + v1.3 элита/лут)
-    hud.ts              # разметка HUD (инжектится до старта движка)
-    game.css            # стили HUD + v0.7/v0.8 + v1.1 (панели) + v1.2 (кнопки плута/жрицы)
-    audio.ts            # v0.7: процедурный WebAudio SFX (без ассетов)
-    particles.ts        # v0.7: пул партиклов (искры, угли, взрывы, лечение)
-    glow.ts             # v0.7: glow-хала (bloom-lite): костёр, плиты огня, вспышки
-    slowmo.ts           # v0.7: слоумо-криты (time scale + виньетка)
-    animation.ts        # v0.7.x: GLTF/Mixamo-риг (Idle/Walk/Run, SkeletonUtils,
-                        #   AnimationMixer, кроссфейды, фоллбек на капсулы) + bloom-инфра
+    engine.ts           # оркестратор: сборка, ввод, игровой цикл, dispose (~300 строк)
+    types.ts            # единственный источник доменных типов (Unit/Weapon/SaveData v2…)
+    state.ts            # S (метапрогресс) + G (runtime-контекст) + контейнеры + resetState
+    bus.ts              # шина поздних связей (UI-refresh, диалоги, ИИ, карты) — разрыв циклов
+    constants.ts        # TILE/GRID/XP_NEED/STATUS/HERO_TINT/SAVE_VER… (лист)
+    rng.ts              # mulberry32/srand (декор), d/roll/ri (бой) (лист)
+    utils.ts            # $/clamp/mod/key/cheb (лист)
+    hud.ts              # разметка HUD + реестр id UI (инжектится до старта движка)
+    game.css            # стили HUD
+    audio.ts            # процедурный WebAudio SFX (без ассетов)
+    particles.ts / glow.ts / slowmo.ts / animation.ts   # эффекты и GLTF-риги
+    render/
+      renderer.ts       # WebGPURenderer + bloom (TSL) + камера + свет (синглтоны)
+    world/
+      grid.ts           # сетка 28×28, проходимость, A*, reachNodes (чистый лист)
+      props.ts          # сиды карт, деревья/камни/шатры/костёр/бочки
+      maps.ts           # buildMap/switchMap/teardownWorld (лес ↔ крипта)
+    entities/
+      figure.ts         # капсульные фигурки
+      units.ts          # makeUnit/removeUnit/aliveHeroes/placeHeroes
+      roster.ts         # шаблоны врагов, фабрики, buildHeroes/spawnEnemies
+    systems/
+      combat.ts         # боевая математика + doAttack/damageUnit/die/explode
+      vitals.ts         # healUnit (ниже combat — без цикла с progression)
+      statuses.ts       # статусы и огонь на тайлах (igniteTile/removeFire)
+      abilities.ts      # огненный шар, гнев рассвета
+      loot.ts           # LOOT-таблицы v1.3 + rollLoot/giveToParty
+      movement.ts       # animateMove (AoO/огонь), tryMove
+      turns.ts          # старт боя, инициатива, begin/endTurn, tickFires
+      ai.ts             # Utility-ИИ: гоблины/некромант/целитель, бегство
+      progression.ts    # XP/уровни, checkEnd, победа/поражение
+    interact/
+      questData.ts      # данные квестов (лист)
+      quests.ts         # журнал, награды, золото, трекер
+      dialog.ts         # диалоги, проверки d20+ХАР, бегство NPC
+      shop.ts           # лавка Дамрока
+      explore.ts        # спутники, сцены, интеракты, триггеры, moveParty
+    ui/
+      overlays.ts       # лог, всплывающий текст, баннеры, подсказки, полоски HP
+      markers.ts        # маркеры зоны хода и пути (пулы мешей)
+      party.ts          # карточки отряда, боссбар, инициатива, лист персонажа
+      actionbar.ts      # ACTIONS игрока + refreshUI
+      targeting.ts      # прицеливание, тултипы, BOLT/SMITE
+    save/
+      snapshot.ts       # gameSnapshot/applyGame (формат v2 ЗАМОРОЖЕН)
+      slots.ts          # 3 слота localStorage + экспорт/импорт JSON
+      settings.ts       # настройки графики (bg3w_gfx_v1)
 public/
   legacy/
     bg3-prototype-v0.5.html   # архивная однофайловая сборка v0.5 (страница /legacy/...)
     bg3-prototype-v0.6.html   # архивная однофайловая сборка v0.6
 ```
+
+### Куда класть новый код (вклад разработчика)
+
+- **Новая игровая система** (класс, статус, механика боя) → модуль в `systems/`, импорты
+  только вниз (`state/types/constants/rng/utils` и другие системы ниже по слою). Вызов UI —
+  через `bus.*.call()`, прямые импорты `ui/` из `systems/` запрещены (циклы).
+- **Новый контент карты** → `world/props.ts` (декор) / `world/maps.ts` (сборка) / `interact/explore.ts` (интеракты).
+- **Новый UI-элемент** → id — только через реестр `UI` в `hud.ts`; рендер — в `ui/`;
+  если система должна дёргать UI — слот в `bus.ts` + `bind` в владельце.
+- **Новый доменный тип** → только `types.ts` (дубли типов запрещены); `any` запрещён
+  (ESLint warn), непустые проверки `!` — только для DOM-реестра.
+- **Сейвы** — формат v2 заморожен: новые поля героя/флагов добавляются опциональными
+  (`?:`) и восстанавливаются дефолтами в `applyGame`; `SAVE_VER` не менять.
+- Дисциплина: коммит+тег на фазу рефакторинга, E2E-гейт (`REFACTORING.md §5`),
+  лимит размера модуля ≤ 400 строк.
 
 ## 🎮 Управление
 
@@ -83,7 +141,10 @@ public/
 
 ## 🛠 Технологии
 
-Next.js 16 (App Router, Turbopack) · TypeScript · three@0.180 (`three/webgpu` + addons) · WebAudio API · чистый JS-движок в замыкании `bootGame()` (совместим с React-циклом монтирования)
+Next.js 16 (App Router, Turbopack) · TypeScript strict (`noImplicitAny`, `allowJs:false`, без `any`) ·
+three@0.180 (`three/webgpu` + addons) · WebAudio API · модульный движок-оркестратор
+(`engine.ts` ~300 строк + 24 игровых модуля, ацикличный граф зависимостей) —
+совместим с React-циклом монтирования (dispose→resetState).
 
 ## 📜 История версий
 

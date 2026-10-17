@@ -1,12 +1,13 @@
-/* ================= UNITS (Фаза 4c рефакторинга) =================
+/* ================= UNITS (Фазы 4c–5 рефакторинга) =================
    Фабрика юнита (makeUnit), удаление, поиск врагов/героев,
-   размещение отряда по точкам входа. Перенесено дословно из engine.ts. */
+   размещение отряда по точкам входа. Фаза 5: refreshInit — через шину bus
+   (разрыв цикла entities → ui). Перенесено дословно из engine.ts. */
 import * as THREE from 'three/webgpu';
 import { G, units } from '../state';
 import { scene, rigs } from '../render/renderer';
 import { W } from '../constants';
 import { srand } from '../rng';import { buildFigure } from './figure';
-import { refreshInit } from '../ui/party';
+import { bus } from '../bus';
 import type { Unit, Weapon } from '../types';
 
 export function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза 3: доменный тип юнита */
@@ -34,7 +35,7 @@ export function removeUnit(u:Unit){
   if(i>=0)units.splice(i,1);
   scene.remove(u.mesh);
   if(u._el)u._el.remove();
-  refreshInit();
+  bus.refreshInit.call();
 }
 export function enemiesOf(u:Unit){return units.filter(o=>o.alive&&!o.isBarrel&&o.side!==u.side);}
 export function meleeWeaponOf(e:Unit):Weapon|null{return e.weapon&&e.weapon.melee?e.weapon:(e.dagger||null);}

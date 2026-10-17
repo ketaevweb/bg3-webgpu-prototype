@@ -1,36 +1,40 @@
-/* Фаза 4: engine.ts — оркестратор (сборка, ввод, игровой цикл, dispose).
-   Системы/интеракт/сейвы/мир — в модулях state/render/fx/world/entities/systems/interact/ui/save. */
+/* Фазы 4–5: engine.ts — оркестратор (сборка, ввод, игровой цикл, dispose).
+   Системы/интеракт/сейвы/мир — в модулях state/render/fx/world/entities/systems/interact/ui/save.
+   Фаза 5: все циклы импортов разорваны через шину bus (см. bus.ts) —
+   граф зависимостей ацикличен (scripts/cycles.js: NO CYCLES). */
 import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
 import { upgradeUnitRig } from './animation';
-import { $, clamp, sleep, cheb } from './utils';
+import { $, clamp, cheb } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
 import { UI } from './hud';
-import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT, resetState } from './state';
+import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
+import { bus } from './bus';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';
-import { tween, tickTweens, clearTweens } from './fx/tweens';
+import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
 import { buildHeroes, spawnEnemies } from './entities/roster';
-import { enemiesOf } from './entities/units';
 import { doAttack } from './systems/combat';
 import { LOOT, rollLoot } from './systems/loot';
 import { startCombat } from './systems/turns';
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
-import { openDlg, closeDlg } from './interact/dialog';
-import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty, takeCrate } from './interact/explore';
-import { refreshParty, openExploreUI } from './ui/party';
-import { refreshUI } from './ui/actionbar';
+import { openDlg } from './interact/dialog';
+import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
 import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/markers';
 import { cancelTargeting, resolveTargetClick, showTipFor } from './ui/targeting';
 import { tryMove } from './systems/movement';
-import { gameSnapshot, applyGame } from './save/snapshot';
+import { gameSnapshot } from './save/snapshot';
 import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu, onImportFile } from './save/slots';
 import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/settings';
 import { closeShop, closeChoice } from './interact/shop';
+/* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
+import './ui/party';/* refreshParty/refreshInit/refreshBossBar/openExploreUI */
+import './ui/actionbar';/* refreshUI */
+import './systems/ai';/* aiTurn (turns зовёт через bus — иначе модуль не загрузится) */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    bootGame() — оркестратор: сборка, ввод, игровой цикл, dispose.
@@ -59,7 +63,7 @@ function onLeftClick(){
   if(tgt&&(tgt.side==='goblin'||tgt.isBarrel)){
     if(cheb(h,tgt)<=h.weapon.range&&h.action>0){
       h.action--;
-      doAttack(h,tgt,h.weapon).then(()=>{refreshUI();showReach(h);});
+      doAttack(h,tgt,h.weapon).then(()=>{bus.refreshUI.call();showReach(h);});
       return;
     }
     if(h.action<=0)setHint('Нет действия для атаки.');
@@ -85,20 +89,20 @@ $(UI.gfxClose).onclick=closeGfx;
 
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
-let downPos:any=null;
-function castRay(e){
+let downPos:{x:number;y:number;b:number}|null=null;
+function castRay(e:PointerEvent){
   ptr.x=(e.clientX/innerWidth)*2-1;
   ptr.y=-(e.clientY/innerHeight)*2+1;
   ray.setFromCamera(ptr,camera);
 }
-function updatePick(e){
+function updatePick(e:PointerEvent){
   pick.tile=null;pick.ent=null;pick.inter=null;
   if(G.busy||(G.phase!=='player'&&G.phase!=='explore')){showTipFor(null,e);return;}
   castRay(e);
   const ents=[...units.filter(u=>u.alive),...barrels.filter(b=>b.alive)];
   const hits=ray.intersectObjects(ents.map(u=>u.mesh),true);
   if(hits.length){
-    let o:any=hits[0].object;
+    let o:THREE.Object3D|null=hits[0].object;
     while(o&&!o.userData.ent)o=o.parent;
     if(o)pick.ent=o.userData.ent;
   }
@@ -106,12 +110,12 @@ function updatePick(e){
     const ims=interactables.flatMap(it=>it.mesh?[it.mesh]:[]);/* Фаза 4: Interact.mesh опционален */
     const ih=ray.intersectObjects(ims,true);
     if(ih.length){
-      let o:any=ih[0].object;
+      let o:THREE.Object3D|null=ih[0].object;
       while(o&&!o.userData.it)o=o.parent;
       if(o)pick.inter=o.userData.it;
     }
   }
-  if(!pick.ent&&!pick.inter){
+  if(!pick.ent&&!pick.inter&&G.groundMesh){
     const gh=ray.intersectObject(G.groundMesh,false);
     if(gh.length){
       const p=gh[0].point;
@@ -120,7 +124,7 @@ function updatePick(e){
   }
   updateHoverFX(e);
 }
-function updateHoverFX(e){
+function updateHoverFX(e:PointerEvent){
   const cv=renderer.domElement;
   if(G.targeting){
     clearDots();
@@ -155,7 +159,7 @@ function bindInput(){
   });
   el.addEventListener('pointermove',updatePick);
   el.addEventListener('contextmenu',e=>e.preventDefault());
-  const onKey=e=>{
+  const onKey=(e:KeyboardEvent)=>{
     sfx.unlock();
     if(e.key==='Escape'){cancelTargeting();$(UI.sheet).style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
@@ -204,7 +208,6 @@ function loop(){
   updateOverlays();
   if(G.postFX&&G.bloomOn)G.postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый */
 }
-
 /* ================= СТАРТ ================= */
 const disposers:(()=>void)[]=[];
 let disposed=false;
@@ -213,7 +216,7 @@ let disposed=false;
     console.log('[bg3] init: start');
     initRenderer();
     await ensureRendererInit();/* Фаза 4a: синглтон рендера — init один раз (ремоут переиспользует) */
-    console.log('[bg3] init: done, backend=',(renderer.backend as any)?.isWebGPUBackend?'WebGPU':'WebGL2');
+    console.log('[bg3] init: done, backend=',(renderer.backend as {isWebGPUBackend?:unknown})?.isWebGPUBackend?'WebGPU':'WebGL2');
   }catch(err){
     console.error('[bg3] renderer.init() failed:',err);
     document.body.insertAdjacentHTML('beforeend',
@@ -235,9 +238,11 @@ let disposed=false;
   initMarkers();
   initOverlays();
   bindInput();
-  /* v0.7: хало и угли костра */
-  glows.campfire(W(G.FIREPIT[0]),W(G.FIREPIT[1]));
-  fx.addEmber('campfire',W(G.FIREPIT[0]),W(G.FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
+  /* v0.7: хало и угли костра (FIREPIT задан buildWorld — guard от null) */
+  if(G.FIREPIT){
+    glows.campfire(W(G.FIREPIT[0]),W(G.FIREPIT[1]));
+    fx.addEmber('campfire',W(G.FIREPIT[0]),W(G.FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
+  }
   /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и босса; гоблины — капсулы */
   void (async()=>{
     const targets=units.filter(u=>u.side==='hero'||u.isBoss);
@@ -251,8 +256,8 @@ let disposed=false;
     if(ok)log('Скелетные анимации подключены ('+ok+' рига).','g-sys');
   })();
   G.phase='explore';
-  refreshUI();refreshParty();
-  openExploreUI();
+  bus.refreshUI.call();bus.refreshParty.call();
+  bus.openExploreUI.call();
   /* v1.1: настройки графики + меню сохранений */
   loadGfx();applyGfx();renderGfx();renderSaves();
   const gb=document.getElementById('gfxBtn');
@@ -277,15 +282,15 @@ let disposed=false;
     console.error('[bg3] boot failed:',err);
   }
 })();
-/* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) */
-(window as any).__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
-  freeIlva:()=>freeIlva(),joinKaya:()=>joinKaya(KAYA_SPOT[0]+1,KAYA_SPOT[1]),
+/* v0.8+v1.1+v1.2: отладочный хук (E2E-проверки в консоли браузера) — тип Bg3Debug */
+window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
+  freeIlva:()=>freeIlva(),joinKaya:(x,z)=>joinKaya(x??KAYA_SPOT[0]+1,z??KAYA_SPOT[1]),
   gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx,
   rollLoot,LOOT};/* v1.3: +лут-таблицы для E2E */
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);
-  while(disposers.length){const f=disposers.pop();try{if(f)f();}catch(e){}}
+  while(disposers.length){const f=disposers.pop();try{if(f)f();}catch{}}
   /* Фаза 4a: рендерер/сцена — синглтоны приложения; состояние — в resetState (§4) */
   for(const u of [...units])u.mesh.removeFromParent();
   clearGroup(worldGroup);

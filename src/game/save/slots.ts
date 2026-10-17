@@ -1,6 +1,8 @@
-/* ================= SLOTS (Фаза 4 рефакторинга) =================
+/* ================= SLOTS (Фазы 4–5 рефакторинга) =================
    3 слота localStorage + экспорт/импорт JSON + меню сохранений.
-   Перенесено дословно из engine.ts. */
+   Фаза 5: closeSaveMenu переехал сюда из applyGame (разрыв цикла
+   slots⇄snapshot — applyGame зовётся только из doLoad); sv типизирован
+   (SaveData|null); параметры типизированы. Перенесено дословно. */
 import { SAVE_VER, SLOT_N } from '../constants';
 import { $ } from '../utils';
 import { UI } from '../hud';
@@ -14,7 +16,7 @@ import type { SaveData } from '../types';
    Слоты живут в localStorage (bg3w_slot_1..3), формат — обычный JSON, поэтому
    экспорт/импорт — это просто скачивание файла и обратная запись в слот. */
 /* SAVE_VER/SLOT_N → constants.ts (Фаза 2) */
-export const slotKey=i=>'bg3w_slot_'+i;
+export const slotKey=(i:number):string=>'bg3w_slot_'+i;
 let savesFromEnd=false,importSlot=1;
 
 
@@ -24,30 +26,31 @@ export function slotMeta(sv:SaveData){
 }
 export function readSlot(i:number):SaveData|null{
   try{const raw=localStorage.getItem(slotKey(i));return raw?JSON.parse(raw):null;}
-  catch(e){return null;}
+  catch{return null;}
 }
 
 
-export function doSave(i){
+export function doSave(i:number){
   if(G.combatOn||G.busy||G.phase==='transition'||G.phase==='over'){
     log('Сейчас нельзя сохранять: идёт бой, переход или экран поражения.','g-enemy');sfx.ui();return;
   }
   try{localStorage.setItem(slotKey(i),JSON.stringify(gameSnapshot()));}
-  catch(e){log('Не удалось сохранить — хранилище браузера недоступно.','g-enemy');return;}
+  catch{log('Не удалось сохранить — хранилище браузера недоступно.','g-enemy');return;}
   log('Игра сохранена в слот '+i+'.','g-heal');sfx.ui();renderSaves();
 }
-export function doLoad(i){
+export function doLoad(i:number){
   const sv=readSlot(i);
   if(!sv){log('Слот '+i+' пуст — сохраняйте через «Сохранить» или импортируйте JSON.','g-enemy');sfx.ui();return;}
   if(G.phase==='transition'){log('Идёт переход между картами — подождите секунду.','g-enemy');return;}
   if(G.busy){log('Дождитесь конца текущего действия.','g-enemy');return;}
+  closeSaveMenu();/* Фаза 5: переехало из applyGame (разрыв slots⇄snapshot) */
   applyGame(sv);
 }
-export function doDelete(i){
+export function doDelete(i:number){
   localStorage.removeItem(slotKey(i));
   log('Слот '+i+' очищен.','g-sys');sfx.ui();renderSaves();
 }
-export function doExport(i){
+export function doExport(i:number){
   const sv=readSlot(i);
   if(!sv){log('Слот '+i+' пуст — нечего экспортировать.','g-enemy');sfx.ui();return;}
   const blob=new Blob([JSON.stringify(sv,null,1)],{type:'application/json'});
@@ -58,19 +61,20 @@ export function doExport(i){
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   log('Сейв слота '+i+' выгружен в JSON-файл.','g-sys');sfx.ui();
 }
-export function doImport(i){importSlot=i;$(UI.importFile).click();}
-export function onImportFile(e){
-  const file=e.target.files&&e.target.files[0];
-  e.target.value='';
+export function doImport(i:number){importSlot=i;$(UI.importFile).click();}
+export function onImportFile(e:Event){
+  const inp=e.target as HTMLInputElement;
+  const file=inp.files&&inp.files[0];
+  inp.value='';
   if(!file)return;
   file.text().then(txt=>{
-    let sv:any=null;
-    try{sv=JSON.parse(txt);}catch(err){}
+    let sv:SaveData|null=null;
+    try{sv=JSON.parse(txt) as SaveData;}catch{}
     if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)||!MAP_NAME[sv.mapId]){
       log('Это не файл сохранения «Врат Бальдура» (нужен JSON формата v'+SAVE_VER+').','g-enemy');return;
     }
     try{localStorage.setItem(slotKey(importSlot),JSON.stringify(sv));}
-    catch(err){log('Ошибка записи в слот '+importSlot+'.','g-enemy');return;}
+    catch{log('Ошибка записи в слот '+importSlot+'.','g-enemy');return;}
     log('JSON импортирован в слот '+importSlot+': '+slotMeta(sv),'g-heal');
     renderSaves();sfx.ui();
   });
@@ -88,7 +92,7 @@ export function renderSaves(){
     row.innerHTML='<div class="smeta">Слот '+i+(sv?'':' — пуст')+'</div>'+
       '<div class="ssub">'+(sv?slotMeta(sv):'Нет данных. Сохраните игру или импортируйте JSON-файл.')+'</div>';
     const btns=document.createElement('div');btns.className='sbtns';
-    const mk=(t,fn,dis?,danger?)=>{
+    const mk=(t:string,fn:()=>void,dis?:boolean,danger?:boolean)=>{
       const b=document.createElement('button');b.textContent=t;b.disabled=!!dis;
       if(danger)b.className='danger';
       b.onclick=fn;btns.appendChild(b);
@@ -102,7 +106,7 @@ export function renderSaves(){
     el.appendChild(row);
   }
 }
-export function openSaveMenu(fromEnd){
+export function openSaveMenu(fromEnd:boolean){
   savesFromEnd=!!fromEnd;
   renderSaves();
   $(UI.saves).style.display='block';

@@ -14,22 +14,23 @@ export const LOOT={
 export type LootKey=keyof typeof LOOT;
 
 
-/* ================= ВЫДАЧА ЛУТА (Фаза 4 рефакторинга) =================
-   giveToParty/rollLoot — перенесено дословно из engine.ts. */
+/* ================= ВЫДАЧА ЛУТА (Фазы 4–5 рефакторинга) =================
+   giveToParty/rollLoot — перенесено дословно из engine.ts. Фаза 5:
+   refreshParty — через шину bus; реликвия типизирована (Relic). */
 import { ri } from '../rng';
 import { log } from '../ui/overlays';
 import { aliveHeroes } from '../entities/units';
 import { gainGold } from '../interact/quests';
-import { refreshParty } from '../ui/party';
+import { bus } from '../bus';
 import { fx, glows } from '../render/renderer';
-import type { Unit } from '../types';
+import type { Relic, Unit } from '../types';
 
 /* ================= v1.3: ЛУТ-ТАБЛИЦЫ =================
    Из каждого врага выпадает добыча по таблице его типа:
    гоблины/нежить/культисты/боссы — золото, шанс зелья и масла.
    Элита даёт вдвое больше золота, гарантированный предмет и реликвию. */
 /* ri → rng.ts; LOOT → systems/loot.ts (Фаза 2). rollLoot/giveToParty — здесь до p4d */
-export function giveToParty(kind,why){
+export function giveToParty(kind:'potion'|'oil',why:string):Unit|null{
   const hs=aliveHeroes();if(!hs.length)return null;
   const h=kind==='potion'
     ?hs.slice().sort((a,b)=>a.hp/a.maxhp-b.hp/b.maxhp)[0]
@@ -39,7 +40,7 @@ export function giveToParty(kind,why){
   log(h.short+' забирает: '+why+'.','g-sys');
   return h;
 }
-export function rollLoot(t){
+export function rollLoot(t:Unit){
   if(!t||t.isBarrel||t.side!=='goblin'||t.summoned)return;
   const isBoss=!!(t.mainBoss||t.cryptBoss);
   const tbl=isBoss?LOOT.boss:(t.caster?LOOT.cultist:(t.cls==='undead'?LOOT.undead:LOOT.goblin));
@@ -53,7 +54,7 @@ export function rollLoot(t){
     if(Math.random()<tbl.oil)giveToParty('oil','огненное масло из пожитков врага');
   }
   if(t.elite&&hs.length){/* реликвии элиты — по одной на героя */
-    let relic:any=null,cand=aliveHeroes();
+    let relic:Relic|null=null,cand=aliveHeroes();
     if(t.cls==='undead'){relic={n:'Костяной оберег',apply:h=>{h.ac+=1;h.relic='Костяной оберег';return h.short+': КД +1';}};}
     else if(t.caster){relic={n:'Пыльный фолиант',apply:h=>{h.slotsMax+=1;h.slots+=1;h.relic='Пыльный фолиант';return h.short+': +1 ячейка заклинаний';}};cand=aliveHeroes().filter(h=>h.slotsMax>0);}
     else{relic={n:'Трофейный клык',apply:h=>{h.str+=1;h.relic='Трофейный клык';return h.short+': СИЛ +1';}};cand=aliveHeroes().filter(h=>h.cls==='fighter');}
@@ -62,11 +63,11 @@ export function rollLoot(t){
       const h=free[0];
       log('Реликвия «'+relic.n+'» переходит к отряду: '+relic.apply(h)+'.','g-heal');
       glows.flashAtMesh(h,0xd8b45a,1.3);
-      refreshParty();
+      bus.refreshParty.call();
     }else{
       const b=25;gainGold(b);
       log('Носить реликвию некому — она обращена в '+b+' золота.','g-sys');
     }
   }
-  refreshParty();
+  bus.refreshParty.call();
 }

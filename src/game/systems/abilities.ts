@@ -1,63 +1,23 @@
-/* ================= ABILITIES (Фаза 4 рефакторинга) =================
-   Взрывы, огненный шар, гнев рассвета. Перенесено дословно из engine.ts. */
+/* ================= ABILITIES (Фазы 4–5 рефакторинга) =================
+   Огненный шар, гнев рассвета. Перенесено дословно из engine.ts.
+   Фаза 5: explode/explodeBarrel переехали в systems/combat.ts (die→бочка
+   без цикла), checkEnd/igniteTile/addStatus уезжают вместе с ними;
+   UI-refresh — через bus. Импорты однонаправленные. */
 import * as THREE from 'three/webgpu';
-import { key, cheb } from '../utils';
+import { cheb } from '../utils';
 import { roll } from '../rng';
 import { W } from '../constants';
-import { boomFX, tween, projMesh, shake } from '../fx/tweens';
+import { tween, projMesh, shake } from '../fx/tweens';
 import { fx, glows } from '../render/renderer';
 import { sfx } from '../audio';
-import { slowmo } from '../slowmo';
 import { log, ftextAbove } from '../ui/overlays';
-import { fires, grass, units, barrels } from '../state';
-import { igniteTile, addStatus } from './statuses';
-import { damageUnit } from './combat';
-import { checkEnd } from './progression';
-import { refreshUI } from '../ui/actionbar';
+import { units } from '../state';
+import { bus } from '../bus';
+import { damageUnit, explode } from './combat';
 import { showReach } from '../ui/markers';
 import type { Unit } from '../types';
 
-/* ================= ВЗРЫВЫ ================= */
-export function explode(tx,tz,opts){
-  opts=opts||{};
-  const dice=opts.dice||[3,6],radius=opts.radius||2.5;
-  const dmg=roll(dice[0],dice[1]);
-  const cx=W(tx),cz=W(tz);
-  boomFX(cx,cz,radius);
-  /* v0.7: партиклы взрыва, хало-вспышка, звук, микро-слоумо */
-  fx.explosion(cx,cz,radius);
-  glows.flash(cx,cz,radius*1.5,0xffa040);
-  sfx.explosion();
-  slowmo.trigger(0.4,0.4);
-  log('ВЗРЫВ! Урон '+dmg+' в радиусе '+radius+' кл.','g-fire');
-  for(const u of units)if(u.alive&&!u.isBarrel){
-    if(Math.hypot(u.x-tx,u.z-tz)<=radius+0.35){
-      ftextAbove(u,'−'+dmg,'#ff8a50');
-      damageUnit(u,dmg,null);
-      if(u.alive&&Math.random()<0.6)addStatus(u,'burn',2);
-    }
-  }
-  for(const b of barrels)if(b.alive&&Math.hypot(b.x-tx,b.z-tz)<=radius+0.35){
-    setTimeout(()=>explodeBarrel(b),240);
-  }
-  let lit=0;
-  const R=Math.ceil(radius);
-  for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++){
-    if(Math.hypot(dx,dz)>radius)continue;
-    if(grass.has(key(tx+dx,tz+dz))&&!fires.has(key(tx+dx,tz+dz))){igniteTile(tx+dx,tz+dz,3);lit++;}
-  }
-  if(lit)log('Трава вспыхивает ('+lit+' кл.)!','g-fire');
-  checkEnd();
-}
-export function explodeBarrel(b){
-  if(!b.alive)return;
-  b.alive=false;
-  const m=b.mesh;
-  tween(0.15,k=>{m.scale.setScalar(1+0.6*k);}).then(()=>m.removeFromParent());/* v0.8 */
-  log('Взрывная бочка детонирует!','g-fire');
-  explode(b.x,b.z,{dice:[3,6],radius:2.5});
-}
-export async function castFireball(h,tx,tz){
+export async function castFireball(h:Unit,tx:number,tz:number):Promise<void>{
   log(h.name+' сотворяет ОГНЕННЫЙ ШАР!','g-fire');
   sfx.fireCast();
   projMesh.visible=true;
@@ -70,7 +30,7 @@ export async function castFireball(h,tx,tz){
   projMesh.visible=false;
   explode(tx,tz,{dice:[3,6],radius:2.5});
 }
-export async function radiantNova(h){/* v1.2: гнев рассвета Кая */
+export async function radiantNova(h:Unit):Promise<void>{/* v1.2: гнев рассвета Кая */
   h.action--;h.dawnUsed=true;
   log(h.name+' призывает ГНЕВ РАССВЕТА!','g-hero');
   sfx.nova();
@@ -86,5 +46,5 @@ export async function radiantNova(h){/* v1.2: гнев рассвета Кая *
     log('Гнев рассвета бьёт '+e.name+': '+dmg+' излучения.','g-hero');
     damageUnit(e,dmg,h);
   }
-  refreshUI();showReach(h);
+  bus.refreshUI.call();showReach(h);
 }

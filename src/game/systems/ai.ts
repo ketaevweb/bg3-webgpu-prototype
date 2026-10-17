@@ -1,12 +1,17 @@
-/* ================= AI (Фаза 4 рефакторинга) =================
+/* ================= AI (Фазы 4–5 рефакторинга) =================
    Utility-ИИ: планы гоблинов/некроманта/целителя, оценка атак, бегство,
-   исполнение хода. Перенесено дословно из engine.ts. */
+   исполнение хода. Перенесено дословно из engine.ts. Фаза 5: цикл turns⇄ai
+   разорван — beginTurn зовёт aiTurn через шину bus (ai привязывает слот);
+   healUnit — из vitals.ts; freeSpotNear — с явным контекстом сетки;
+   best/hb-кандидаты типизированы (AIPlan/Scored). */
 import { sleep, cheb, key, mod } from '../utils';
-import { d, roll } from '../rng';
+import { roll } from '../rng';
 import { W } from '../constants';
 import { G, units, barrels, fires, GW } from '../state';
-import { hitChance, avgDamage, healUnit, damageUnit, doAttack } from './combat';
-import { reachNodes, nodePath, freeSpotNear } from '../world/grid';
+import { bus } from '../bus';
+import { hitChance, avgDamage, damageUnit, doAttack } from './combat';
+import { healUnit } from './vitals';
+import { reachNodes, nodePath, freeSpotNear, type AStarNode } from '../world/grid';
 import { makeSkeleton } from '../entities/roster';
 import { aliveHeroes } from '../entities/units';
 import { joinCombat, endTurn } from './turns';
@@ -15,54 +20,57 @@ import { bigBanner, log, ftextAbove } from '../ui/overlays';
 import { sfx } from '../audio';
 import { fx, glows } from '../render/renderer';
 import { shake } from '../fx/tweens';
-import type { Unit } from '../types';
+import type { AIPlan, Unit } from '../types';
 
-export function planNecro(u){/* v0.8: ИИ некроманта — шквал, дистанция, фаза призыва */
+/* локальный тип оценочного кандидата (s — score, v — полезная нагрузка) */
+type Scored<V>={s:number;v:V;}
+
+export function planNecro(u:Unit):AIPlan|null{/* v0.8: ИИ некроманта — шквал, дистанция, фаза призыва */
   const heroes=aliveHeroes();
   if(!heroes.length)return null;
   if(!u.phase2&&u.hp<=u.maxhp*0.5)return{type:'phase2'};
   if(u.action>0&&heroes.filter(h=>cheb(u,h)<=1).length>=2)return{type:'nova'};
   if(u.action>0){
-    let best:any=null;
+    let best:Scored<Unit>|null=null;
     for(const h of heroes)if(cheb(u,h)<=u.weapon.range){
       const s=evalAttack(u,h)+(h.hp<=h.maxhp*0.4?1.6:0);
-      if(!best||s>best.s)best={s,target:h};
+      if(!best||s>best.s)best={s,v:h};
     }
-    if(best)return{type:'attack',target:best.target};
+    if(best)return{type:'attack',target:best.v};
   }
   if(u.keepDist&&u.moveLeft>=1){
     const close=heroes.some(h=>cheb(u,h)<3);
     if(close){
       const nodes=reachNodes(GW,u,true);
-      let best:any=null;
+      let best:Scored<AStarNode>|null=null;
       const curD=Math.min(...heroes.map(h=>cheb(u,h)));
       for(const node of nodes.values()){
         if(node.g<=0)continue;
         const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
         const s=dmin*0.9-node.g*0.12;
-        if(!best||s>best.s)best={s,node};
+        if(!best||s>best.s)best={s,v:node};
       }
-      if(best&&Math.min(...heroes.map(h=>cheb(best.node,h)))>curD)return{type:'move',path:nodePath(best.node)};
+      if(best&&Math.min(...heroes.map(h=>cheb(best.v,h)))>curD)return{type:'move',path:nodePath(best.v)};
     }
   }
   if(u.moveLeft>=1&&u.action>0){
     const nodes=reachNodes(GW,u,true);
-    let best:any=null;
+    let best:Scored<AStarNode>|null=null;
     for(const node of nodes.values()){
       if(node.g<=0)continue;
       for(const h of heroes){
         const dd=cheb(node,h);
         if(dd>u.weapon.range)continue;
         const s=evalAttack(u,h)-node.g*0.05+(dd>=4?0.8:0);
-        if(!best||s>best.s)best={s,node};
+        if(!best||s>best.s)best={s,v:node};
       }
     }
-    if(best)return{type:'move',path:nodePath(best.node)};
+    if(best)return{type:'move',path:nodePath(best.v)};
   }
   if(u.bonus>0&&u.action>0)return{type:'dash'};
   return null;
 }
-export function evalAttack(u,h){
+export function evalAttack(u:Unit,h:Unit):number{
   const w=u.weapon;
   const exp=hitChance(u,h,w)*avgDamage(u,w);
   let s=exp*1.15;
@@ -70,36 +78,36 @@ export function evalAttack(u,h){
   s+=(1-h.hp/h.maxhp)*2.5;
   return s;
 }
-export function threatened(u){
+export function threatened(u:Unit):boolean{
   return units.some(e=>e.side==='hero'&&e.alive&&cheb(e,u)<=1);
 }
-export function bestFleeNode(u){
+export function bestFleeNode(u:Unit):AStarNode|null{
   const heroes=units.filter(x=>x.side==='hero'&&x.alive);
   if(!heroes.length)return null;
   const nodes=reachNodes(GW,u,true);
-  let best:any=null;
+  let best:Scored<AStarNode>|null=null;
   for(const node of nodes.values()){
     if(node.g<=0)continue;
     const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
     let s=dmin*1.1-node.g*0.08;
     if(fires.has(key(node.x,node.z)))s-=5;
-    if(!best||s>best.s)best={s,node};
+    if(!best||s>best.s)best={s,v:node};
   }
-  return best?best.node:null;
+  return best?best.v:null;
 }
-export function planGoblin(u){
+export function planGoblin(u:Unit):AIPlan|null{
   const heroes=units.filter(x=>x.side==='hero'&&x.alive);
   if(!heroes.length)return null;
   const gobs=units.filter(x=>x.side==='goblin'&&x.alive);
   /* v1.3: ученик некроманта первым делом латает раненых слуг */
   if(u.healer&&u.action>0){
-    let hb:any=null;
+    let hb:Scored<Unit>|null=null;
     for(const w of gobs){
       if(w===u||w.hp>=w.maxhp*0.65)continue;
       const s=(1-w.hp/w.maxhp)*3+(w.isBoss?1.2:0);
-      if(cheb(u,w)<=u.weapon.range&&(!hb||s>hb.s))hb={s,t:w};
+      if(cheb(u,w)<=u.weapon.range&&(!hb||s>hb.s))hb={s,v:w};
     }
-    if(hb)return{type:'heal',target:hb.t};
+    if(hb)return{type:'heal',target:hb.v};
   }
   if(u.bonus>0&&u.potions>0&&u.hp<u.maxhp*0.45)return{type:'potion'};
   if(u.action>0){
@@ -113,27 +121,27 @@ export function planGoblin(u){
     }
   }
   if(u.action>0){
-    let best:any=null;
+    let best:Scored<Unit>|null=null;
     for(const h of heroes)if(cheb(u,h)<=u.weapon.range){
       const s=evalAttack(u,h);
-      if(!best||s>best.s)best={s,target:h};
+      if(!best||s>best.s)best={s,v:h};
     }
-    if(best)return{type:'attack',target:best.target};
+    if(best)return{type:'attack',target:best.v};
   }
   if(u.keepDist&&u.moveLeft>=1){
     const close=heroes.some(h=>cheb(u,h)<3);
     if(close){
       const nodes=reachNodes(GW,u,true);
-      let best:any=null;
+      let best:Scored<AStarNode>|null=null;
       const curD=Math.min(...heroes.map(h=>cheb(u,h)));
       for(const node of nodes.values()){
         if(node.g<=0)continue;
         const dmin=Math.min(...heroes.map(h=>cheb(node,h)));
         let s=dmin*0.9-node.g*0.12;
         if(fires.has(key(node.x,node.z)))s-=5;
-        if(!best||s>best.s)best={s,node};
+        if(!best||s>best.s)best={s,v:node};
       }
-      if(best&&Math.min(...heroes.map(h=>cheb(best.node,h)))>curD)return{type:'move',path:nodePath(best.node)};
+      if(best&&Math.min(...heroes.map(h=>cheb(best.v,h)))>curD)return{type:'move',path:nodePath(best.v)};
     }
   }
   if(u.action>0&&u.hp<u.maxhp*0.3&&threatened(u)){
@@ -142,7 +150,7 @@ export function planGoblin(u){
   }
   if(u.moveLeft>=1&&u.action>0){
     const nodes=reachNodes(GW,u,true);
-    let best:any=null;
+    let best:Scored<AStarNode>|null=null;
     for(const node of nodes.values()){
       if(node.g<=0)continue;
       for(const h of heroes){
@@ -153,19 +161,19 @@ export function planGoblin(u){
         if(!u.weapon.melee&&dd>=3&&dd<=6)s+=1.2;
         if(!u.weapon.melee&&dd<2)s-=0.8;
         if(fires.has(key(node.x,node.z)))s-=5;
-        if(!best||s>best.s)best={s,node};
+        if(!best||s>best.s)best={s,v:node};
       }
     }
-    if(best)return{type:'move',path:nodePath(best.node)};
+    if(best)return{type:'move',path:nodePath(best.v)};
   }
   if(u.bonus>0&&u.action>0)return{type:'dash'};
   return null;
 }
-export async function aiTurn(u){
+export async function aiTurn(u:Unit){
   await sleep(500);
   let guard=0;
   while(G.combatOn&&u.alive&&guard++<6){
-    const plan=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
+    const plan:AIPlan|null=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
     if(plan.type==='phase2'){/* v0.8: подъём мёртвых */
       u.phase2=true;
@@ -176,7 +184,7 @@ export async function aiTurn(u){
       glows.flashAtMesh(u,0x9fe8b8,2.6);
       shake(0.35);
       for(let i=0;i<2;i++){
-        const spot=freeSpotNear(u,2);
+        const spot=freeSpotNear(GW,u,2);
         if(!spot)break;
         const sk=makeSkeleton(spot.x,spot.z);
         sk.summoned=true;
@@ -235,3 +243,6 @@ export async function aiTurn(u){
   }
   if(G.combatOn)endTurn();
 }
+
+/* ---- регистрация на шине (Фаза 5: разрыв цикла turns→ai) ---- */
+bus.aiTurn.bind(aiTurn);

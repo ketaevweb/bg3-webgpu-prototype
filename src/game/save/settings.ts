@@ -14,7 +14,7 @@ import { sfx } from '../audio';
 export const GFX_KEY='bg3w_gfx_v1';
 export const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max'};
 
-export function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.assign(gfx,JSON.parse(raw));}catch(e){}}
+export function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.assign(gfx,JSON.parse(raw));}catch{}}
 export function applyShadows(){
   const q=gfx.shadows;
   renderer.shadowMap.enabled=(q!=='off');
@@ -35,14 +35,15 @@ export function applyGfx(){
   renderer.setPixelRatio(Math.min(devicePixelRatio,2)*(gfx.res==='50'?0.5:(gfx.res==='75'?0.75:1)));
   G.fpsLimit=gfx.fps==='30'?30:(gfx.fps==='60'?60:0);
   G.frameAcc=0;
-  try{localStorage.setItem(GFX_KEY,JSON.stringify(gfx));}catch(e){}
+  try{localStorage.setItem(GFX_KEY,JSON.stringify(gfx));}catch{}
 }
 export const GFX_PRESETS={
   low:{shadows:'off',bloom:false,glow:false,particles:'low',res:'75',fps:'60'},
   mid:{shadows:'low',bloom:true,glow:true,particles:'mid',res:'100',fps:'60'},
   high:{shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max'},
 };
-export const GFX_ROWS=[
+type GfxKey=keyof typeof gfx;
+export const GFX_ROWS:{k:GfxKey;label:string;bool?:boolean;opts:[string,string][]}[]=[
   {k:'shadows',label:'Тени',opts:[['off','Выкл'],['low','Низк.'],['high','Выс.']]},
   {k:'bloom',label:'Bloom-пасс',bool:true,opts:[['1','Вкл'],['0','Выкл']]},
   {k:'glow',label:'Glow-хала',bool:true,opts:[['1','Вкл'],['0','Выкл']]},
@@ -58,7 +59,7 @@ export function renderGfx(){
   pl.textContent='Пресет качества:';
   el.appendChild(pl);
   const pre=document.createElement('div');pre.className='gpre';
-  for(const [k,n] of [['low','Низкий'],['mid','Средний'],['high','Высокий']]){
+  for(const [k,n] of ([['low','Низкий'],['mid','Средний'],['high','Высокий']] as const)){
     const b=document.createElement('button');b.textContent=n;
     b.onclick=()=>{Object.assign(gfx,GFX_PRESETS[k]);applyGfx();renderGfx();sfx.ui();};
     pre.appendChild(b);
@@ -70,10 +71,13 @@ export function renderGfx(){
     const seg=document.createElement('div');seg.className='seg';
     for(const [val,name] of r.opts){
       const b=document.createElement('button');b.textContent=name;
-      const setVal=r.bool?(val==='1'):val;
-      const active=r.bool?(!!gfx[r.k]===setVal):String(gfx[r.k])===val;
+      const active=r.bool?(!!gfx[r.k]===(val==='1')):String(gfx[r.k])===val;
       if(active)b.classList.add('on');
-      b.onclick=()=>{gfx[r.k]=setVal;applyGfx();renderGfx();sfx.ui();};
+      b.onclick=()=>{
+        /* запись в словарь настроек по ключу строки панели */
+        (gfx as Record<GfxKey,string|boolean>)[r.k]=r.bool?(val==='1'):val;
+        applyGfx();renderGfx();sfx.ui();
+      };
       seg.appendChild(b);
     }
     row.appendChild(lab);row.appendChild(seg);

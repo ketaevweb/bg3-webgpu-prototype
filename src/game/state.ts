@@ -1,13 +1,15 @@
-/* ================= STATE (Фаза 4a рефакторинга) =================
+/* ================= STATE (Фазы 4a–5 рефакторинга) =================
    Единственный источник игрового состояния (REFACTORING.md §4).
    S — метапрогресс/флаги (GameState из types.ts);
    G — runtime-контекст: всё, что раньше было мутабельными локалами
    замыкания bootGame() и переприсваивалось. Вынесено дословно —
-   имена полей и семантика 1:1 (TODO(refactor-p5): зачистка any-полей).
+   имена полей и семантика 1:1. Фаза 5: все any-поля типизированы
+   (TargetingState/THREE-типы), TREES/ROCKS/TENTS/BARREL_POS — number[][]
+   (инициализируются пустыми массивами — читатели уже после buildWorld).
    Контейнеры (units/barrels/fires/…) — const, мутируются in-place,
    никогда не переприсваиваются (проверено grep в Фазе 2). */
-import type { FireTile, GameState, Interact, MapId, Phase, PickState, Unit } from './types';
-import type { GridWorld } from './world/grid';
+import type * as THREE from 'three/webgpu';
+import type { FireTile, GameState, GridWorld, Interact, MapId, Phase, PickState, TargetingState, Unit } from './types';
 
 /* ---- метапрогресс и флаги квестов (S) ---- */
 export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
@@ -17,12 +19,13 @@ export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false
 
 /* ---- runtime-контекст (G) ---- */
 export const G:{
-  busy:boolean;busyCount:number;combatOn:boolean;phase:Phase;targeting:any;
+  busy:boolean;busyCount:number;combatOn:boolean;phase:Phase;targeting:TargetingState|null;
   round:number;turnIdx:number;current:Unit|null;
   uid:number;shakeT:number;
-  groundMesh:any;fireLight:any;flameMesh:any;hemiLight:any;sunLight:any;
-  postFX:any;mapId:MapId;
-  TREES:any;ROCKS:any;TENTS:any;FIREPIT:any;BARREL_POS:any;
+  groundMesh:THREE.Mesh|null;fireLight:THREE.PointLight|null;flameMesh:THREE.Mesh|null;
+  hemiLight:THREE.HemisphereLight|null;sunLight:THREE.DirectionalLight|null;
+  postFX:THREE.PostProcessing|null;mapId:MapId;
+  TREES:number[][];ROCKS:number[][];TENTS:number[][];FIREPIT:[number,number]|null;BARREL_POS:number[][];
   order:Unit[];
   bloomOn:boolean;fpsLimit:number;frameAcc:number;
 }={
@@ -31,7 +34,7 @@ export const G:{
   uid:0,shakeT:0,
   groundMesh:null,fireLight:null,flameMesh:null,hemiLight:null,sunLight:null,
   postFX:null,mapId:'forest',
-  TREES:null,ROCKS:null,TENTS:null,FIREPIT:null,BARREL_POS:null,
+  TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],
   order:[],
   bloomOn:true,fpsLimit:0,frameAcc:0,
 };
@@ -72,7 +75,7 @@ export function resetState(){
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,
     mapId:'forest' as MapId,
-    TREES:null,ROCKS:null,TENTS:null,FIREPIT:null,BARREL_POS:null,order:[]});
+    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[]});
   units.length=0;barrels.length=0;fires.clear();
   pick.tile=null;pick.ent=null;pick.inter=null;
   solid.clear();grass.clear();

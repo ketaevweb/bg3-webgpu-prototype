@@ -1,20 +1,15 @@
-/* ================= WORLD/GRID (Фазы 2–3 рефакторинга) =================
+/* ================= WORLD/GRID (Фазы 2–5 рефакторинга) =================
    Сетка мира, проходимость, опасность и A* — чистые функции, состояние
-   передаётся явным аргументом GridWorld (контейнеры в engine создаются один
-   раз и только мутируются, поэтому объект-контекст валиден весь рантайм).
-   Фаза 3: доменные типы Unit/Barrel из types.ts вместо any.
-   TODO(refactor-p4a): GridWorld станет срезом GameCtx из state.ts. */
+   передаётся явным аргументом GridWorld (контейнеры создаются один раз
+   и только мутируются, поэтому объект-контекст валиден весь рантайм).
+   Фаза 5: GridWorld переехал в types.ts (единый источник доменных типов);
+   freeSpotNear принимает w явно — модуль стал ЧИСТЫМ ЛИСТОМ (импортирует
+   только utils/constants/types), цикл state⇄grid разорван. */
 
 import { key, cheb } from '../utils';
 import { GRID } from '../constants';
-import type { Unit } from '../types';
-
-export interface GridWorld {
-  solid: Set<string>;        /* непроходимая декорация */
-  units: Unit[];             /* живые сущности (вкл. фигурки-преграды) */
-  barrels: Unit[];           /* бочки/урны (Unit с isBarrel:true) */
-  fires: Map<string, unknown>; /* горящие тайлы (значение — FireTile, сетке не нужен) */
-}
+import type { GridWorld, Unit } from '../types';
+export type { GridWorld };
 
 export function passable(w:GridWorld, x:number, z:number, mover?:Unit|null){
   if(x<1||z<1||x>=GRID-1||z>=GRID-1)return false;
@@ -109,15 +104,14 @@ export function nodePath(node:AStarNode){
   return a.reverse();
 }
 
-/* свободная клетка вокруг точки (v0.8) — из engine (Фаза 4 рефакторинга)
-   GW — модульный синглтон из state.ts (обратная кромка type-only: state → grid) */
-import { GW } from '../state';
 /* ================= UTILITY-ИИ ГОБЛИНОВ ================= */
-export function freeSpotNear(c,ring){/* v0.8: свободная клетка вокруг точки */
+/* свободная клетка вокруг точки (v0.8) — из engine (Фаза 4);
+   Фаза 5: контекст сетки передаётся явно (grid — чистый лист) */
+export function freeSpotNear(w:GridWorld,c:{x:number;z:number},ring:number){
   for(let r=1;r<=ring;r++)for(let dx=-r;dx<=r;dx++)for(let dz=-r;dz<=r;dz++){
     if(Math.max(Math.abs(dx),Math.abs(dz))!==r)continue;
     const x=c.x+dx,z=c.z+dz;
-    if(passable(GW,x,z,null))return{x,z};
+    if(passable(w,x,z,null))return{x,z};
   }
   return null;
 }

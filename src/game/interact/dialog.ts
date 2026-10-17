@@ -1,10 +1,15 @@
-/* ================= DIALOG (Фаза 4 рефакторинга) =================
-   Диалоги (DLGS), социальные проверки, бегство NPC. Перенесено дословно. */
+/* ================= DIALOG (Фазы 4–5 рефакторинга) =================
+   Диалоги (DLGS), социальные проверки, бегство NPC. Фаза 5: циклы
+   turns→dialog и explore→dialog разорваны — closeDlgHard/openDlg
+   привязаны к шине bus (turns/explore зовут через неё); сам dialog
+   спокойно импортирует turns/explore/progression — теперь это одна
+   сторона графа. DLGS/опции типизированы (DlgFn/DlgOpt/DlgNode). */
 import { $, mod } from '../utils';
 import { d } from '../rng';
 import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, KAYA_SPOT, busyOn, busyOff } from '../state';
+import { bus } from '../bus';
 import { setHint, log } from '../ui/overlays';
 import { aliveHeroes, removeUnit } from '../entities/units';
 import { startCombat } from '../systems/turns';
@@ -12,12 +17,12 @@ import { addStatus } from '../systems/statuses';
 import { awardXP } from '../systems/progression';
 import { questStart, questObj, questDone, QUESTS, refreshTracker } from '../interact/quests';
 import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
-import { openShop, closeShop } from '../interact/shop';
+import { openShop } from '../interact/shop';
 import { tween } from '../fx/tweens';
-import type { Unit } from '../types';
+import type { DlgFn, DlgOpt, Unit } from '../types';
 
 /* ---- диалоги ---- */
-export function openDlg(npc){
+export function openDlg(npc:string){
   if(G.combatOn||G.phase==='over')return;
   busyOn();G.phase='dialogue';
   sfx.dialog();
@@ -37,8 +42,8 @@ export function closeDlgHard(){
   S.dlgNpc=null;
   G.busyCount=Math.max(0,G.busyCount-1);G.busy=G.busyCount>0;
 }
-export function gotoNode(id){showNode(id);}
-export function socialCheck(req){
+export function gotoNode(id:string){showNode(id);}
+export function socialCheck(req:{skill:string;dc:number}):boolean{
   const hs=aliveHeroes();
   const best=hs.reduce((a,b)=>mod(b.cha)>mod(a.cha)?b:a);
   const r=d(20),m=mod(best.cha)+2,tot=r+m;
@@ -46,7 +51,7 @@ export function socialCheck(req){
   log('Проверка «'+req.skill+'» СЛ '+req.dc+': d20 '+r+(m>=0?'+':'')+m+' ('+best.short+') = '+tot+' — '+(ok?'УСПЕХ!':'провал.'),ok?'g-heal':'g-enemy');
   return ok;
 }
-export function showNode(id){
+export function showNode(id:string){
   const fn=S.dlgNpc?DLGS[S.dlgNpc]:undefined;
   const n=fn?fn(id):null;
   if(!n)return closeDlg();
@@ -70,7 +75,7 @@ export function showNode(id){
     box.appendChild(b);
   }
 }
-export const DLGS={
+export const DLGS:Record<string,DlgFn>={
   patrol(id){
     if(id==='start')return{name:'Гоблин-патрульный',
       text:'Стоять! Смердяки с юга?.. Это земля племени Кости! Уходи, пока кишки внутри!',
@@ -89,7 +94,7 @@ export const DLGS={
   },
   boss(id){
     if(id==='start'){
-      const opts:any[]=[];
+      const opts:DlgOpt[]=[];
       if(S.knowsBoss)opts.push({t:'[Знание Илвы] «Помнишь драконий огонь, что оставил тебе те шрамы, Грат?»',fn:bossFear});
       opts.push(
         {t:'[Запугивание СЛ 16] «Ваш лагерь станет пеплом. Уведите щенков, пока целы.»',req:{skill:'Запугивание',dc:16},ok:'cow',fail:'fight'},
@@ -176,7 +181,7 @@ export function bossFear(){
   S.campDone=true;
   startCombat(S.campGroup.filter(g=>g.alive));
 }
-export function fleeUnits(arr){
+export function fleeUnits(arr:Unit[]){
   for(const g of arr){
     if(!g.alive)continue;
     log(g.name+' обращается в бегство!','g-sys');
@@ -186,3 +191,7 @@ export function fleeUnits(arr){
       .then(()=>removeUnit(g));
   }
 }
+
+/* ---- регистрация на шине (Фаза 5: turns→closeDlgHard, explore→openDlg без циклов) ---- */
+bus.openDlg.bind(openDlg);
+bus.closeDlgHard.bind(closeDlgHard);

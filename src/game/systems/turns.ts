@@ -1,25 +1,54 @@
-/* ================= TURNS (Фаза 4 рефакторинга) =================
-   Старт боя, инициатива, begin/endTurn. Цикл импортов turns⇄ai —
-   на уровне функций (ESM-safe). Перенесено дословно из engine.ts. */
+/* ================= TURNS (Фазы 4–5 рефакторинга) =================
+   Старт боя, инициатива, begin/endTurn. Фаза 5: tickFires переехал сюда
+   из statuses.ts (тика огня — конец раунда; прямой вызов damageUnit из
+   statuses замыкал цикл combat⇄statuses); closeDlgHard/aiTurn — через
+   шину bus (разрыв cycles turns⇄dialog и turns⇄ai); UI-refresh — через
+   bus. Импорты однонаправленные. Перенесено дословно из engine.ts. */
 import { $, key, mod } from '../utils';
 import { d } from '../rng';
 import { UI } from '../hud';
 import { sfx } from '../audio';
-import { G, S, units, fires } from '../state';
+import { G, S, units, fires, grass, GW } from '../state';
+import { bus } from '../bus';
 import { bigBanner, log, ftextAbove, setHint, refreshIcons } from '../ui/overlays';
-import { closeDlgHard } from '../interact/dialog';
 import { aliveHeroes } from '../entities/units';
-import { tickFires } from './statuses';
-import { damageUnit } from './combat';
-import { aiTurn } from './ai';
-import { refreshInit, refreshParty } from '../ui/party';
-import { refreshUI } from '../ui/actionbar';
+import { unitAt, barrelAt } from '../world/grid';
+import { igniteTile, removeFire, addStatus } from './statuses';
+import { damageUnit, explodeBarrel } from './combat';
+import { checkEnd } from './progression';
 import { clearMarkers, clearDots, showReach } from '../ui/markers';
 import type { Unit } from '../types';
 
+/* ================= ОГОНЬ: ТИК КОНЦА РАУНДА (Фаза 5: из statuses.ts) ================= */
+export function tickFires(){
+  for(const f of [...fires.values()]){
+    const u=unitAt(GW,f.x,f.z,null);
+    if(u&&u.alive){
+      const dmg=d(4);
+      log(u.name+' горит в пламени: '+dmg+' урона.','g-fire');
+      ftextAbove(u,'−'+dmg,'#ff8a50');
+      damageUnit(u,dmg,null);
+      if(u.alive&&Math.random()<0.5)addStatus(u,'burn',2);
+    }
+  }
+  const born:[number,number][]=[];
+  for(const f of fires.values()){
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
+      if(!dx&&!dz)continue;
+      const nx=f.x+dx,nz=f.z+dz,nk=key(nx,nz);
+      const b=barrelAt(GW,nx,nz);
+      if(b)setTimeout(()=>explodeBarrel(b),240);
+      else if(grass.has(nk)&&!fires.has(nk)&&Math.random()<0.38)born.push([nx,nz]);
+    }
+  }
+  for(const [x,z] of born)igniteTile(x,z,2);
+  for(const [k,f] of [...fires]){f.turns--;if(f.turns<=0)removeFire(k);}
+  checkEnd();
+}
+
 /* ================= ХОДЫ ================= */
-export function startCombat(group){
-  closeDlgHard();
+export function startCombat(group:Unit[]){
+  bus.closeDlgHard.call();
   if(!group.length)return;
   S.combatGroup=group;
   G.combatOn=true;
@@ -36,21 +65,21 @@ export function startCombat(group){
   }
   const list=[...aliveHeroes(),...group.filter(g=>g.alive)];
   for(const u of list)u.init=d(20)+mod(u.dex);
-  G.order=list.sort((a,b)=>b.init-a.init);
+  G.order=list.sort((a,b)=>(b.init||0)-(a.init||0));/* init задан строкой выше */
   G.turnIdx=-1;G.round=1;
   $(UI.round).textContent='Раунд 1';
   $(UI.actionbar).style.display='block';
-  refreshInit();refreshParty();
+  bus.refreshInit.call();bus.refreshParty.call();
   log('Инициатива: '+G.order.map(u=>u.name+' ('+u.init+')').join(', '),'g-sys');
   endTurn();
 }
-export function beginTurn(u){
+export function beginTurn(u:Unit){
   if(!G.combatOn)return;
   G.current=u;G.targeting=null;
   clearMarkers();clearDots();setHint('');
   for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:(x.elite?0xd8b45a:0xa04a3a));/* v1.3: элита — золотое кольцо */
   u.mesh.userData.ring.material.color.setHex(0xd8b45a);
-  refreshInit();
+  bus.refreshInit.call();
   $(UI.turnb).textContent=u.side==='hero'?'Ваш ход: '+u.name:'Ход противника: '+u.name;
   $(UI.turnb).style.color=u.side==='hero'?'#8fd36a':'#e06c55';
   if(fires.has(key(u.x,u.z))){
@@ -76,11 +105,11 @@ export function beginTurn(u){
   $(UI.actionbar).style.display='block';
   if(u.side==='hero'){
     G.phase='player';
-    refreshUI();showReach(u);
+    bus.refreshUI.call();showReach(u);
   }else{
     G.phase='ai';
-    refreshUI();
-    setTimeout(()=>aiTurn(u),550);
+    bus.refreshUI.call();
+    setTimeout(()=>{void bus.aiTurn.call(u);},550);
   }
 }
 export function endTurn(){
@@ -104,9 +133,9 @@ export function endTurn(){
 }
 
 
-export function joinCombat(u){/* v0.8: подкрепление встаёт в очередь инициативы */
+export function joinCombat(u:Unit){/* v0.8: подкрепление встаёт в очередь инициативы */
   u.init=d(20)+mod(u.dex);
   G.order.push(u);
   log(u.name+' вступает в бой (инициатива '+u.init+').','g-enemy');
-  refreshInit();
+  bus.refreshInit.call();
 }

@@ -9,7 +9,7 @@ import { W } from '../constants';
 import { reachNodes } from '../world/grid';
 import type { Unit } from '../types';
 
-const markerPool:any[]=[],dotPool:any[]=[];
+const markerPool:THREE.Mesh[]=[],dotPool:THREE.Mesh[]=[];
 let mi=0,di=0;
 const circGeo=new THREE.CircleGeometry(0.52,20);
 const dotGeo=new THREE.SphereGeometry(0.09,8,8);
@@ -30,7 +30,8 @@ export function addMarker(x:number,z:number,color:number,scale?:number){
   if(mi>=markerPool.length)return;
   const m=markerPool[mi++];
   m.visible=true;m.position.set(W(x),0.05,W(z));
-  m.material.color.setHex(color);m.material.opacity=0.32;
+  (m.material as THREE.MeshBasicMaterial).color.setHex(color);
+  (m.material as THREE.MeshBasicMaterial).opacity=0.32;
   m.scale.setScalar(scale||1);
 }
 export function clearMarkers(){mi=0;for(const m of markerPool)m.visible=false;}
@@ -38,7 +39,7 @@ export function addDot(x:number,z:number,inRange:boolean){
   if(di>=dotPool.length)return;
   const m=dotPool[di++];
   m.visible=true;m.position.set(W(x),0.12,W(z));
-  m.material.color.setHex(inRange?0x8fe0ff:0x3a5560);
+  (m.material as THREE.MeshBasicMaterial).color.setHex(inRange?0x8fe0ff:0x3a5560);
 }
 export function clearDots(){di=0;for(const m of dotPool)m.visible=false;}
 export function showReach(u:Unit|null){

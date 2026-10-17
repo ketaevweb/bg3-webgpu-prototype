@@ -1,0 +1,29 @@
+/* ================= QUEST DATA (Фаза 5 рефакторинга) =================
+   Данные квестов (QUESTS/QUEST_REWARD) выделены из interact/quests.ts.
+   Причина: progression.showEnd читает QUESTS, а quests.questDone зовёт
+   awardXP из progression — данные уезжают в лист, разрывая цикл
+   quests⇄progression (REFACTORING.md §5, разбор циклов Фазы 5).
+   quests.ts реэкспортирует их для совместимости импортов. Формат — v1.3
+   дословно (структура читается gameSnapshot/applyGame, v2 заморожен). */
+import type { Quest } from '../types';
+
+export const QUESTS:Record<string,Quest>={
+  main:{name:'Кости и пепел',state:'active',
+    desc:'Гоблины племени Костей перекрыли торговый тракт. Разгромите их лагерь на севере и убейте вожака.',
+    objs:[{k:'boss',t:'Убить вожака Грата Костолома',done:false}]},
+  prisoner:{name:'Свободу разведчице',state:'hidden',
+    desc:'Западнее гоблинского лагеря в клетке томится Илва — разведчица Долгого Дозора.',
+    objs:[{k:'free',t:'Освободить Илву',done:false}]},
+  crate:{name:'Похищенный товар',state:'hidden',
+    desc:'Гоблины утащили у Дамрока ящик с товаром. Он где-то в их лагере.',
+    objs:[{k:'find',t:'Найти ящик в лагере',done:false},{k:'return',t:'Вернуть ящик Дамроку',done:false}]},
+  crypt:{name:'Сердце крипты',state:'hidden',/* v0.8 */
+    desc:'Мертвецы тракта — не гоблинская работа. Под курганом на северо-востоке открылась крипта, где сидит некромант Вхорил Костепёр и дёргает за ниточки своих костяных кукол.',
+    objs:[{k:'enter',t:'Спуститься в крипту',done:false},{k:'boss',t:'Уничтожить Костепёра',done:false}]},
+};
+export const QUEST_REWARD:Record<string,string>={
+  main:'300 XP, 150 зол.',
+  prisoner:'150 XP, 100 зол., кулон красноречия',
+  crate:'150 XP, 100 зол., вечная скидка',
+  crypt:'300 XP, 150 зол., перстень Костепёра',
+};

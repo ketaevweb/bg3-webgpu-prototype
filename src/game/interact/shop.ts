@@ -1,17 +1,19 @@
-/* ================= SHOP (Фаза 4 рефакторинга) =================
-   Лавка Дамрока, выбор героя, применение предметов. Перенесено дословно. */
+/* ================= SHOP (Фазы 4–5 рефакторинга) =================
+   Лавка Дамрока, выбор героя, применение предметов. Фаза 5: refreshParty —
+   через шину bus; SHOP/цены/применение типизированы (ShopItem).
+   Перенесено дословно. */
 import { $ } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
 import { S } from '../state';
+import { bus } from '../bus';
 import { log } from '../ui/overlays';
-import { refreshParty } from '../ui/party';
 import { refreshTracker } from '../interact/quests';
 import { aliveHeroes } from '../entities/units';
-import type { Unit } from '../types';
+import type { ShopItem, Unit } from '../types';
 
 /* ---- магазин ---- */
-export const SHOP=[
+export const SHOP:ShopItem[]=[
   {n:'Зелье лечения',p:25,d:'Бонусное действие в бою: +2d4+2 HP.',t:'potion'},
   {n:'Огненное масло',p:40,d:'Действие в бою: бросок — 1d6 огня в радиусе 1.5 кл., трава вспыхивает.',t:'oil'},
   {n:'Щит',p:60,d:'+2 КД владельцу.',t:'ac',v:2},
@@ -20,7 +22,7 @@ export const SHOP=[
   {n:'Кольчуга',p:150,d:'Доспех: КД 16 (Торику уже знакома, Мирелле даст КД 14).',t:'armor'},
   {n:'Кулон красноречия',p:100,d:'+1 ХАР владельцу — проверки убеждения легче.',t:'cha',v:1},
 ];
-export const price=it=>S.discount?Math.floor(it.p*0.8):it.p;
+export const price=(it:ShopItem):number=>S.discount?Math.floor(it.p*0.8):it.p;
 export function openShop(){renderShop();$(UI.shop).style.display='block';sfx.dialog();}
 export function closeShop(){$(UI.shop).style.display='none';}
 export function renderShop(){
@@ -37,7 +39,7 @@ export function renderShop(){
     el.appendChild(row);
   }
 }
-export function chooseHero(title,cb){
+export function chooseHero(title:string,cb:(h:Unit)=>void){
   $(UI.choiceTitle).textContent=title;
   const el=$(UI.choiceList);el.innerHTML='';
   for(const h of aliveHeroes()){
@@ -49,14 +51,14 @@ export function chooseHero(title,cb){
   $(UI.choice).style.display='block';
 }
 export function closeChoice(){$(UI.choice).style.display='none';}
-export function applyItem(it,h){
+export function applyItem(it:ShopItem,h:Unit){
   S.gold-=price(it);
   if(it.t==='potion')h.potions++;
   else if(it.t==='oil')h.oil=(h.oil||0)+1;
-  else if(it.t==='ac')h.ac+=it.v;
-  else if(it.t==='weapon')h.weapon={name:it.w.name,dice:it.w.dice,abil:it.w.abil,range:it.w.range};
+  else if(it.t==='ac')h.ac+=it.v||0;
+  else if(it.t==='weapon')h.weapon={name:it.w!.name,dice:it.w!.dice,abil:it.w!.abil,range:it.w!.range};
   else if(it.t==='armor'){h.ac=h.cls==='fighter'?16:14;h.armor='Кольчуга';}
-  else if(it.t==='cha')h.cha+=it.v;
+  else if(it.t==='cha')h.cha+=it.v||0;
   log('Куплено: '+it.n+' → '+h.short+' (−'+price(it)+' зол.).','g-sys');
-  refreshTracker();refreshParty();renderShop();
+  refreshTracker();bus.refreshParty.call();renderShop();
 }

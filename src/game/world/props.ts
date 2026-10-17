@@ -20,7 +20,7 @@ export function seedForest(){
   G.BARREL_POS=[[18,5],[22,6],[24,6]];
   solid.clear();grass.clear();
   for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
-  [[7,19],[21,19],[13,13],[23,11],[9,8]].forEach(([cx,cz])=>{
+  ([[7,19],[21,19],[13,13],[23,11],[9,8]] as [number,number][]).forEach(([cx,cz])=>{
     for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
       const x=cx+dx,z=cz+dz;
       if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
@@ -44,7 +44,7 @@ export function seedCrypt(){
 /* passable/unitAt/barrelAt/cheb/dangerAt → utils.ts и world/grid.ts (Фаза 2) */
 
 /* ================= ПОСТРОЕНИЕ МИРА ================= */
-export function addTree(x,z){
+export function addTree(x:number,z:number){
   solid.add(key(x,z));
   const g=new THREE.Group();
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.3,1.8,7),
@@ -61,7 +61,7 @@ export function addTree(x,z){
   g.scale.setScalar(0.85+srand()*0.5);
   worldGroup.add(g);
 }
-export function addRock(x,z){
+export function addRock(x:number,z:number){
   solid.add(key(x,z));
   const m=new THREE.Mesh(new THREE.DodecahedronGeometry(0.75,0),
     new THREE.MeshStandardMaterial({color:0x6d6d64,roughness:1}));
@@ -70,7 +70,7 @@ export function addRock(x,z){
   m.castShadow=true;m.receiveShadow=true;
   worldGroup.add(m);
 }
-export function addTent(x,z){
+export function addTent(x:number,z:number){
   solid.add(key(x,z));
   const m=new THREE.Mesh(new THREE.ConeGeometry(1.15,1.6,4),
     new THREE.MeshStandardMaterial({color:0x7a5c3f,roughness:1}));
@@ -78,7 +78,7 @@ export function addTent(x,z){
   m.rotation.y=srand()*3;m.castShadow=true;
   worldGroup.add(m);
 }
-export function addCampfire(x,z){
+export function addCampfire(x:number,z:number){
   solid.add(key(x,z));
   const g=new THREE.Group();
   const logM=new THREE.MeshStandardMaterial({color:0x4a3520,roughness:1});
@@ -103,7 +103,7 @@ export function addCampfire(x,z){
   g.position.set(W(x),0,W(z));
   worldGroup.add(g);
 }
-export function addBarrel(x,z,bodyColor){/* v0.8: цвет — лес (дерево) или крипта (урна) */
+export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет — лес (дерево) или крипта (урна) */
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.85,10),
     new THREE.MeshStandardMaterial({color:bodyColor||0x6b3f24,roughness:0.7}));
   body.position.y=0.43;body.castShadow=true;

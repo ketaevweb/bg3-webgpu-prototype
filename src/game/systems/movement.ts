@@ -1,24 +1,24 @@
-/* ================= MOVEMENT (Фаза 4 рефакторинга) =================
+/* ================= MOVEMENT (Фазы 4–5 рефакторинга) =================
    animateMove (с атаками по возможности и огнём) и tryMove игрока.
+   Фаза 5: UI-refresh — через bus; параметры типизированы.
    Перенесено дословно из engine.ts. */
-import { G, fires, busyOn, busyOff } from '../state';
+import { G, fires, GW, busyOn, busyOff } from '../state';
 import { enemiesOf, meleeWeaponOf } from '../entities/units';
 import { cheb, key } from '../utils';
 import { d } from '../rng';
 import { W } from '../constants';
 import { tween, faceTo } from '../fx/tweens';
 import { log, ftextAbove, setHint } from '../ui/overlays';
+import { bus } from '../bus';
 import { doAttack, damageUnit } from './combat';
 import { addStatus } from './statuses';
-import { refreshUI } from '../ui/actionbar';
 import { showReach, clearMarkers, clearDots } from '../ui/markers';
 import { passable, astar } from '../world/grid';
 import * as THREE from 'three/webgpu';
-import { GW } from '../state';
 import type { Unit } from '../types';
 
 /* ================= ПЕРЕМЕЩЕНИЕ ================= */
-export async function animateMove(u,path){
+export async function animateMove(u:Unit,path:{x:number;z:number}[]):Promise<boolean>{
   u.moving=true;
   try{
   for(const step of path){
@@ -57,14 +57,14 @@ export async function animateMove(u,path){
       if(!u.alive)return false;
       if(Math.random()<0.45)addStatus(u,'burn',2);
     }
-    refreshUI();
+    bus.refreshUI.call();
   }
   return u.alive;
   }finally{u.moving=false;}
 }
 
 
-export async function tryMove(h,tile){
+export async function tryMove(h:Unit,tile:{x:number;z:number}){
   if(G.busy||G.phase!=='player')return;
   if(h.moveLeft<1){setHint('Перемещение закончилось — завершите ход.');return;}
   if(!passable(GW,tile.x,tile.z,h)){setHint('Клетка занята.');return;}
@@ -73,5 +73,5 @@ export async function tryMove(h,tile){
   busyOn();clearMarkers();clearDots();setHint('');
   await animateMove(h,path);
   busyOff();
-  refreshUI();showReach(h);
+  bus.refreshUI.call();showReach(h);
 }

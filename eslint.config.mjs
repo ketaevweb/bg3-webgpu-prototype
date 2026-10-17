@@ -44,6 +44,15 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
+  /* Фаза 5 рефакторинга: строгий режим для игровых модулей (REFACTORING.md §6):
+     без any (предупреждение), без неиспользуемых переменных, prefer-const */
+  files: ["src/game/**/*.{ts,tsx}"],
+  rules: {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": ["error", {"argsIgnorePattern": "^_", "varsIgnorePattern": "^_"}],
+    "prefer-const": "error",
+  },
+}, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
 }];
 

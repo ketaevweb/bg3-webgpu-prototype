@@ -70,6 +70,8 @@ export interface Unit{
   init?:number;inCombat?:boolean;
   /* представление */
   mesh:THREE.Object3D;rig:THREE.Object3D;phase:number;
+  /* транзитный флаг анимации перемещения (animateMove) */
+  moving?:boolean;
 }
 
 export type Barrel=Unit&{isBarrel:true};
@@ -135,3 +137,76 @@ export interface PickState{
   ent:Unit|null;
   inter:Interact|null;
 }
+
+/* ================= ФАЗА 5: типы разрыва циклов и строгого режима ================= */
+
+/* сетка мира — контекст чистых функций world/grid.ts (переехал из grid.ts:
+   types.ts — единственный источник доменных типов, state.ts больше не
+   импортирует grid — цикл state⇄grid разорван) */
+export interface GridWorld{
+  solid:Set<string>;         /* непроходимая декорация */
+  units:Unit[];              /* живые сущности (вкл. фигурки-преграды) */
+  barrels:Unit[];            /* бочки/урны (Unit с isBarrel:true) */
+  fires:Map<string,FireTile>;/* горящие тайлы */
+}
+
+/* режим прицеливания (G.targeting) */
+export type TargetType='attack'|'bolt'|'sneak'|'smite'|'fireball'|'oil'|'bless'|'cure'|'heal';
+export interface TargetingState{type:TargetType;}
+
+/* опция и узел диалога (DLGS) */
+export interface DlgOpt{
+  t:string;
+  show?:()=>boolean;
+  req?:{skill:string;dc:number};
+  ok?:string;fail?:string;
+  end?:boolean;fn?:()=>void;
+}
+export interface DlgNode{name:string;text:string;opts?:DlgOpt[];}
+export type DlgFn=(id:string)=>DlgNode|null|undefined;
+
+/* действие панели боя (ACTIONS) */
+export interface ActionDef{
+  label:string;sub?:string;cls?:string;
+  only?:(h:Unit)=>boolean;
+  enabled:(h:Unit)=>boolean;
+  run:(h:Unit)=>void;
+}
+
+/* товар лавки Дамрока (SHOP) */
+export interface ShopItem{
+  n:string;p:number;d:string;
+  t:'potion'|'oil'|'ac'|'weapon'|'armor'|'cha';
+  v?:number;w?:Weapon;
+}
+
+/* план ИИ (planGoblin/planNecro → aiTurn) */
+export type AIPlan=
+  {type:'phase2'}|{type:'nova'}|{type:'dash'}|{type:'potion'}|
+  {type:'heal';target:Unit}|{type:'attack';target:Unit}|
+  {type:'move';path:{x:number;z:number}[]}|{type:'dis';path:{x:number;z:number}[]};
+
+/* реликвия элиты (rollLoot) */
+export interface Relic{n:string;apply:(h:Unit)=>string;}
+
+/* параметры взрыва (explode) */
+export interface ExplodeOpts{dice?:number[];radius?:number;}
+
+/* отладочный хук __bg3 (E2E-проверки) */
+export interface Bg3Debug{
+  units:Unit[];S:GameState;QUESTS:Record<string,Quest>;
+  switchMap:(id:MapId)=>Promise<void>;
+  startCombat:(group:Unit[])=>void;
+  questDone:(id:string)=>void;
+  freeIlva:()=>Promise<void>;
+  joinKaya:(x?:number,z?:number)=>unknown;
+  gameSnapshot:()=>SaveData;
+  doSave:(i:number)=>void;doLoad:(i:number)=>void;
+  gfx:Record<string,unknown>;
+  applyGfx:()=>void;
+  openSaveMenu:(fromEnd:boolean)=>void;
+  toggleGfx:()=>void;
+  rollLoot:(t:Unit)=>void;
+  LOOT:Record<string,{readonly gold:readonly [number,number];readonly potion:number;readonly oil:number}>;
+}
+declare global{interface Window{__bg3?:Bg3Debug;}}

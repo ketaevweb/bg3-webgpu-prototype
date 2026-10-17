@@ -34,7 +34,7 @@ export async function lunge(att:{mesh:THREE.Object3D},def:{mesh:THREE.Object3D})
   await tween(0.13,k=>{const s=k*k*(3-2*k);att.mesh.position.copy(back).addScaledVector(dir,L*(1-s));});
   att.mesh.position.copy(back);
 }
-const boomPool:any[]=[];
+const boomPool:THREE.Mesh[]=[];
 export function boomFX(x:number,z:number,r:number){
   let m=boomPool.find(b=>!b.visible);
   if(!m){
@@ -42,8 +42,11 @@ export function boomFX(x:number,z:number,r:number){
       new THREE.MeshBasicMaterial({color:0xffa040,transparent:true,opacity:0.9,depthWrite:false}));
     scene.add(m);boomPool.push(m);
   }
-  m.visible=true;m.position.set(x,0.4,z);m.scale.setScalar(0.3);m.material.opacity=0.9;
-  tween(0.4,k=>{m.scale.setScalar(0.3+r*1.05*k);m.material.opacity=0.9*(1-k);}).then(()=>{m.visible=false;});
+  m.visible=true;m.position.set(x,0.4,z);m.scale.setScalar(0.3);
+  const mm=m.material as THREE.MeshBasicMaterial;
+  mm.opacity=0.9;
+  const mesh=m;/* const-копия для замыкания (стандарт TS: без non-null `!`) */
+  tween(0.4,k=>{mesh.scale.setScalar(0.3+r*1.05*k);mm.opacity=0.9*(1-k);}).then(()=>{mesh.visible=false;});
   const flash=new THREE.PointLight(0xff9040,60,14,2);
   flash.position.set(x,1.5,z);scene.add(flash);
   tween(0.35,k=>{flash.intensity=60*(1-k);}).then(()=>scene.remove(flash));
