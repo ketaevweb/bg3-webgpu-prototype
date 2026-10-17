@@ -15,6 +15,7 @@ import { useUi, uiSet } from '../ui/store';
 import { log } from '../ui/overlays';
 import { gameSnapshot, applyGame } from './snapshot';
 import { cloudPut, cloudGet } from './cloud';
+import { serverPut, serverGet } from './server';/* v1.5: серверные скрижали */
 import type { SaveData } from '../types';
 
 /* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
@@ -47,6 +48,12 @@ export function doSave(i:number){
   void cloudPut(i,sv).then(ok=>{
     if(ok)log('Зеркало сейва — в облачной скрижали (IndexedDB).','g-sys');
     else log('Облачная скрижаль недоступна (IndexedDB) — сейв остался только в этом браузере.','g-sys');
+    renderSaves();
+  });
+  /* v1.5: асинхронное зеркало в серверную скрижаль (кампания переживает смену машины) */
+  void serverPut(i,sv).then(ok=>{
+    if(ok)log('Зеркало сейва — в серверной скрижали.','g-sys');
+    else log('Серверная скрижаль недоступна — сейв остался только на этой машине.','g-sys');
     renderSaves();
   });
   renderSaves();
@@ -112,12 +119,33 @@ export async function cloudPush(i:number):Promise<void>{
   log(ok?'Слот '+i+' отправлен в облачную скрижаль.':'Облачная скрижаль недоступна (IndexedDB).',ok?'g-sys':'g-enemy');
   sfx.ui();renderSaves();
 }
-/* мета облачных слотов подтягивается асинхронно — дописывается в уже
+/* ---- v1.5: серверные скрижали (зеркало слотов на сервере) ---- */
+export async function serverPull(i:number):Promise<void>{
+  const sv=await serverGet(i);
+  if(!sv){log('Серверная скрижаль '+i+' пуста — сначала отправьте туда сейв.','g-enemy');sfx.ui();return;}
+  try{localStorage.setItem(slotKey(i),JSON.stringify(sv));}
+  catch{log('Не удалось восстановить — хранилище браузера недоступно.','g-enemy');return;}
+  log('Серверный сейв восстановлен в слот '+i+': '+slotMeta(sv),'g-heal');sfx.ui();renderSaves();
+}
+export async function serverPush(i:number):Promise<void>{
+  const sv=readSlot(i);
+  if(!sv){log('Слот '+i+' пуст — нечего отправлять на сервер.','g-enemy');sfx.ui();return;}
+  const ok=await serverPut(i,sv);
+  log(ok?'Слот '+i+' отправлен в серверную скрижаль.':'Сервер недоступен — скрижаль не записана.',ok?'g-sys':'g-enemy');
+  sfx.ui();renderSaves();
+}
+/* мета облачных/серверных слотов подтягивается асинхронно — дописывается в уже
    отрисованные ряды (uiSet на каждый слот, без перезаписи колбэков) */
 async function refreshCloudMeta(){
   for(let i=1;i<=SLOT_N;i++){
     const sv=await cloudGet(i);
     uiSet(s=>({savesSlots:s.savesSlots.map(r=>r.i===i?{...r,cloudHas:!!sv,cloudWhen:sv?new Date(sv.when).toLocaleString('ru-RU'):null}:r)}));
+  }
+}
+async function refreshServerMeta(){/* v1.5 */
+  for(let i=1;i<=SLOT_N;i++){
+    const sv=await serverGet(i);
+    uiSet(s=>({savesSlots:s.savesSlots.map(r=>r.i===i?{...r,serverHas:!!sv,serverWhen:sv?new Date(sv.when).toLocaleString('ru-RU'):null}:r)}));
   }
 }
 
@@ -127,7 +155,8 @@ export function renderSaves(){
   const cur='Текущая игра: '+MAP_NAME[G.mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
   const slots:{i:number;has:boolean;meta:string;sub:string;
     onSave:()=>void;onLoad:()=>void;onExport:()=>void;onImport:()=>void;onDelete:()=>void;
-    cloudHas:boolean;cloudWhen:string|null;onCloudPull:()=>void;onCloudPush:()=>void}[]=[];
+    cloudHas:boolean;cloudWhen:string|null;onCloudPull:()=>void;onCloudPush:()=>void;
+    serverHas:boolean;serverWhen:string|null;onServerPull:()=>void;onServerPush:()=>void}[]=[];
   for(let i=1;i<=SLOT_N;i++){
     const sv=readSlot(i);
     slots.push({
@@ -142,10 +171,14 @@ export function renderSaves(){
       cloudHas:false,cloudWhen:null,
       onCloudPull:()=>{void cloudPull(i);},
       onCloudPush:()=>{void cloudPush(i);},
+      serverHas:false,serverWhen:null,
+      onServerPull:()=>{void serverPull(i);},
+      onServerPush:()=>{void serverPush(i);},
     });
   }
   uiSet({savesCur:cur,savesSlots:slots});
   void refreshCloudMeta();/* v1.4: облачные меты — асинхронно поверх рядов */
+  void refreshServerMeta();/* v1.5: серверные меты — асинхронно поверх рядов */
 }
 export function openSaveMenu(fromEnd:boolean){
   savesFromEnd=!!fromEnd;

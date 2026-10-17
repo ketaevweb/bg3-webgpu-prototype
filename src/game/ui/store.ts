@@ -44,6 +44,8 @@ export interface SlotRowView{
   onSave:()=>void;onLoad:()=>void;onExport:()=>void;onImport:()=>void;onDelete:()=>void;
   /* v1.4: облачная скрижаль (IndexedDB-зеркало слота) */
   cloudHas:boolean;cloudWhen:string|null;onCloudPull:()=>void;onCloudPush:()=>void;
+  /* v1.5: серверная скрижаль (зеркало слота на сервере /api/tablets) */
+  serverHas:boolean;serverWhen:string|null;onServerPull:()=>void;onServerPush:()=>void;
 }
 /* v1.4: карточка обучения («Наставник») — продвигается реальными действиями игрока */
 export interface TutView{title:string;text:string;i:number;n:number;onSkip:()=>void}

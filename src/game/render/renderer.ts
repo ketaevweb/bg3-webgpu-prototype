@@ -49,12 +49,13 @@ export function initRenderer(){
   $(UI.scene).appendChild(renderer.domElement);
 }
 
-/* v0.8: атмосфера и свет — параметризованы по карте */
-export function applyAtmosphere(m:'forest'|'crypt'){
+/* v0.8: атмосфера и свет — параметризованы по карте; v1.5: +болота */
+export function applyAtmosphere(m:'forest'|'crypt'|'swamp'){
   if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
+  else if(m==='swamp'){scene.background=new THREE.Color(0x0e1410);scene.fog=new THREE.FogExp2(0x0e1410,0.019);}
   else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
 }
-export function applyLighting(m:'forest'|'crypt'){
+export function applyLighting(m:'forest'|'crypt'|'swamp'){
   if(!G.hemiLight||!G.sunLight){
     const hemi=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
     const sun=new THREE.DirectionalLight(0xffeecf,2.4);
@@ -70,6 +71,9 @@ export function applyLighting(m:'forest'|'crypt'){
   if(m==='crypt'){
     hemi.color.setHex(0x7c8ca4);hemi.groundColor.setHex(0x1a1826);hemi.intensity=0.68;
     sun.color.setHex(0x9fb4d8);sun.intensity=1.05;
+  }else if(m==='swamp'){/* v1.5: мертвенно-зелёные сумерки */
+    hemi.color.setHex(0x9ab88a);hemi.groundColor.setHex(0x1a2416);hemi.intensity=0.72;
+    sun.color.setHex(0xcfe0a8);sun.intensity=1.5;
   }else{
     hemi.color.setHex(0xbcd8e8);hemi.groundColor.setHex(0x2a3325);hemi.intensity=0.85;
     sun.color.setHex(0xffeecf);sun.intensity=2.4;

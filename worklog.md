@@ -204,3 +204,26 @@ Stage Summary:
 - v1.4 «Наставник дозора» выпущен: обучение на реальных действиях (7 шагов, bus.tutEvent, LS-прогресс), облачные скрижали (IndexedDB-зеркало, pull/push, метки в панели), багфикс ИИ-сближения; формат сейва v2 и баланс не изменены
 - Первый фича-релиз на пост-рефакторинговой архитектуре: новая система = 2 листа (tutorial 79, cloud 55) + слот шины + 6 точек вызова — god-файл не вырос (301 строка)
 - Следующий шаг: v1.5 — третья карта (болота культистов) и/или серверные скрижали (API-роут)
+
+---
+Task ID: 11
+Agent: main (Z.ai)
+Task: v1.5 «Болота культистов» — третья карта + пятый класс (друид Ольха) + серверные скрижали; гейты, E2E, tag+push
+
+Work Log:
+- Проверка состояния: конвейер рефакторинга p0–p6 завершён ранее, v1.4 выпущена (tag v1.4); дорожная карта README прямо задаёт состав v1.5: третья карта, серверные скрижали, новый класс
+- Карта «болота»: types.ts (+swamp в MapId, флаги S, SaveFlags opt, Unit.swampBoss, TargetType spark/spore, Bg3Debug+), state.ts (SWAMP: MIRE/REEDS/IDOL/OLKHA/BOSS/ALTAR/EXIT/ENTER/TRAIL, MAP_NAME.swamp, resetState), renderer.ts (атмосфера/свет «мертвенно-зелёные сумерки»), props.ts (seedSwamp, addDeadTree, лужи+камыш в buildWorld, «Бочка с гниловаром»), interact/swamp.ts (НОВЫЙ модуль: buildSwampTrail/enterSwamp с гейтом «крипта зачищена», buildSwampScenery — идол/цепи Ольхи/алтарь/гать, joinOlkha/dismissOlkhaScene/ensureOlkha, startSwampQuest), maps.ts (ветка swamp в buildMap, точки входа по карте, buildSwampTrail в лесу), roster.ts (makeDrowned «Утопленник» 14hp, makeUlva 54hp bossBrain+swampBoss, makeOlkha druid, CULT.deep «Культист Глубин», spawnEnemies swamp: 7 юнитов), ai.ts (фаза 2 по фабрике босса: Ульва поднимает утопленников, баннер «ТРЯСИНА ПРОСЫПАЕТСЯ»), combat.ts die() (swampBoss → S.swampDone + questDone), loot.ts (isBoss+swampBoss), explore.ts (триггер босса болот в checkTriggers), questData/quests (квест «Шёпот глубин», 350XP/200зол/жемчуг +1 МДР), dialog.ts (DLGS.olkha/swampboss + опция Дамрока), snapshot.ts (флаги swampDone/olkhaJoined, mapId swamp, ensureOlkha при загрузке)
+- Друид Ольха: constants (HERO_TINT.druid, RANGE_SPORE), abilities.castSpores (1d6+МДР яд R2, только по врагам, projMesh+зелёный burst), targeting (SPARK 2d6+МДР дальн.7, ветки spark/spore, маркеры/хинты/тултипы), actionbar (2 кнопки dru), progression (уровни друида = жрица), party.showSheet (блок друида)
+- Серверные скрижали: prisma/model Tablet (slot Int @id, data String, when BigInt — Date.now не влезает в Int, всплыло на E2E), db:push + generate; src/app/api/tablets/route.ts (GET список/по слоту, PUT upsert c BigInt, DELETE, валидация slot 1..9, runtime nodejs); save/server.ts (НОВЫЙ, no-throw fetch-клиент); slots.ts (doSave зеркалит на сервер, serverPush/serverPull, refreshServerMeta в renderSaves); store SlotRowView +4 поля; menus.tsx (метка «⇅ на сервере», кнопки «На сервер»/«С сервера»); __bg3 += serverGet/serverPut/serverPull
+- engine.ts: boot-лог v1.5, __bg3 += joinOlkha/aim/fire (E2E-прицеливание: enterTarget+resolveTargetClick c подстановкой pick)
+- layout.tsx: title/description v1.5
+- README: шапка v1.5, структура (+swamp.ts, server.ts, api/tablets), механики v1.5, дорожная карта (v1.5 зачёркнут, v1.6: перевал великанов/снаряжение/Mixamo-атаки), технологии (+Prisma/SQLite)
+- Гейты статические: tsc 0; ESLint src 0/0 (осталась пара require-ошибок в scripts/cycles*.js — вне src, исторически); node scripts/cycles.js → NO CYCLES; модули ≤400 (макс explore.ts 387)
+- E2E agent-browser 14/14: boot v1.5 WebGL2+bloom без ошибок; болота: гарнизон 7 (Ульва 54/КД15, культисты Глубин ×2, ученик, утопленники ×3), квест стартует, objective enter; Ольха: join → 3 героя, ячейки 2/2, кнопки в React-HUD; Разряд молнии: 16 vs КД12, урон 13 (2d6+МДР), ячейка −1; Облако спор: 7 яда, килл+лут+70XP; Ульва: keep-dist, фаза 2 (+2 утопленника), Ученик-целитель латал её могильной песнью (работает и на болотном боссе); смерть Ульвы от огненного шара: questDone('swamp'), +350XP/+200зол, «Болотный жемчуг» → Мирелла МДР+1, уровни 3; ПОБЕДА после полной зачистки; doSave(1) на болотах → localStorage+IndexedDB+сервер (serverGet: mapName «Болота культистов», flags olkhaJoined/swampDone, heroes fighter,wizard,druid); doLoad(1) → карта болота 1:1, ensureOlkha восстановил друида, «ИГРА ЗАГРУЖЕНА»; serverPull: слот очищен → восстановлен с сервера; curl PUT/GET/DELETE /api/tablets OK; раунд-трип лес↔крипта↔болота, убитая Ульва не респаунится; двойной ремоут чистый (1 canvas, 0 ошибок)
+- Наблюдения E2E: триггер близости босса честно срабатывает и на телепортированную Ольху (диалог открывается повторно, пока герой рядом — не баг); doSave в бою корректно отклонён гардом; мёртвые герои пишутся в сейв с hp 0 → восстановление на 1 hp (задуманное поведение v1.1 «приходит в себя»); для нового Prisma Client потребовался рестарт dev-сервера
+
+Stage Summary:
+- v1.5 «Болота культистов» готова: 3 фичи по дорожной карте — третья карта (болота+Ульва+утопленники), пятый класс (друид Ольха: Разряд молнии/Облако спор), серверные скрижали (Prisma/SQLite + /api/tablets + панель)
+- Сейв v2 сохранён совместимым (новые флаги опциональные); сцена брендинга: заголовок/логи/README/layout на v1.5
+- Гейты: tsc 0, ESLint src 0/0, NO CYCLES, ≤400, E2E 14/14
+- Далее: коммит + tag v1.5 + push (token-процесс) — см. следующую запись

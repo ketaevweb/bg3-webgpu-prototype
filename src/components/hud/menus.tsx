@@ -54,6 +54,7 @@ export function SavesPanel(){
             <div className="smeta">Слот {sl.i}{sl.has?'':' — пуст'}</div>
             <div className="ssub">{sl.sub}</div>
             {sl.cloudHas&&<div className="scloud">☁ в облаке: {sl.cloudWhen}</div>}
+            {sl.serverHas&&<div className="scloud">⇅ на сервере: {sl.serverWhen}</div>}
             <div className="sbtns">
               <button onClick={sl.onSave}>Сохранить</button>
               <button disabled={!sl.has} onClick={sl.onLoad}>Загрузить</button>
@@ -61,6 +62,8 @@ export function SavesPanel(){
               <button onClick={sl.onImport}>Импорт JSON</button>
               <button disabled={!sl.has} title="Дублировать в облачную скрижаль (IndexedDB)" onClick={sl.onCloudPush}>В облако</button>
               <button disabled={!sl.cloudHas} title="Восстановить слот из облачной скрижали" onClick={sl.onCloudPull}>Из облака</button>
+              <button disabled={!sl.has} title="Дублировать в серверную скрижаль (переживёт смену машины)" onClick={sl.onServerPush}>На сервер</button>
+              <button disabled={!sl.serverHas} title="Восстановить слот из серверной скрижали" onClick={sl.onServerPull}>С сервера</button>
               <button disabled={!sl.has} className="danger" onClick={sl.onDelete}>Удалить</button>
             </div>
           </div>

@@ -9,7 +9,7 @@ import type * as THREE from 'three/webgpu';
 /* --- примитивы --- */
 export type Side='hero'|'goblin';
 export type Abil='str'|'dex'|'con'|'int'|'wis'|'cha';
-export type MapId='forest'|'crypt';
+export type MapId='forest'|'crypt'|'swamp';/* v1.5: +болота культистов */
 export type StatusType='burn'|'poison'|'bless'|'fear'|'dodge'|'faith';
 export type QuestState='hidden'|'active'|'done';
 
@@ -62,6 +62,7 @@ export interface Unit{
   keepDist:boolean;elite?:boolean;caster?:boolean;healer?:boolean;
   summoned?:boolean;summoner?:Unit|null;
   bossBrain?:boolean;isBoss?:boolean;mainBoss?:boolean;cryptBoss?:boolean;
+  swampBoss?:boolean;/* v1.5: Ульва, Матерь Топей */
   phase2?:boolean;fearImmune?:boolean;isBarrel?:true;
   pacified?:boolean;/* v0.6: запуган — реакция атаки недоступна */
   /* кэш DOM-полоски над головой (updateOverlays) */
@@ -98,10 +99,11 @@ export interface GameState{
   patrolDone:boolean;campDone:boolean;cageSeen:boolean;knowsBoss:boolean;
   hasCrate:boolean;ilvaFreed:boolean;mainShown:boolean;
   chestLooted:boolean;necroSlain:boolean;kayaJoined:boolean;
-  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];
+  swampDone:boolean;olkhaJoined:boolean;/* v1.5 */
+  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];
   dlgNpc:string|null;
   cageMesh:THREE.Object3D|null;ilvaMesh:THREE.Object3D|null;crateMesh:THREE.Object3D|null;
-  kayaMesh:THREE.Object3D|null;
+  kayaMesh:THREE.Object3D|null;olkhaMesh:THREE.Object3D|null;/* v1.5 */
   barrelsUsed:Set<string>;
 }
 
@@ -119,6 +121,8 @@ export interface SaveFlags{
   patrolDone:boolean;campDone:boolean;cageSeen:boolean;knowsBoss:boolean;
   hasCrate:boolean;ilvaFreed:boolean;chestLooted:boolean;necroSlain:boolean;
   kayaJoined:boolean;
+  /* v1.5: новые флаги — опциональные, сейв v2 остаётся совместимым */
+  swampDone?:boolean;olkhaJoined?:boolean;
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -151,7 +155,7 @@ export interface GridWorld{
 }
 
 /* режим прицеливания (G.targeting) */
-export type TargetType='attack'|'bolt'|'sneak'|'smite'|'fireball'|'oil'|'bless'|'cure'|'heal';
+export type TargetType='attack'|'bolt'|'sneak'|'smite'|'fireball'|'oil'|'bless'|'cure'|'heal'|'spark'|'spore';/* v1.5: +разряд молнии, облако спор */
 export interface TargetingState{type:TargetType;}
 
 /* опция и узел диалога (DLGS) */
@@ -214,5 +218,12 @@ export interface Bg3Debug{
   cloudGet:(i:number)=>Promise<SaveData|null>;
   cloudPut:(i:number,sv:SaveData)=>Promise<boolean>;
   cloudPull:(i:number)=>Promise<void>;
+  /* v1.5: болота + друид + серверные скрижали + E2E-прицеливание */
+  joinOlkha:(x?:number,z?:number)=>unknown;
+  serverGet:(i:number)=>Promise<SaveData|null>;
+  serverPut:(i:number,sv:SaveData)=>Promise<boolean>;
+  serverPull:(i:number)=>Promise<void>;
+  aim:(t:string)=>void;
+  fire:(x:number,z:number)=>Promise<void>;
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

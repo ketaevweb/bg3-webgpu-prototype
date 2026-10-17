@@ -23,9 +23,10 @@ import { startCombat } from './systems/turns';
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
 import { openDlg } from './interact/dialog';
 import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
+import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
 import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/markers';
-import { cancelTargeting, resolveTargetClick, showTipFor } from './ui/targeting';
+import { cancelTargeting, enterTarget, resolveTargetClick, showTipFor } from './ui/targeting';
 import { tryMove } from './systems/movement';
 import { gameSnapshot } from './save/snapshot';
 import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu } from './save/slots';
@@ -33,7 +34,8 @@ import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/s
 import { closeShop, closeChoice } from './interact/shop';
 import { initTutorial, tutState } from './ui/tutorial';/* v1.4: наставник */
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
-import { cloudPull } from './save/slots';
+import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
+import { cloudPull, serverPull } from './save/slots';
 /* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
 import './ui/party';/* refreshParty/refreshInit/refreshBossBar/openExploreUI */
 import './ui/actionbar';/* refreshUI */
@@ -264,26 +266,34 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.4 «Наставник дозора»: обучение по шагам и облачные скрижали — сейвы дублируются в IndexedDB.','g-sys');
+  log('BG3 Web-прототип v1.5 «Болота культистов»: третья карта, друид Ольха и серверные скрижали.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
-  log('В лагере Костей орудует гоблин-ветеран, а в крипте ждут культисты, ученик-целитель и скелет-рыцарь. Элита носит реликвии!','g-sys');
+  log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, а на восточных болотах поёт жрица Глубин. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
-  log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы • G — графика • ПКМ/Esc — отмена.','g-sys');
-  log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
+  log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы (теперь и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
+  log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), а после неё — утопленный тракт на болота (восток).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.4 boot complete');
+  console.log('[bg3] v1.5 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
 })();
-/* v0.8+v1.1+v1.2+v1.4: отладочный хук (E2E-проверки в консоли браузера) — тип Bg3Debug */
+/* v0.8+v1.1+v1.2+v1.4+v1.5: отладочный хук (E2E-проверки в консоли браузера) — тип Bg3Debug */
 window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   freeIlva:()=>freeIlva(),joinKaya:(x,z)=>joinKaya(x??KAYA_SPOT[0]+1,z??KAYA_SPOT[1]),
+  joinOlkha:(x,z)=>joinOlkha(x??15,z??8),/* v1.5: друид для E2E */
   gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx,
   rollLoot,LOOT,/* v1.3: +лут-таблицы для E2E */
   moveParty:(x,z)=>{void moveParty({x,z});},/* v1.4: шаг обучения «Ход отряда» */
   tut:()=>tutState(),/* v1.4: инспектор наставника (только чтение) */
-  cloudGet,cloudPut,cloudPull};/* v1.4: облачные скрижали для E2E */
+  cloudGet,cloudPut,cloudPull,/* v1.4 */
+  serverGet,serverPut,serverPull,/* v1.5: серверные скрижали для E2E */
+  aim:(t)=>enterTarget(t as Parameters<typeof enterTarget>[0]),/* v1.5: E2E-прицеливание */
+  fire:async(x,z)=>{/* v1.5: E2E-выстрел — подложить pick и применить */
+    pick.tile={x,z};
+    pick.ent=units.find(u=>u.alive&&!u.isBarrel&&u.x===x&&u.z===z)||null;
+    await resolveTargetClick();
+  }};
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);

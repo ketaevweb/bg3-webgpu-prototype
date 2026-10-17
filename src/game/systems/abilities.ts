@@ -4,7 +4,7 @@
    без цикла), checkEnd/igniteTile/addStatus уезжают вместе с ними;
    UI-refresh — через bus. Импорты однонаправленные. */
 import * as THREE from 'three/webgpu';
-import { cheb } from '../utils';
+import { cheb, mod } from '../utils';
 import { roll } from '../rng';
 import { W } from '../constants';
 import { tween, projMesh, shake } from '../fx/tweens';
@@ -14,6 +14,7 @@ import { log, ftextAbove } from '../ui/overlays';
 import { units } from '../state';
 import { bus } from '../bus';
 import { damageUnit, explode } from './combat';
+import { addStatus } from './statuses';
 import { showReach } from '../ui/markers';
 import type { Unit } from '../types';
 
@@ -45,6 +46,29 @@ export async function radiantNova(h:Unit):Promise<void>{/* v1.2: гнев рас
     ftextAbove(e,'−'+dmg,'#ffe08a');
     log('Гнев рассвета бьёт '+e.name+': '+dmg+' излучения.','g-hero');
     damageUnit(e,dmg,h);
+  }
+  bus.refreshUI.call();showReach(h);
+}
+export async function castSpores(h:Unit,tx:number,tz:number):Promise<void>{/* v1.5: облако спор Ольхи */
+  log(h.name+' выпускает ОБЛАКО СПОР!','g-hero');
+  sfx.poison();
+  const from=h.mesh.position.clone().add(new THREE.Vector3(0,1.2,0));
+  const to=new THREE.Vector3(W(tx),0.5,W(tz));
+  projMesh.visible=true;
+  await tween(0.3,k=>{
+    projMesh.position.lerpVectors(from,to,k);
+    projMesh.position.y=0.7+Math.sin(k*Math.PI)*1.6;
+  });
+  projMesh.visible=false;
+  fx.burst(W(tx),0.5,W(tz),{count:36,color:0x8fd36a,speed:3.2,life:0.9,gravity:0.6,spread:0.9});
+  glows.flash(W(tx),W(tz),2.6,0x8fd36a);
+  const dmg=roll(1,6)+mod(h.wis);
+  log('Споры жгут лёгкие: '+dmg+' яда в радиусе 2 кл. (свои не страдают).','g-hero');
+  for(const e of units)if(e.alive&&!e.isBarrel&&e.side!=='hero'&&Math.hypot(e.x-tx,e.z-tz)<=2.35){
+    ftextAbove(e,'−'+dmg,'#8fd36a');
+    log('Облако спор бьёт '+e.name+': '+dmg+' яда.','g-hero');
+    damageUnit(e,dmg,h);
+    if(e.alive)addStatus(e,'poison',2);
   }
   bus.refreshUI.call();showReach(h);
 }

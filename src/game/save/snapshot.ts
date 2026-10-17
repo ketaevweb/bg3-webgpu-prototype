@@ -16,6 +16,7 @@ import { closeGfx } from './settings';
 import { cancelTargeting } from '../ui/targeting';
 import { teardownWorld, buildMap } from '../world/maps';
 import { ensureCompanions, refreshHintExplore } from '../interact/explore';
+import { ensureOlkha } from '../interact/swamp';/* v1.5: восстановление друида по флагу сейва */
 import { bigBanner, log } from '../ui/overlays';
 import type { SaveData } from '../types';
 
@@ -28,6 +29,7 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       patrolDone:!!S.patrolDone,campDone:!!S.campDone,cageSeen:!!S.cageSeen,knowsBoss:!!S.knowsBoss,
       hasCrate:!!S.hasCrate,ilvaFreed:!!S.ilvaFreed,chestLooted:!!S.chestLooted,necroSlain:!!S.necroSlain,
       kayaJoined:!!S.kayaJoined,/* v1.2 */
+      swampDone:!!S.swampDone,olkhaJoined:!!S.olkhaJoined,/* v1.5: опциональные поля — v2 совместим */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -53,6 +55,7 @@ export function applyGame(sv:SaveData|null){
   S.patrolDone=!!fl.patrolDone;S.campDone=!!fl.campDone;S.cageSeen=!!fl.cageSeen;S.knowsBoss=!!fl.knowsBoss;
   S.hasCrate=!!fl.hasCrate;S.ilvaFreed=!!fl.ilvaFreed;S.chestLooted=!!fl.chestLooted;S.necroSlain=!!fl.necroSlain;
   S.kayaJoined=!!fl.kayaJoined;/* v1.2 */
+  S.swampDone=!!fl.swampDone;S.olkhaJoined=!!fl.olkhaJoined;/* v1.5: в старых сейвах полей нет — дефолт false */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
     const svq=sv.quests&&sv.quests[id];
@@ -63,8 +66,9 @@ export function applyGame(sv:SaveData|null){
   }
   cancelTargeting();
   teardownWorld();
-  buildMap(sv.mapId==='crypt'?'crypt':'forest',null);
+  buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='crypt'?'crypt':'forest'),null);/* v1.5: +болота */
   ensureCompanions();/* v1.2: восстановить Илву и Каю по флагам сейва */
+  ensureOlkha();/* v1.5: восстановить Ольху по флагу сейва */
   for(const hd of sv.heroes){
     const h=units.find(u=>u.side==='hero'&&u.cls===hd.cls);
     if(!h)continue;

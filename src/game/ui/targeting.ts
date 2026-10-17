@@ -5,7 +5,7 @@
    abilities). Перенесено дословно из engine.ts. */
 import { cheb, mod } from '../utils';
 import { roll } from '../rng';
-import { GRID, RANGE_FB, RANGE_OIL, STATUS } from '../constants';
+import { GRID, RANGE_FB, RANGE_OIL, RANGE_SPORE, STATUS } from '../constants';
 import { G, units, barrels, pick, GW, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { addMarker, clearMarkers, clearDots, showReach } from '../ui/markers';
@@ -14,13 +14,14 @@ import { uiSet } from './store';
 import { passable } from '../world/grid';
 import { doAttack, hitChance, avgDamage, explode } from '../systems/combat';
 import { healUnit } from '../systems/vitals';
-import { castFireball } from '../systems/abilities';
+import { castFireball, castSpores } from '../systems/abilities';
 import { addStatus } from '../systems/statuses';
 import { aliveHeroes } from '../entities/units';
 import type { Interact, TargetType, Unit, Weapon } from '../types';
 
 export const BOLT:Weapon={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
 export const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
+export const SPARK:Weapon={name:'Разряд молнии',dice:[2,6],abil:'wis',range:7,smite:true};/* v1.5: друид */
 
 
 
@@ -35,14 +36,15 @@ export function enterTarget(type:TargetType){
   G.targeting={type};
   if(type!=='attack')bus.tutEvent.call('spell');/* v1.4: шаг обучения «Способность» */
   clearMarkers();clearDots();
-  if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'){/* v1.2: +подлый удар и карание */
-    const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:9);
+  if(type==='attack'||type==='bolt'||type==='sneak'||type==='smite'||type==='spark'){/* v1.2: +подлый удар и карание; v1.5: +разряд молнии */
+    const range=(type==='attack'||type==='sneak')?h.weapon.range:(type==='smite'?6:(type==='spark'?7:9));
     let hasTgt=false;
     const cands=[...units.filter(x=>x.side==='goblin'&&x.alive),...barrels.filter(b=>b.alive)];
     for(const e of cands)if(cheb(h,e)<=range){addMarker(e.x,e.z,0xe06c55,0.62);hasTgt=true;}
     const hintTxt=type==='attack'?'Выберите цель для атаки'
       :type==='sneak'?'Подлый удар: выберите цель (фланг — +1d6)'
       :type==='smite'?'Карание света: выберите цель'
+      :type==='spark'?'Разряд молнии: выберите цель'
       :'Огненные стрелы: выберите цель';
     setHint(hasTgt?(hintTxt+' (ПКМ / Esc — отмена)'):'Вне зоны действия!');
   }else if(type==='fireball'){
@@ -55,6 +57,11 @@ export function enterTarget(type:TargetType){
       if(cheb(h,{x,z})<=RANGE_OIL&&passable(GW,x,z,h))addMarker(x,z,0xff9a4d,0.5);
     }
     setHint('Огненное масло: выберите клетку. Осторожно — огонь распространяется! (ПКМ — отмена)');
+  }else if(type==='spore'){/* v1.5: облако спор */
+    for(let x=1;x<GRID-1;x++)for(let z=1;z<GRID-1;z++){
+      if(cheb(h,{x,z})<=RANGE_SPORE&&passable(GW,x,z,h))addMarker(x,z,0x8fd36a,0.5);
+    }
+    setHint('Облако спор: выберите клетку — ядовитая завеса бьёт по врагам в радиусе 2 кл. (ПКМ — отмена)');
   }else{
     for(const a of units.filter(x=>x.side==='hero'&&x.alive&&cheb(h,x)<=6))addMarker(a.x,a.z,0xffd54f,0.62);
     setHint(type==='bless'?'Благословение: выберите союзника (ПКМ — отмена)':(type==='cure'?'Лечение: выберите союзника (ПКМ — отмена)':'Лечащее слово: выберите союзника (ПКМ — отмена)'));
@@ -68,10 +75,10 @@ export function cancelTargeting():void{
 export async function resolveTargetClick():Promise<void>{
   const h=G.current,t=G.targeting;
   if(!t||!h)return;
-  if(t.type==='attack'||t.type==='bolt'||t.type==='sneak'||t.type==='smite'){
+  if(t.type==='attack'||t.type==='bolt'||t.type==='sneak'||t.type==='smite'||t.type==='spark'){
     const tgt=pick.ent;
     if(!tgt){setHint('Нужно выбрать цель!');return;}
-    const range=(t.type==='attack'||t.type==='sneak')?h.weapon.range:(t.type==='smite'?6:9);
+    const range=(t.type==='attack'||t.type==='sneak')?h.weapon.range:(t.type==='smite'?6:(t.type==='spark'?7:9));
     if(tgt.side==='hero'){setHint('Это союзник!');return;}
     if(cheb(h,tgt)>range){setHint('Слишком далеко!');return;}
     cancelTargeting();
@@ -85,6 +92,9 @@ export async function resolveTargetClick():Promise<void>{
       (огненные стрелы били «Каранием света» и жгли ячейку); по описанию способности —
       безъячейковый заговор 1d10 огня */
       await doAttack(h,tgt,BOLT);
+    }else if(t.type==='spark'){/* v1.5: разряд молнии Ольхи */
+      h.slots--;
+      await doAttack(h,tgt,SPARK);
     }else{/* v1.2: карание света */
       h.slots--;
       await doAttack(h,tgt,SMITE);
@@ -106,6 +116,15 @@ export async function resolveTargetClick():Promise<void>{
     h.action--;h.oil=(h.oil||0)-1;/* Фаза 4a: oil — опциональное поле */
     log(h.name+' метает огненное масло!','g-fire');
     explode(pick.tile.x,pick.tile.z,{dice:[1,6],radius:1.5});
+    bus.refreshUI.call();showReach(h);
+  }else if(t.type==='spore'){/* v1.5: облако спор */
+    if(!pick.tile){setHint('Выберите клетку!');return;}
+    if(cheb(h,pick.tile)>RANGE_SPORE){setHint('Слишком далеко!');return;}
+    cancelTargeting();
+    h.action--;h.slots--;
+    busyOn();
+    await castSpores(h,pick.tile.x,pick.tile.z);
+    busyOff();
     bus.refreshUI.call();showReach(h);
   }else{
     const ally=pick.ent;
@@ -140,8 +159,8 @@ export function showTipFor(ent0:Unit|Interact|null,e?:PointerEvent){
       if(ent.healer)html+='<br><span class="tc">Целитель: латает слуг Костепёра — бейте первым.</span>';
       if(ent.elite)html+='<br><span class="tc">Элита: крепче рядового, добыча богаче.</span>';
       if(ent.statuses&&ent.statuses.length)html+='<br>Статусы: '+ent.statuses.map(s=>STATUS[s.type].name).join(', ');
-      if(G.targeting&&(G.targeting.type==='attack'||G.targeting.type==='bolt'||G.targeting.type==='sneak'||G.targeting.type==='smite')&&ent.side==='goblin'&&G.current){
-        const w=(G.targeting.type==='attack'||G.targeting.type==='sneak')?G.current.weapon:(G.targeting.type==='smite'?SMITE:BOLT);
+      if(G.targeting&&(G.targeting.type==='attack'||G.targeting.type==='bolt'||G.targeting.type==='sneak'||G.targeting.type==='smite'||G.targeting.type==='spark')&&ent.side==='goblin'&&G.current){
+        const w=(G.targeting.type==='attack'||G.targeting.type==='sneak')?G.current.weapon:(G.targeting.type==='smite'?SMITE:(G.targeting.type==='spark'?SPARK:BOLT));
         const ch=Math.round(hitChance(G.current,ent,w)*100);
         html+='<br><span class="tc">Попадание ~'+ch+'% • урон ~'+avgDamage(G.current,w).toFixed(1)+' • крит 5%</span>';
       }

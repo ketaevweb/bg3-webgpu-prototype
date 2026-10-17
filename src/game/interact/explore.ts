@@ -372,6 +372,9 @@ export function checkTriggers(){
   if(G.mapId==='crypt'&&S.cryptGroup.some(g=>g.alive&&g.cryptBoss)){/* v0.8: триггер босса крипты */
     if(hs.some(h=>S.cryptGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('necro');return;}
   }
+  if(G.mapId==='swamp'&&!S.swampDone&&S.swampGroup.some(g=>g.alive&&g.isBoss)){/* v1.5: триггер Матери Топей */
+    if(hs.some(h=>S.swampGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('swampboss');return;}
+  }
   refreshHintExplore();
 }
 export function refreshHintExplore(){

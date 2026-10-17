@@ -43,6 +43,13 @@ export function questDone(id:string){
   }
   if(id==='crate'){gainGold(100);awardXP(150);S.discount=true;}
   if(id==='crypt'){gainGold(150);awardXP(300);log('Крипта очистилась — мертвецы тракта больше не поднимутся.','g-heal');}
+  if(id==='swamp'){/* v1.5: Болотный жемчуг — МДР +1 лучшему заклинателю без реликвии */
+    gainGold(200);awardXP(350);
+    const c=aliveHeroes().find(h=>h.cls==='druid'&&!h.relic)
+      ||aliveHeroes().find(h=>h.slotsMax>0&&!h.relic)
+      ||aliveHeroes().find(h=>!h.relic);
+    if(c){c.wis+=1;c.relic='Болотный жемчуг';log('Болотный жемчуг переходит к '+c.short+': МДР +1.','g-heal');}
+  }
   bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
   refreshTracker();bus.refreshParty.call();

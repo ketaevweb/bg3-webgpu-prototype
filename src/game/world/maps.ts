@@ -5,12 +5,13 @@
 import { $, sleep } from '../utils';
 import { UI } from '../hud';
 import { sfx } from '../audio';
-import { G, CRYPT, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
+import { G, CRYPT, SWAMP, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { setActionbarVisible, setRound } from '../ui/store';
 import { worldGroup, fx, glows, controls, clearGroup, applyAtmosphere } from '../render/renderer';
-import { seedForest, seedCrypt, buildWorld } from './props';
+import { seedForest, seedCrypt, seedSwamp, buildWorld } from './props';
 import { buildForestScenery, buildCryptScenery } from '../interact/explore';
+import { buildSwampScenery, buildSwampTrail, startSwampQuest } from '../interact/swamp';
 import { spawnEnemies } from '../entities/roster';
 import { removeUnit, placeHeroes } from '../entities/units';
 import { QUESTS, questStart, questObj, refreshTracker } from '../interact/quests';
@@ -49,9 +50,19 @@ export function buildMap(id:MapId,spots:number[][]|null){
     const nc=units.find(u=>u.cryptBoss);
     if(nc)void upgradeUnitRig(nc,{tint:0x4a7a5f,tintStrength:0.5,scale:1.14,yaw:Math.PI});
     log('Крипта Костепёра. Зелёный свет жаровен, холод и стрёкот костей в темноте.','g-sys');
+  }else if(id==='swamp'){/* v1.5: болота культистов */
+    seedSwamp();applyAtmosphere('swamp');
+    buildWorld();buildSwampScenery();spawnEnemies();
+    if(spots)placeHeroes(spots);
+    controls.target.set(14,0,14);
+    startSwampQuest();
+    const ub=units.find(u=>u.swampBoss);
+    if(ub)void upgradeUnitRig(ub,{tint:0x4a6a4f,tintStrength:0.5,scale:1.16,yaw:Math.PI});
+    log('Болота культистов. Зелёный туман, тина по колено и песня из глубины.','g-sys');
   }else{
     seedForest();applyAtmosphere('forest');
-    buildWorld();buildForestScenery();spawnEnemies();
+    buildWorld();buildForestScenery();buildSwampTrail();/* v1.5: гать на болота */
+    spawnEnemies();
     if(spots)placeHeroes(spots);
     controls.target.set(1,0,12);
     log('Вы поднимаетесь на тракт. Ветер и пение птиц — мертвецы больше не тревожат дорогу.','g-sys');
@@ -69,7 +80,7 @@ export async function switchMap(id:MapId):Promise<void>{
   f.style.opacity='1';
   await sleep(620);
   teardownWorld();
-  buildMap(id,CRYPT.ENTER);
+  buildMap(id,id==='swamp'?SWAMP.ENTER:CRYPT.ENTER);/* v1.5: точки входа по карте */
   f.style.opacity='0';
   bus.openExploreUI.call();
   refreshTracker();bus.refreshParty.call();bus.refreshBossBar.call();

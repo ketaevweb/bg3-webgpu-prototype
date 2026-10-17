@@ -12,7 +12,7 @@ import { bus } from '../bus';
 import { hitChance, avgDamage, damageUnit, doAttack } from './combat';
 import { healUnit } from './vitals';
 import { reachNodes, nodePath, freeSpotNear, type AStarNode } from '../world/grid';
-import { makeSkeleton } from '../entities/roster';
+import { makeSkeleton, makeDrowned } from '../entities/roster';
 import { aliveHeroes } from '../entities/units';
 import { joinCombat, endTurn } from './turns';
 import { animateMove } from './movement';
@@ -205,20 +205,21 @@ export async function aiTurn(u:Unit){
   while(G.combatOn&&u.alive&&guard++<6){
     const plan:AIPlan|null=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
-    if(plan.type==='phase2'){/* v0.8: подъём мёртвых */
+    if(plan.type==='phase2'){/* v0.8: подъём мёртвых; v1.5: Ульва поднимает утопленников */
       u.phase2=true;
-      bigBanner('ФАЗА 2: ПОДЪЁМ МЁРТВЫХ');
-      log('Костепёр: «ВСТАНЬТЕ, МОИ ВЕРНЫЕ КОСТИ!»','g-enemy');
+      const swamp=u.swampBoss===true;
+      bigBanner(swamp?'ФАЗА 2: ТРЯСИНА ПРОСЫПАЕТСЯ':'ФАЗА 2: ПОДЪЁМ МЁРТВЫХ');
+      log(swamp?'Ульва: «ТОНИТЕ. ТОНИТЕ ВСЕ!»':'Костепёр: «ВСТАНЬТЕ, МОИ ВЕРНЫЕ КОСТИ!»','g-enemy');
       sfx.bones();
-      fx.burstAtMesh(u,{count:44,color:0x9fe8b8,speed:3.2,size:0.15,life:1.2,gravity:-1.1});
-      glows.flashAtMesh(u,0x9fe8b8,2.6);
+      fx.burstAtMesh(u,{count:44,color:swamp?0x8fd36a:0x9fe8b8,speed:3.2,size:0.15,life:1.2,gravity:-1.1});
+      glows.flashAtMesh(u,swamp?0x8fd36a:0x9fe8b8,2.6);
       shake(0.35);
       for(let i=0;i<2;i++){
         const spot=freeSpotNear(GW,u,2);
         if(!spot)break;
-        const sk=makeSkeleton(spot.x,spot.z);
-        sk.summoned=true;
-        joinCombat(sk);
+        const sum=swamp?makeDrowned(spot.x,spot.z):makeSkeleton(spot.x,spot.z);/* v1.5: фабрика по боссу */
+        sum.summoned=true;
+        joinCombat(sum);
       }
       await sleep(700);continue;
     }

@@ -125,6 +125,13 @@ export function die(t:Unit,_src:Unit|null){
     sfx.bones();
     log('Могильная печать на сундуке у трона рассыпается!','g-sys');
   }
+  if(t.swampBoss){/* v1.5: жрица болот — тина оседает */
+    S.swampDone=true;
+    questObj('swamp','boss');questDone('swamp');
+    fx.burstAtMesh(t,{count:44,color:0x8fd36a,speed:3.6,size:0.15,life:1.1,gravity:0.6});
+    glows.flashAtMesh(t,0x8fd36a,2.4);
+    log('Тина оседает: болота больше не шепчут. Зелёный свет идола гаснет.','g-sys');
+  }
   checkEnd();
 }
 

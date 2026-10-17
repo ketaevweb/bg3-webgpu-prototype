@@ -2,7 +2,7 @@
    Шаблоны врагов (GOB/SKEL/SKEL_KNIGHT/CULT), фабрики, элита,
    отряд героев и спавн врагов по карте/прогрессу.
    Перенесено дословно из engine.ts. */
-import { S, G, gobCount, units } from '../state';
+import { S, G, gobCount, units, SWAMP } from '../state';
 import { makeUnit } from './units';
 import type { Unit, UnitTemplate } from '../types';
 
@@ -78,17 +78,21 @@ const CULT:Record<string,UnitTemplate>={
   acolyte:{name:'Ученик Костепёра',short:'Ученик',hp:14,ac:13,xp:150,color:0x4f3a72,dex:14,int:16,keepDist:true,healer:true,
     weapon:{name:'Луч могильного холода',dice:[1,8],abil:'int',range:8,necro:true},
     dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
+  /* v1.5: культисты Глубинного на болотах */
+  deep:{name:'Культист Глубин',short:'Культист',hp:10,ac:12,xp:90,color:0x4f7a6e,dex:14,int:14,keepDist:true,
+    weapon:{name:'Сгусток тины',dice:[1,6],abil:'int',range:7,necro:true,status:{type:'poison',turns:2}},
+    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
 };
-export function makeCultist(kind:'cultist'|'acolyte',x:number,z:number){
+export function makeCultist(kind:'cultist'|'acolyte'|'deep',x:number,z:number){
   const t=CULT[kind];
   gobCount[t.short]=(gobCount[t.short]||0)+1;
   const n=gobCount[t.short];
   const u=makeUnit({
     name:t.name+(n>1?' №'+n:''),short:t.short+(n>1?' '+n:''),side:'goblin',
-    cls:'cultist',clsName:kind==='acolyte'?'Ученик некроманта':'Культист',x,z,
+    cls:'cultist',clsName:kind==='acolyte'?'Ученик некроманта':(kind==='deep'?'Культист Глубин':'Культист'),x,z,
     str:10,dex:t.dex,con:12,int:t.int,wis:12,cha:10,
     hp:t.hp,maxhp:t.hp,ac:t.ac,speed:6,xp:t.xp,color:t.color,skin:0xcfc2a8,
-    staff:true,tipColor:kind==='acolyte'?0x9fe8b8:0xc08fff,
+    staff:true,tipColor:kind==='acolyte'?0x9fe8b8:(kind==='deep'?0x8fe87f:0xc08fff),
     weapon:t.weapon,dagger:t.dagger||null,keepDist:!!t.keepDist,healer:!!t.healer,features:[],
   });
   if(kind==='acolyte')applyElite(u);
@@ -157,6 +161,47 @@ export function makeKaya(x:number,z:number){
       'Со 2 уровня: +6 HP, МДР +1, 3 ячейки; с 3 уровня — 4 ячейки'],
   });
 }
+/* ================= v1.5: БОЛОТА — УТОПЛЕННИКИ, УЛЬВА, ОЛЬХА ================= */
+const DROWNED:UnitTemplate={name:'Утопленник',short:'Утопленник',hp:14,ac:12,xp:70,color:0x5a7a62,
+  weapon:{name:'Гнилые когти',dice:[1,6],abil:'str',melee:true,range:1}};
+export function makeDrowned(x:number,z:number){
+  gobCount[DROWNED.short]=(gobCount[DROWNED.short]||0)+1;
+  const n=gobCount[DROWNED.short];
+  return makeUnit({
+    name:DROWNED.name+(n>1?' №'+n:''),short:DROWNED.short+(n>1?' '+n:''),side:'goblin',
+    cls:'undead',clsName:'Утопленник',x,z,
+    str:13,dex:10,con:14,int:3,wis:10,cha:6,
+    hp:DROWNED.hp,maxhp:DROWNED.hp,ac:DROWNED.ac,speed:5,xp:DROWNED.xp,color:DROWNED.color,skin:0x7a9a82,
+    weapon:DROWNED.weapon,dagger:null,keepDist:false,features:['Всплывает из трясины по зову Матери Топей'],
+  });
+}
+export function makeUlva(){
+  return makeUnit({
+    name:'Ульва, Матерь Топей',short:'Ульва',cls:'swampboss',clsName:'Жрица Глубин',side:'goblin',
+    str:11,dex:13,con:14,int:14,wis:17,cha:15,
+    hp:54,maxhp:54,ac:15,speed:5,xp:450,x:SWAMP.BOSS[0],z:SWAMP.BOSS[1],
+    color:0x3f5a45,skin:0x9ab88a,staff:true,tipColor:0x8fe87f,
+    keepDist:true,bossBrain:true,isBoss:true,swampBoss:true,phase2:false,
+    weapon:{name:'Хлыст трясины',dice:[1,8],abil:'wis',range:6,necro:true,status:{type:'poison',turns:2}},
+    dagger:{name:'Ритуальный серп',dice:[1,6],abil:'str',melee:true,range:1},
+    features:['Хватка трясины — на половине хитов поднимает утопленников из жижи',
+      'Хлыст трясины отравляет на 2 хода',
+      'Споры болот веками копились в её лёгких'],
+  });
+}
+/* пятая спутница — друид Ольха (подключается на болотах, interact/swamp.ts) */
+export function makeOlkha(x:number,z:number){
+  return makeUnit({
+    name:'Ольха Тисовая',short:'Ольха',cls:'druid',clsName:'Друид',side:'hero',
+    str:11,dex:12,con:13,int:9,wis:16,cha:12,hp:12,maxhp:12,ac:13,speed:5,
+    weapon:{name:'Посох тиса',dice:[1,6],abil:'str',melee:true,range:1},
+    dagger:null,armor:'Кожаный доспех',potions:1,slots:2,slotsMax:2,
+    staff:true,tipColor:0x9fe87f,x,z,color:0x6a9a4a,
+    features:['Разряд молнии — действие + ячейка: 2d6+МДР молнии, дальность 7 кл.',
+      'Облако спор — действие + ячейка: 1d6+МДР яда в радиусе 2 кл., отравление',
+      'Со 2 уровня: +6 HP, МДР +1, 3 ячейки; с 3 уровня — 4 ячейки'],
+  });
+}
 export function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(G.mapId==='forest'){
@@ -167,6 +212,11 @@ export function spawnEnemies(){/* v0.8: враги зависят от карт�
     grat.isBoss=true;grat.mainBoss=true;grat.str=14;
     /* v1.3: ветеран — элита лагеря Костей */
     S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7),applyElite(makeGoblin(GOB.veteran,22,8))];
+  }else if(G.mapId==='swamp'){/* v1.5: гарнизон болот — жрица, культисты Глубин, утопленники */
+    S.patrolGroup=[];S.campGroup=[];
+    if(S.swampDone){S.swampGroup=[];return;}/* убитая Ульва не поднимается вновь */
+    S.swampGroup=[makeUlva(),makeCultist('deep',10,6),makeCultist('deep',18,6),makeCultist('acolyte',11,4),
+      makeDrowned(10,12),makeDrowned(18,12),makeDrowned(14,12)];
   }else{
     S.patrolGroup=[];S.campGroup=[];
     if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */

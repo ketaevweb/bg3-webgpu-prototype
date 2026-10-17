@@ -6,7 +6,7 @@ import { srand } from '../rng';
 import { key } from '../utils';
 import { GRID, TILE, W } from '../constants';
 import { worldGroup, applyLighting } from '../render/renderer';
-import { G, S, solid, grass, barrels, CRYPT } from '../state';
+import { G, S, solid, grass, barrels, CRYPT, SWAMP } from '../state';
 import type { Barrel } from '../types';
 
 /* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
@@ -40,6 +40,27 @@ export function seedCrypt(){
   solid.add(key(CRYPT.THRONE[0],CRYPT.THRONE[1]));
   solid.add(key(CRYPT.CHEST[0],CRYPT.CHEST[1]));
 }
+/* v1.5: болота культистов — сухостой, камни, непроходимая трясина, камыш */
+export function seedSwamp(){
+  G.TREES=[[4,4],[8,3],[20,3],[25,4],[3,10],[7,12],[21,9],[26,10],[3,19],[9,16],
+    [19,20],[24,19],[12,22],[6,24],[18,24],[26,22],[16,3],[10,7],[2,12],[25,14]];
+  G.ROCKS=[[6,15],[22,13],[15,17],[11,3],[24,24],[5,12],[13,19]];
+  G.TENTS=[];G.FIREPIT=null;G.BARREL_POS=[[8,20],[19,14],[23,8]];
+  solid.clear();grass.clear();
+  for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
+  for(const [x,z] of SWAMP.MIRE)solid.add(key(x,z));
+  solid.add(key(SWAMP.IDOL[0],SWAMP.IDOL[1]));
+  solid.add(key(SWAMP.ALTAR[0],SWAMP.ALTAR[1]));
+  for(const [cx,cz] of SWAMP.REEDS){
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
+      const x=cx+dx,z=cz+dz;
+      if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
+      if(solid.has(key(x,z)))continue;
+      if(srand()<0.78)grass.add(key(x,z));
+    }
+  }
+  for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
+}
 
 /* passable/unitAt/barrelAt/cheb/dangerAt → utils.ts и world/grid.ts (Фаза 2) */
 
@@ -59,6 +80,26 @@ export function addTree(x:number,z:number){
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*6.28;
   g.scale.setScalar(0.85+srand()*0.5);
+  worldGroup.add(g);
+}
+/* v1.5: болотный сухостой — голые ветви вместо листвы */
+export function addDeadTree(x:number,z:number){
+  solid.add(key(x,z));
+  const g=new THREE.Group();
+  const m=new THREE.MeshStandardMaterial({color:0x4a4438,roughness:1});
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.3,2.1,6),m);
+  trunk.position.y=1.05;trunk.castShadow=true;
+  g.add(trunk);
+  for(let i=0;i<3;i++){
+    const br=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.09,1.0,5),m);
+    br.position.set(Math.cos(i*2.1)*0.32,1.55+i*0.28,Math.sin(i*2.1)*0.32);
+    br.rotation.z=Math.cos(i*2.1)*0.95;br.rotation.x=Math.sin(i*2.1)*0.95;
+    br.castShadow=true;
+    g.add(br);
+  }
+  g.position.set(W(x),0,W(z));
+  g.rotation.y=srand()*6.28;
+  g.scale.setScalar(0.85+srand()*0.4);
   worldGroup.add(g);
 }
 export function addRock(x:number,z:number){
@@ -118,18 +159,21 @@ export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*3;
   worldGroup.add(g);
-  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:G.mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
+  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:G.mapId==='crypt'?'Погребальная урна':(G.mapId==='swamp'?'Бочка с гниловаром':'Взрывная бочка'),isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
   g.userData.ent=b;
   barrels.push(b);
 }
 export function buildWorld(){
   applyLighting(G.mapId);
+  /* v1.5: цвет грунта/заплаток — по карте (лес/крипта/болото) */
+  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:0x3a5530);
+  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:0x324a2a);
   G.groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
-    new THREE.MeshStandardMaterial({color:G.mapId==='crypt'?0x3d3d47:0x3a5530,roughness:1}));
+    new THREE.MeshStandardMaterial({color:groundColor,roughness:1}));
   G.groundMesh.rotation.x=-Math.PI/2;G.groundMesh.receiveShadow=true;
   worldGroup.add(G.groundMesh);
   const patchGeo=new THREE.CircleGeometry(1,16);
-  const patchMat=new THREE.MeshStandardMaterial({color:G.mapId==='crypt'?0x34343e:0x324a2a,roughness:1});
+  const patchMat=new THREE.MeshStandardMaterial({color:patchColor,roughness:1});
   for(let i=0;i<26;i++){
     const m=new THREE.Mesh(patchGeo,patchMat);
     m.rotation.x=-Math.PI/2;
@@ -151,8 +195,29 @@ export function buildWorld(){
         worldGroup.add(t);
       }
     }
+  }else if(G.mapId==='swamp'){/* v1.5: лужи стоячей воды + камыш */
+    const watM=new THREE.MeshStandardMaterial({color:0x1d3a3a,roughness:0.25,metalness:0.15});
+    for(let i=0;i<14;i++){
+      const m=new THREE.Mesh(new THREE.CircleGeometry(0.5+srand()*0.9,12),watM);
+      m.rotation.x=-Math.PI/2;
+      m.position.set((srand()-0.5)*GRID*TILE*0.85,0.014,(srand()-0.5)*GRID*TILE*0.85);
+      worldGroup.add(m);
+    }
+    const reedG=new THREE.ConeGeometry(0.05,0.95,4);
+    const reedM=new THREE.MeshStandardMaterial({color:0x5f7f3a,roughness:1});
+    for(const k of grass){
+      const [x,z]=k.split('_').map(Number);
+      if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
+      for(let i=0;i<4;i++){
+        const t=new THREE.Mesh(reedG,reedM);
+        t.position.set(W(x)+(srand()-0.5),0.44,W(z)+(srand()-0.5));
+        t.rotation.z=(srand()-0.5)*0.4;
+        t.castShadow=true;
+        worldGroup.add(t);
+      }
+    }
   }
-  for(const [x,z] of G.TREES)addTree(x,z);
+  for(const [x,z] of G.TREES)(G.mapId==='swamp'?addDeadTree:addTree)(x,z);
   for(const [x,z] of G.ROCKS)addRock(x,z);
   for(const [x,z] of G.TENTS)addTent(x,z);
   if(G.FIREPIT)addCampfire(G.FIREPIT[0],G.FIREPIT[1]);

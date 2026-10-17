@@ -16,6 +16,7 @@ export const XP_NEED=(l:number)=>l===1?300:900;
 /* дальности заклинаний в клетках сетки */
 export const RANGE_FB=7;   /* огненный шар */
 export const RANGE_OIL=5;  /* огненное масло */
+export const RANGE_SPORE=5;/* v1.5: облако спор */
 
 /* визуальные справочники статусов (иконки, тултипы, журнал) */
 export const STATUS={
@@ -27,8 +28,8 @@ export const STATUS={
   faith:{name:'Щит веры',tag:'Щ',css:'#8fb8ff'},/* v1.2 */
 } as const;
 
-/* оттенки ригов героев (v1.2) */
-export const HERO_TINT={fighter:0x5a7fb0,wizard:0x9a6ab8,rogue:0x3f7a6a,cleric:0xc9a84a} as const;
+/* оттенки ригов героев (v1.2; v1.5: +друид) */
+export const HERO_TINT={fighter:0x5a7fb0,wizard:0x9a6ab8,rogue:0x3f7a6a,cleric:0xc9a84a,druid:0x6a9a4a} as const;
 
 /* формат сейва (заморожен, REFACTORING.md §8) и число слотов */
 export const SAVE_VER=2;

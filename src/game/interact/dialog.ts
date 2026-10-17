@@ -7,7 +7,7 @@
 import { mod } from '../utils';
 import { d } from '../rng';
 import { sfx } from '../audio';
-import { G, S, KAYA_SPOT, busyOn, busyOff } from '../state';
+import { G, S, KAYA_SPOT, SWAMP, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { uiSet } from '../ui/store';
 import { setHint, log } from '../ui/overlays';
@@ -17,6 +17,7 @@ import { addStatus } from '../systems/statuses';
 import { awardXP } from '../systems/progression';
 import { questStart, questObj, questDone, QUESTS, refreshTracker } from '../interact/quests';
 import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
+import { joinOlkha } from '../interact/swamp';/* v1.5: друид болот (свамп не импортирует dialog — цикла нет) */
 import { openShop } from '../interact/shop';
 import { tween } from '../fx/tweens';
 import type { DlgFn, DlgOpt, Unit } from '../types';
@@ -110,6 +111,7 @@ export const DLGS:Record<string,DlgFn>={
         {t:'«Вот ваш ящик с товаром.»',show:()=>S.hasCrate&&QUESTS.crate.state==='active',fn:()=>gotoNode('cratedone')},
         {t:'[Убеждение СЛ 12] «Героям положена скидка, сам знаешь.»',req:{skill:'Убеждение',dc:12},ok:'discok',fail:'discfail'},
         {t:'«Что известно о крипте в кургане?»',show:()=>QUESTS.main.state==='done'&&QUESTS.crypt.state==='hidden',fn:()=>gotoNode('cryptinfo')},
+        {t:'«Что за песня доносится с восточных болот?»',show:()=>QUESTS.crypt.state==='done'&&QUESTS.swamp.state==='hidden',fn:()=>gotoNode('swampinfo')},/* v1.5 */
         {t:'«До встречи.»',end:true},
       ]};
     if(id==='story')return{name:'Дамрок Бочкарь',
@@ -124,6 +126,9 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='cryptinfo')return{name:'Дамрок Бочкарь',/* v0.8 */
       text:'Крипту? Слушай сюда: как Грат пал — вход вскрылся, северо-восток, ступени под корнями кургана. Мертвецы на тракте — не гоблинская работа, это Костепёр ниточки дёргает. Возьмите огня, света и... не умирайте, а то скидку кому оставлять буду?',
       opts:[{t:'«Зачистим. Держи лавку открытой.»',fn:()=>{questStart('crypt');gotoNode('start');}}]};
+    if(id==='swampinfo')return{name:'Дамрок Бочкарь',/* v1.5 */
+      text:'И слыхал, и сплюнул. На востоке тракт утонул — культисты Глубинного там завелись, жрица ихняя тину будит. Гать я ещё подлатаю, доски держат. Только возьми кого-то, кто громом швыряет: гниловар огня не боится, а вот молния ей — как кочерга по зубам.',
+      opts:[{t:'«Зачистим и болота.»',fn:()=>{questStart('swamp');gotoNode('start');}}]};
   },
   ilva(id){
     if(id==='start')return{name:'Илва (в клетке)',
@@ -166,6 +171,33 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='fight')return{name:'Вхорил Костепёр',
       text:'Ха! Философы с мечами. КОСТИ не спорят — КОСТИ ПОВИНУЮТСЯ!',
       opts:[{t:'«В бой!»',fn:()=>startCombat(S.cryptGroup.filter(g=>g.alive))}]};
+  },
+  swampboss(id){/* v1.5: жрица болот */
+    if(id==='start')return{name:'Ульва, Матерь Топей',
+      text:'Теплокровные... Шли по моим костьм — Грат, Костепёр... Все шли. Теперь тина их гладит. И вас она погладит. Пой, тина, пой!',
+      opts:[
+        {t:'[Запугивание СЛ 16] «Твой кумир — гнилое бревно. Я вытащу тебя за волосы.»',req:{skill:'Запугивание',dc:16},ok:'brave',fail:'fight'},
+        {t:'«Болота будут дышать свободой!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти по гати.»',end:true,fn:()=>{log('Ульва поёт — и вода под сапогами кажется теплее, чем должна быть.','g-enemy');}},
+      ]};
+    if(id==='brave')return{name:'Ульва, Матерь Топей',
+      text:'ГЛУБИНА... ПОДНИМИ ИХ. ПОДНИМИ ИХ ВСЕХ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.swampGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Ульва, Матерь Топей',
+      text:'Пой, тина, пой! УТОПШИЕ, ПОДНИМАЙТЕСЬ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.swampGroup.filter(g=>g.alive))}]};
+  },
+  olkha(id){/* v1.5: прикованная друидка */
+    if(id==='start')return{name:'Ольха (прикована к идолу)',
+      text:'Тихо... не будите тину. Я — Ольха, друид этого тракта. Ульва приковала меня к идолу Глубинного, когда я отказалась петь ей.',
+      opts:[
+        {t:'«Сейчас освободим. Идём с нами.»',end:true,fn:()=>{closeDlg();joinOlkha(SWAMP.OLKHA[0],SWAMP.OLKHA[1]);}},
+        {t:'«Кто такая Ульва?»',fn:()=>gotoNode('ulva')},
+        {t:'«Держись.»',end:true},
+      ]};
+    if(id==='ulva')return{name:'Ольха (прикована к идолу)',
+      text:'Жрица Глубинного. Отравила родники — и топь пошла расти. Хлыст её жжётся ядом, а на полсмерти она поднимает утопленников. Возьмите в отряд того, кто бьёт громом: молния ей вреднее огня.',
+      opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinOlkha(SWAMP.OLKHA[0],SWAMP.OLKHA[1]);}}]};
   },
 };
 export function bossFear(){

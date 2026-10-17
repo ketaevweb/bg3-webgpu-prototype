@@ -34,6 +34,9 @@ export const ACTIONS:ActionDef[]=[
     run:h=>{h.bonus--;h.slots--;addStatus(h,'faith',3);renderUI();showReach(h);}},
   {label:'Карание света',sub:'Действие · ячейка',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('smite')},
   {label:'Гнев рассвета',sub:'Действие · 1/бой',cls:'cle',only:h=>h.cls==='cleric',enabled:h=>h.action>0&&!h.dawnUsed,run:h=>radiantNova(h)},
+  /* v1.5: умения друида Ольхи */
+  {label:'Разряд молнии',sub:'Действие · ячейка',cls:'wiz',only:h=>h.cls==='druid',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('spark')},
+  {label:'Облако спор',sub:'Действие · ячейка',cls:'wiz',only:h=>h.cls==='druid',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('spore')},
   {label:'Второе дыхание',sub:'Бонус · 1/бой',enabled:h=>h.bonus>0&&!h.swUsed,only:h=>h.cls==='fighter',
     run:h=>{h.bonus--;h.swUsed=true;healUnit(h,roll(1,10)+1,'второе дыхание');renderUI();showReach(h);}},
   {label:'Доп. действие',sub:'1/бой',enabled:h=>(h.surge||0)>0,only:h=>h.cls==='fighter'&&h.level>=2,

@@ -74,6 +74,12 @@ export function levelUp(h:Unit){
       log(h.name+' — УРОВЕНЬ 2! +6 HP, МДР +1, ячеек заклинаний теперь 3.','g-sys');}
     else{h.slotsMax=4;h.slots=4;
       log(h.name+' — УРОВЕНЬ 3! +6 HP, ячеек заклинаний теперь 4.','g-sys');}
+  }else if(h.cls==='druid'){/* v1.5: друид растёт как жрица */
+    h.maxhp+=6;h.hp+=6;
+    if(h.level===2){h.wis+=1;h.slotsMax=3;h.slots=3;
+      log(h.name+' — УРОВЕНЬ 2! +6 HP, МДР +1, ячеек заклинаний теперь 3.','g-sys');}
+    else{h.slotsMax=4;h.slots=4;
+      log(h.name+' — УРОВЕНЬ 3! +6 HP, ячеек заклинаний теперь 4.','g-sys');}
   }else{
     h.maxhp+=5;h.hp+=5;
     if(h.level===2){h.int+=1;h.slotsMax=4;h.slots=4;
