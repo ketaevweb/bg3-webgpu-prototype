@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Врата Бальдура — v0.8 «Крипта Костепёра»",
+  title: "Врата Бальдура — v1.1 «Скрижали судьбы»",
   description:
-    "Фулстек-прототип CRPG в духе Baldur's Gate 3: Three.js WebGPU (src/game), d20-бои, диалоги с проверками ХАР, квесты, торговец, процедурный WebAudio-звук, партиклы и слоумо-криты.",
-  keywords: ["Baldur's Gate 3", "WebGPU", "Three.js", "CRPG", "прототип", "D&D", "WebAudio"],
+    "Фулстек-прототип CRPG в духе Baldur's Gate 3: Three.js WebGPU (src/game), d20-бои, босс-некромант с фазами, две карты, 3 слота сохранений с экспортом/импортом JSON, настройки графики, процедурный WebAudio-звук и партиклы.",
+  keywords: ["Baldur's Gate 3", "WebGPU", "Three.js", "CRPG", "прототип", "D&D", "WebAudio", "сохранения"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

@@ -53,6 +53,8 @@ export class ParticleFX {
   private cursor = 0;
   private emitters = new Map<string, Emitter>();
   private geo: THREE.BufferGeometry;
+  /** v1.1: множитель плотности частиц (настройки графики) 0..1+ */
+  density = 1;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -99,7 +101,7 @@ export class ParticleFX {
 
   /** Всплеск в точке. */
   burst(x: number, y: number, z: number, o: BurstOpts = {}) {
-    const count = o.count ?? 12;
+    const count = Math.max(1, Math.round((o.count ?? 12) * this.density));
     const speed = o.speed ?? 2.5;
     const size = o.size ?? 0.12;
     const life = o.life ?? 0.6;
@@ -161,7 +163,7 @@ export class ParticleFX {
     if (dt <= 0) return;
     // спавн из эмиттеров
     for (const e of this.emitters.values()) {
-      e.acc += dt * e.rate;
+      e.acc += dt * e.rate * this.density;
       while (e.acc >= 1) {
         e.acc -= 1;
         const a = Math.random() * Math.PI * 2;

@@ -36,7 +36,7 @@ const STATUS={
 const S={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
   cageMesh:null,ilvaMesh:null,crateMesh:null,
-  cryptGroup:[],chestLooted:false,barrelsUsed:new Set()};/* v0.8 */
+  cryptGroup:[],chestLooted:false,necroSlain:false,barrelsUsed:new Set()};/* v0.8+v1.1 */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    Весь игровой стейт живёт в замыкании bootGame(), чтобы React мог
@@ -421,6 +421,7 @@ function spawnEnemies(){/* v0.8: враги зависят от карты и п
     S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4)];
   }else{
     S.patrolGroup=[];S.campGroup=[];
+    if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */
     const necro=makeNecro();
     S.cryptGroup=[necro,makeSkeleton(12,5),makeSkeleton(16,5)];
   }
@@ -605,7 +606,7 @@ function openChest(chest){
   sfx.gold();
   refreshParty();refreshTracker();
 }
-/* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
+/* v0.8: размещение отряда в точках входа */
 function placeHeroes(list){
   const hs=units.filter(u=>u.side==='hero');
   hs.forEach((h,i)=>{
@@ -615,14 +616,9 @@ function placeHeroes(list){
     h.mesh.rotation.set(0,0,0);
   });
 }
-async function switchMap(id){
-  if(busy||mapId===id||phase==='transition')return;
-  busyOn();phase='transition';
+/* v1.1: разбор мира вынесен из switchMap — используется и при загрузке сейва */
+function teardownWorld(){
   cancelTargeting();setHint('');
-  sfx.portal();
-  const f=$('#fade');
-  f.style.opacity=1;
-  await sleep(620);
   for(const u of units.filter(u=>u.side!=='hero'))removeUnit(u);
   for(const b of barrels)if(b.mesh)b.mesh.removeFromParent();
   barrels.length=0;
@@ -635,11 +631,15 @@ async function switchMap(id){
   combatOn=false;order=[];turnIdx=-1;current=null;
   $('#actionbar').style.display='none';
   refreshBossBar();
+}
+/* v1.1: сборка карты без фейда — общее ядро switchMap и загрузки сейва.
+   spots — точки размещения героев (null — не трогать позиции). */
+function buildMap(id,spots){
   mapId=id;
   if(id==='crypt'){
     seedCrypt();applyAtmosphere('crypt');
     buildWorld();buildCryptScenery();spawnEnemies();
-    placeHeroes(CRYPT.ENTER);
+    if(spots)placeHeroes(spots);
     controls.target.set(1,0,8);
     if(QUESTS.crypt.state==='hidden')questStart('crypt');
     questObj('crypt','enter');
@@ -649,13 +649,24 @@ async function switchMap(id){
   }else{
     seedForest();applyAtmosphere('forest');
     buildWorld();buildForestScenery();spawnEnemies();
-    placeHeroes(CRYPT.ENTER);
+    if(spots)placeHeroes(spots);
     controls.target.set(1,0,12);
     log('Вы поднимаетесь на тракт. Ветер и пение птиц — мертвецы больше не тревожат дорогу.','g-sys');
   }
   initOverlays();
   phase='explore';
   $('#round').textContent=MAP_NAME[mapId];
+}
+/* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
+async function switchMap(id){
+  if(busy||mapId===id||phase==='transition')return;
+  busyOn();phase='transition';
+  sfx.portal();
+  const f=$('#fade');
+  f.style.opacity=1;
+  await sleep(620);
+  teardownWorld();
+  buildMap(id,CRYPT.ENTER);
   f.style.opacity=0;
   openExploreUI();
   refreshTracker();refreshParty();refreshBossBar();
@@ -1003,6 +1014,7 @@ function die(t,src){
   if(t.side==='goblin'){const g=3+d(6);gainGold(g);log('С поверженного собрано '+g+' золота.','g-sys');}
   if(t.mainBoss){questObj('main','boss');questDone('main');}/* v0.8: Грат — босс основного квеста */
   if(t.cryptBoss){
+    S.necroSlain=true;/* v1.1: печать сундука и респаун */
     questObj('crypt','boss');questDone('crypt');
     fx.burstAtMesh(t,{count:44,color:0xcfe8d8,speed:3.6,size:0.15,life:1.1,gravity:0.6});
     sfx.bones();
@@ -2159,6 +2171,256 @@ function showSheet(h){
 }
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('#sheet').style.display='none';});
 
+/* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
+   Слоты живут в localStorage (bg3w_slot_1..3), формат — обычный JSON, поэтому
+   экспорт/импорт — это просто скачивание файла и обратная запись в слот. */
+const SAVE_VER=2,SLOT_N=3;
+const slotKey=i=>'bg3w_slot_'+i;
+let savesFromEnd=false,importSlot=1;
+function gameSnapshot(){
+  return {
+    v:SAVE_VER,when:Date.now(),
+    mapId,mapName:MAP_NAME[mapId],
+    gold:S.gold,discount:!!S.discount,
+    flags:{
+      patrolDone:!!S.patrolDone,campDone:!!S.campDone,cageSeen:!!S.cageSeen,knowsBoss:!!S.knowsBoss,
+      hasCrate:!!S.hasCrate,ilvaFreed:!!S.ilvaFreed,chestLooted:!!S.chestLooted,necroSlain:!!S.necroSlain,
+    },
+    barrelsUsed:[...S.barrelsUsed],
+    quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
+    heroes:units.filter(u=>u.side==='hero').map(h=>({
+      cls:h.cls,level:h.level,xp:h.xp,hp:h.hp,maxhp:h.maxhp,ac:h.ac,
+      str:h.str,dex:h.dex,con:h.con,int:h.int,wis:h.wis,cha:h.cha,
+      slotsMax:h.slotsMax||0,potions:h.potions,oil:h.oil||0,armor:h.armor,
+      weapon:h.weapon?{name:h.weapon.name,dice:h.weapon.dice,abil:h.weapon.abil,range:h.weapon.range,melee:!!h.weapon.melee}:null,
+      x:h.x,z:h.z,
+    })),
+  };
+}
+function slotMeta(sv){
+  const lv=sv.heroes&&sv.heroes.length?Math.max(...sv.heroes.map(h=>h.level||1)):1;
+  return (sv.mapName||MAP_NAME[sv.mapId]||'?')+' · ур. '+lv+' · '+(sv.gold||0)+' зол. · '+new Date(sv.when).toLocaleString('ru-RU');
+}
+function readSlot(i){
+  try{const raw=localStorage.getItem(slotKey(i));return raw?JSON.parse(raw):null;}
+  catch(e){return null;}
+}
+function doSave(i){
+  if(combatOn||busy||phase==='transition'||phase==='over'){
+    log('Сейчас нельзя сохранять: идёт бой, переход или экран поражения.','g-enemy');sfx.ui();return;
+  }
+  try{localStorage.setItem(slotKey(i),JSON.stringify(gameSnapshot()));}
+  catch(e){log('Не удалось сохранить — хранилище браузера недоступно.','g-enemy');return;}
+  log('Игра сохранена в слот '+i+'.','g-heal');sfx.ui();renderSaves();
+}
+function doLoad(i){
+  const sv=readSlot(i);
+  if(!sv){log('Слот '+i+' пуст — сохраняйте через «Сохранить» или импортируйте JSON.','g-enemy');sfx.ui();return;}
+  if(phase==='transition'){log('Идёт переход между картами — подождите секунду.','g-enemy');return;}
+  if(busy){log('Дождитесь конца текущего действия.','g-enemy');return;}
+  applyGame(sv);
+}
+function doDelete(i){
+  localStorage.removeItem(slotKey(i));
+  log('Слот '+i+' очищен.','g-sys');sfx.ui();renderSaves();
+}
+function doExport(i){
+  const sv=readSlot(i);
+  if(!sv){log('Слот '+i+' пуст — нечего экспортировать.','g-enemy');sfx.ui();return;}
+  const blob=new Blob([JSON.stringify(sv,null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='bg3web_save_slot'+i+'_'+new Date(sv.when).toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  log('Сейв слота '+i+' выгружен в JSON-файл.','g-sys');sfx.ui();
+}
+function doImport(i){importSlot=i;$('#importFile').click();}
+function onImportFile(e){
+  const file=e.target.files&&e.target.files[0];
+  e.target.value='';
+  if(!file)return;
+  file.text().then(txt=>{
+    let sv=null;
+    try{sv=JSON.parse(txt);}catch(err){}
+    if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)||!MAP_NAME[sv.mapId]){
+      log('Это не файл сохранения «Врат Бальдура» (нужен JSON формата v'+SAVE_VER+').','g-enemy');return;
+    }
+    try{localStorage.setItem(slotKey(importSlot),JSON.stringify(sv));}
+    catch(err){log('Ошибка записи в слот '+importSlot+'.','g-enemy');return;}
+    log('JSON импортирован в слот '+importSlot+': '+slotMeta(sv),'g-heal');
+    renderSaves();sfx.ui();
+  });
+}
+function applyGame(sv){
+  if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)){log('Сейв повреждён или от другой версии.','g-enemy');return;}
+  if(phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
+  if(S.dlgNpc)closeDlgHard();
+  closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();
+  $('#sheet').style.display='none';$('#end').style.display='none';
+  S.gold=sv.gold||0;S.discount=!!sv.discount;
+  const fl=sv.flags||{};
+  S.patrolDone=!!fl.patrolDone;S.campDone=!!fl.campDone;S.cageSeen=!!fl.cageSeen;S.knowsBoss=!!fl.knowsBoss;
+  S.hasCrate=!!fl.hasCrate;S.ilvaFreed=!!fl.ilvaFreed;S.chestLooted=!!fl.chestLooted;S.necroSlain=!!fl.necroSlain;
+  S.barrelsUsed=new Set(sv.barrelsUsed||[]);
+  for(const id in QUESTS){
+    const svq=sv.quests&&sv.quests[id];
+    const q=QUESTS[id];
+    if(!svq){q.state=id==='main'?'active':'hidden';q.objs.forEach(o=>{o.done=false;});continue;}
+    q.state=svq.state||'hidden';
+    q.objs.forEach((o,i)=>{o.done=!!(svq.objs&&svq.objs[i]);});
+  }
+  cancelTargeting();
+  teardownWorld();
+  buildMap(sv.mapId==='crypt'?'crypt':'forest',null);
+  for(const hd of sv.heroes){
+    const h=units.find(u=>u.side==='hero'&&u.cls===hd.cls);
+    if(!h)continue;
+    h.level=hd.level||1;h.xp=hd.xp||0;
+    h.maxhp=hd.maxhp||h.maxhp;h.hp=clamp(hd.hp||1,1,h.maxhp);
+    h.ac=hd.ac||h.ac;
+    ['str','dex','con','int','wis','cha'].forEach(a=>{if(typeof hd[a]==='number')h[a]=hd[a];});
+    h.slotsMax=hd.slotsMax||0;h.slots=h.slotsMax;
+    h.potions=hd.potions||0;h.oil=hd.oil||0;h.armor=hd.armor||h.armor;
+    if(hd.weapon&&hd.weapon.dice)h.weapon={name:hd.weapon.name,dice:hd.weapon.dice,abil:hd.weapon.abil,range:hd.weapon.range,melee:!!hd.weapon.melee};
+    h.statuses=[];h.swUsed=false;h.surge=0;
+    if(typeof hd.x==='number'&&typeof hd.z==='number'){
+      h.x=hd.x;h.z=hd.z;
+      h.mesh.position.set(W(h.x),0,W(h.z));h.mesh.rotation.set(0,0,0);
+    }
+  }
+  openExploreUI();
+  refreshParty();refreshBossBar();refreshHintExplore();refreshTracker();
+  bigBanner('ИГРА ЗАГРУЖЕНА');
+  log('Отряд приходит в себя: '+MAP_NAME[mapId]+'. Прогресс восстановлен из сейва.','g-heal');
+  sfx.ui();
+}
+function renderSaves(){
+  const el=$('#saveList');if(!el)return;
+  el.innerHTML='';
+  const hs=units.filter(u=>u.side==='hero');
+  $('#curSave').textContent='Текущая игра: '+MAP_NAME[mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
+  for(let i=1;i<=SLOT_N;i++){
+    const sv=readSlot(i);
+    const row=document.createElement('div');row.className='slot';
+    row.innerHTML='<div class="smeta">Слот '+i+(sv?'':' — пуст')+'</div>'+
+      '<div class="ssub">'+(sv?slotMeta(sv):'Нет данных. Сохраните игру или импортируйте JSON-файл.')+'</div>';
+    const btns=document.createElement('div');btns.className='sbtns';
+    const mk=(t,fn,dis,danger)=>{
+      const b=document.createElement('button');b.textContent=t;b.disabled=!!dis;
+      if(danger)b.className='danger';
+      b.onclick=fn;btns.appendChild(b);
+    };
+    mk('Сохранить',()=>doSave(i));
+    mk('Загрузить',()=>doLoad(i),!sv);
+    mk('Экспорт JSON',()=>doExport(i),!sv);
+    mk('Импорт JSON',()=>doImport(i));
+    mk('Удалить',()=>doDelete(i),!sv,true);
+    row.appendChild(btns);
+    el.appendChild(row);
+  }
+}
+function openSaveMenu(fromEnd){
+  savesFromEnd=!!fromEnd;
+  renderSaves();
+  $('#saves').style.display='block';
+  sfx.ui();
+}
+function closeSaveMenu(){
+  $('#saves').style.display='none';
+  if(savesFromEnd){
+    savesFromEnd=false;
+    if(phase==='over')$('#end').style.display='flex';/* вернулись на экран поражения */
+  }
+}
+function toggleSaveMenu(){
+  if($('#saves').style.display==='block')closeSaveMenu();
+  else openSaveMenu(false);
+}
+$('#savesClose').onclick=closeSaveMenu;
+$('#importFile').addEventListener('change',onImportFile);
+$('#loadBtn2').onclick=()=>{$('#end').style.display='none';openSaveMenu(true);};
+
+/* ================= v1.1: НАСТРОЙКИ ГРАФИКИ =================
+   Тени / bloom / glow-хала / плотность частиц / разрешение / лимит FPS.
+   Всё применяется на живую и хранится в localStorage (bg3w_gfx_v1). */
+const GFX_KEY='bg3w_gfx_v1';
+const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max'};
+let bloomOn=true,fpsLimit=0,frameAcc=0;
+function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.assign(gfx,JSON.parse(raw));}catch(e){}}
+function applyShadows(){
+  const q=gfx.shadows;
+  renderer.shadowMap.enabled=(q!=='off');
+  if(sunLight){
+    sunLight.castShadow=(q!=='off');
+    const size=q==='high'?2048:1024;
+    if(sunLight.shadow.mapSize.x!==size){
+      sunLight.shadow.mapSize.set(size,size);
+      if(sunLight.shadow.map){sunLight.shadow.map.dispose();sunLight.shadow.map=null;}
+    }
+  }
+}
+function applyGfx(){
+  applyShadows();
+  bloomOn=!!gfx.bloom;
+  glows.setEnabled(!!gfx.glow);
+  fx.density=gfx.particles==='low'?0.4:(gfx.particles==='mid'?0.7:1);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2)*(gfx.res==='50'?0.5:(gfx.res==='75'?0.75:1)));
+  fpsLimit=gfx.fps==='30'?30:(gfx.fps==='60'?60:0);
+  frameAcc=0;
+  try{localStorage.setItem(GFX_KEY,JSON.stringify(gfx));}catch(e){}
+}
+const GFX_PRESETS={
+  low:{shadows:'off',bloom:false,glow:false,particles:'low',res:'75',fps:'60'},
+  mid:{shadows:'low',bloom:true,glow:true,particles:'mid',res:'100',fps:'60'},
+  high:{shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max'},
+};
+const GFX_ROWS=[
+  {k:'shadows',label:'Тени',opts:[['off','Выкл'],['low','Низк.'],['high','Выс.']]},
+  {k:'bloom',label:'Bloom-пасс',bool:true,opts:[['1','Вкл'],['0','Выкл']]},
+  {k:'glow',label:'Glow-хала',bool:true,opts:[['1','Вкл'],['0','Выкл']]},
+  {k:'particles',label:'Частицы',opts:[['low','Мало'],['mid','Средне'],['high','Много']]},
+  {k:'res',label:'Разрешение',opts:[['50','50%'],['75','75%'],['100','100%']]},
+  {k:'fps',label:'Лимит FPS',opts:[['30','30'],['60','60'],['max','Макс']]},
+];
+function renderGfx(){
+  const el=$('#gfxBody');if(!el)return;
+  el.innerHTML='';
+  const pl=document.createElement('div');
+  pl.style.cssText='font-size:11px;color:#a89f86;margin:2px 0 3px';
+  pl.textContent='Пресет качества:';
+  el.appendChild(pl);
+  const pre=document.createElement('div');pre.className='gpre';
+  for(const [k,n] of [['low','Низкий'],['mid','Средний'],['high','Высокий']]){
+    const b=document.createElement('button');b.textContent=n;
+    b.onclick=()=>{Object.assign(gfx,GFX_PRESETS[k]);applyGfx();renderGfx();sfx.ui();};
+    pre.appendChild(b);
+  }
+  el.appendChild(pre);
+  for(const r of GFX_ROWS){
+    const row=document.createElement('div');row.className='grow';
+    const lab=document.createElement('span');lab.className='gl';lab.textContent=r.label;
+    const seg=document.createElement('div');seg.className='seg';
+    for(const [val,name] of r.opts){
+      const b=document.createElement('button');b.textContent=name;
+      const setVal=r.bool?(val==='1'):val;
+      const active=r.bool?(!!gfx[r.k]===setVal):String(gfx[r.k])===val;
+      if(active)b.classList.add('on');
+      b.onclick=()=>{gfx[r.k]=setVal;applyGfx();renderGfx();sfx.ui();};
+      seg.appendChild(b);
+    }
+    row.appendChild(lab);row.appendChild(seg);
+    el.appendChild(row);
+  }
+}
+function openGfx(){renderGfx();$('#gfx').style.display='block';sfx.ui();}
+function closeGfx(){$('#gfx').style.display='none';}
+function toggleGfx(){
+  if($('#gfx').style.display==='block')closeGfx();
+  else openGfx();
+}
+$('#gfxClose').onclick=closeGfx;
+
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
 let downPos=null;
@@ -2256,11 +2518,13 @@ function bindInput(){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   const onKey=e=>{
     sfx.unlock();
-    if(e.key==='Escape'){cancelTargeting();$('#sheet').style.display='none';closeJournal();closeShop();closeChoice();}
+    if(e.key==='Escape'){cancelTargeting();$('#sheet').style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
       if(phase==='explore'&&!busy){const it=nearestInteract();if(it)it.fn();}
     }
     if(e.key==='j'||e.key==='J'||e.key==='о'||e.key==='О'){toggleJournal();}
+    if(e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л'){if(phase!=='transition')toggleSaveMenu();}/* v1.1 */
+    if(e.key==='g'||e.key==='G'||e.key==='п'||e.key==='П'){toggleGfx();}/* v1.1 */
   };
   addEventListener('keydown',onKey);
   const onResize=()=>{
@@ -2277,6 +2541,8 @@ function bindInput(){
 const clock=new THREE.Clock();
 function loop(){
   const rdt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
+  /* v1.1: лимит FPS — пропускаем кадры сверх лимита */
+  if(fpsLimit>0){frameAcc+=rdt;if(frameAcc+1e-4<0.98/fpsLimit)return;frameAcc=0;}
   slowmo.update(rdt);
   const dt=rdt*slowmo.scale;
   for(let i=tweens.length-1;i>=0;i--){
@@ -2303,7 +2569,7 @@ function loop(){
   glows.update(dt,t);
   rigs.update(dt,t);
   updateOverlays();
-  if(postFX)postFX.render();else renderer.render(scene,camera);
+  if(postFX&&bloomOn)postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый */
 }
 
 /* ================= СТАРТ ================= */
@@ -2362,24 +2628,31 @@ let disposed=false;
   phase='explore';
   refreshUI();refreshParty();
   openExploreUI();
+  /* v1.1: настройки графики + меню сохранений */
+  loadGfx();applyGfx();renderGfx();renderSaves();
+  const gb=document.getElementById('gfxBtn');
+  if(gb){const f=()=>toggleGfx();gb.addEventListener('click',f);disposers.push(()=>gb.removeEventListener('click',f));}
+  const svb=document.getElementById('saveBtn');
+  if(svb){const f=()=>toggleSaveMenu();svb.addEventListener('click',f);disposers.push(()=>svb.removeEventListener('click',f));}
   const sb=document.getElementById('sndBtn');
   if(sb){
     const onSnd=()=>{sfx.unlock();sfx.setMuted(!sfx.isMuted());sb.textContent=sfx.isMuted()?'🔇':'🔊';sfx.ui();};
     sb.addEventListener('click',onSnd);
     disposers.push(()=>sb.removeEventListener('click',onSnd));
   }
-  log('BG3 Web-прототип v0.8 «Крипта Костепёра»: вторая карта, босс-некромант, фазы боя, добыча.','g-sys');
+  log('BG3 Web-прототип v1.1 «Скрижали судьбы»: 3 слота сохранений, экспорт/импорт JSON, настройки графики.','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
-  log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал заданий • ПКМ/Esc — отмена.','g-sys');
+  log('ЛКМ — идти отрядом • E — говорить/осматривать • J — журнал • K — сейвы • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей на севере — тогда откроется вход в крипту под курганом (северо-восток).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] boot complete');
+  console.log('[bg3] v1.1 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
 })();
-/* v0.8: отладочный хук (E2E-проверки в консоли браузера) */
-window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone};
+/* v0.8+v1.1: отладочный хук (E2E-проверки в консоли браузера) */
+window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
+  gameSnapshot,doSave,doLoad,gfx,applyGfx,openSaveMenu,toggleGfx};
 return function dispose(){
   disposed=true;
   renderer.setAnimationLoop(null);

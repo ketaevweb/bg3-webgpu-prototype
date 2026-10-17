@@ -29,6 +29,8 @@ export class GlowFX {
   private attached = new Map<string, Attached>();
   private flashes: Flash[] = [];
   private campfireGlow: Attached | null = null;
+  /** v1.1: общий рубильник (настройки графики) — скрыть все хала */
+  enabled = true;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -87,6 +89,7 @@ export class GlowFX {
 
   /** Одноразовая вспышка в точке (взрыв). */
   flash(x: number, z: number, scale: number, color: number) {
+    if (!this.enabled) return;
     const s = this.makeSprite(color, 0.85);
     s.position.set(x, 1.1, z);
     s.scale.setScalar(scale * 0.4);
@@ -96,6 +99,7 @@ export class GlowFX {
 
   /** Одноразовая вспышка над юнитом (уровень/лечение/крит). */
   flashAtMesh(target: { mesh: { position: THREE.Vector3 } }, color: number, scale: number) {
+    if (!this.enabled) return;
     const p = target.mesh.position;
     const s = this.makeSprite(color, 0.8);
     s.position.set(p.x, p.y + 1.2, p.z);
@@ -104,7 +108,22 @@ export class GlowFX {
     this.flashes.push({ sprite: s, life: 0.5, maxLife: 0.5, from: 0.3, to: scale });
   }
 
+  /** v1.1: вкл/выкл всех хала на живую (без отвязки — возвращаемой). */
+  setEnabled(on: boolean) {
+    this.enabled = on;
+    for (const a of this.attached.values()) a.sprite.visible = on;
+    if (this.campfireGlow) this.campfireGlow.sprite.visible = on;
+    if (!on) {
+      for (const f of this.flashes) {
+        this.scene.remove(f.sprite);
+        (f.sprite.material as THREE.Material).dispose();
+      }
+      this.flashes = [];
+    }
+  }
+
   update(_dt: number, t: number) {
+    if (!this.enabled) return;
     if (this.campfireGlow) {
       const f = 1 + 0.09 * Math.sin(t * 11) + 0.05 * Math.sin(t * 23.7);
       this.campfireGlow.sprite.scale.setScalar(this.campfireGlow.base * f);
