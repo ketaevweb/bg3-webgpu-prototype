@@ -18,10 +18,13 @@ import { TILE, GRID, HALF, W, XP_NEED, RANGE_FB, RANGE_OIL, STATUS, HERO_TINT, S
 import { astar, reachNodes, nodePath, passable, unitAt, barrelAt, type GridWorld } from './world/grid';
 import { attackMod, blessed, hitChance, avgDamage } from './systems/combat';
 import { LOOT } from './systems/loot';
-const S:any={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
+import { UI } from './hud';
+/* Фаза 3: доменные типы — единственный источник (types.ts) */
+import type { Barrel, FireTile, GameState, MapId, Phase, PickState, Quest, SaveData, StatusType, Unit, UnitTemplate, Weapon } from './types';
+const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
   hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
-  cageMesh:null,ilvaMesh:null,crateMesh:null,
-  cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set()};/* v0.8+v1.1+v1.2 */
+  cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,
+  cryptGroup:[],chestLooted:false,necroSlain:false,kayaJoined:false,barrelsUsed:new Set<string>()};/* v0.8+v1.1+v1.2 */
 
 /* ================= ТОЧКА ВХОДА (v0.7: fullstack src) =================
    Весь игровой стейт живёт в замыкании bootGame(), чтобы React мог
@@ -29,14 +32,14 @@ const S:any={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:fal
 export function bootGame(){
 
 /* ================= СОСТОЯНИЕ ================= */
-let busy=false, busyCount=0, combatOn=false, phase='idle', targeting:any=null;
+let busy=false, busyCount=0, combatOn=false, phase:Phase='idle', targeting:any=null;/* TODO(refactor-p4a): targeting/current — поля GameCtx */
 function busyOn(){busyCount++;busy=true;}
 function busyOff(){busyCount=Math.max(0,busyCount-1);if(busyCount===0)busy=false;}
 let wave=1, pendingWave=false, round=1, turnIdx=-1, current:any=null;
-let order:any[]=[]; const units:any[]=[], barrels:any[]=[], fires=new Map<string,any>();
+let order:Unit[]=[]; const units:Unit[]=[], barrels:Unit[]=[], fires=new Map<string,FireTile>();/* Фаза 3: доменные типы */
 let uid=0; const gobCount:Record<string,number>={};
 const tweens:any[]=[]; let shakeT=0;
-const pick:{tile:any,ent:any,inter:any}={tile:null,ent:null,inter:null};
+const pick:PickState={tile:null,ent:null,inter:null};
 let groundMesh:any=null, fireLight:any=null, flameMesh:any=null;
 
 /* ================= РЕНДЕРЕР / СЦЕНА ================= */
@@ -44,7 +47,7 @@ const renderer=new THREE.WebGPURenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
-$('#scene').appendChild(renderer.domElement);
+$(UI.scene).appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0c1510);
 scene.fog=new THREE.FogExp2(0x0c1510,0.014);
@@ -72,7 +75,7 @@ const solid=new Set<string>(), grass=new Set<string>();
 const GW:GridWorld={solid,units,barrels,fires};/* Фаза 2: явный контекст для world/grid (→ GameCtx в p4a) */
 let TREES:any=null,ROCKS:any=null,TENTS:any=null,FIREPIT:any=null,BARREL_POS:any=null;
 const CAGE={x:9,z:5}, CRATE={x:25,z:7}, MERCHANT={x:17,z:25}, KAYA_SPOT=[15,22];/* v1.2: алтарь Кая */
-let mapId='forest';
+let mapId:MapId='forest';
 const MAP_NAME={forest:'Тракт: лагерь Костей',crypt:'Крипта Костепёра'};
 const CRYPT={
   PILLARS:[[6,8],[10,8],[17,8],[21,8],[6,18],[10,18],[17,18],[21,18]],
@@ -189,7 +192,7 @@ function addBarrel(x,z,bodyColor){/* v0.8: цвет — лес (дерево) и
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*3;
   worldGroup.add(g);
-  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g};
+  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:mapId==='crypt'?'Погребальная урна':'Взрывная бочка',isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
   g.userData.ent=b;
   barrels.push(b);
 }
@@ -286,11 +289,11 @@ function buildFigure(cfg){
   g.userData.ring=ring;
   return g;
 }
-function makeUnit(cfg){
+function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза 3: доменный тип юнита */
   const u=Object.assign({
     id:++uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
     slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,poisonBlade:0,dawnUsed:false,/* v1.2 */
-  },cfg);
+  },cfg) as Unit;
   u.mesh=buildFigure(cfg);
   u.mesh.position.set(W(cfg.x),0,W(cfg.z));
   u.mesh.userData.ent=u;
@@ -305,7 +308,7 @@ function makeUnit(cfg){
   units.push(u);
   return u;
 }
-const GOB={
+const GOB:Record<string,UnitTemplate>={
   bruiser:{name:'Гоблин-задира',short:'Задира',hp:7,ac:13,xp:50,color:0x5d8f3f,
     weapon:{name:'Скимитар',dice:[1,6],abil:'str',melee:true,range:1}},
   archer:{name:'Гоблин-лучник',short:'Лучник',hp:7,ac:13,xp:50,color:0x6b7d3f,dex:14,
@@ -332,7 +335,7 @@ function makeGoblin(t,x,z){
   });
 }
 /* ================= v0.8: НЕЖИТЬ КРИПТЫ ================= */
-const SKEL={name:'Скелет-страж',short:'Скелет',hp:11,ac:13,xp:60,color:0xcfc7b0,
+const SKEL:UnitTemplate={name:'Скелет-страж',short:'Скелет',hp:11,ac:13,xp:60,color:0xcfc7b0,
   weapon:{name:'Ржавый меч',dice:[1,6],abil:'str',melee:true,range:1}};
 function makeSkeleton(x,z){
   gobCount[SKEL.short]=(gobCount[SKEL.short]||0)+1;
@@ -355,7 +358,7 @@ function applyElite(u){
   u.features.push('Элита племени Костей: крепче рядового и носит добычу получше');
   return u;
 }
-const SKEL_KNIGHT={name:'Скелет-рыцарь',short:'Рыцарь',hp:22,ac:15,xp:160,color:0xb8b09a,
+const SKEL_KNIGHT:UnitTemplate={name:'Скелет-рыцарь',short:'Рыцарь',hp:22,ac:15,xp:160,color:0xb8b09a,
   weapon:{name:'Древний клеймор',dice:[1,8],abil:'str',melee:true,range:1}};
 function makeSkeletonKnight(x,z){
   gobCount[SKEL_KNIGHT.short]=(gobCount[SKEL_KNIGHT.short]||0)+1;
@@ -370,7 +373,7 @@ function makeSkeletonKnight(x,z){
   });
   return applyElite(u);
 }
-const CULT={
+const CULT:Record<string,UnitTemplate>={
   cultist:{name:'Культист Костепёра',short:'Культист',hp:10,ac:12,xp:90,color:0x6a4f8e,dex:14,int:14,keepDist:true,
     weapon:{name:'Некротический сгусток',dice:[1,6],abil:'int',range:7,necro:true,status:{type:'poison',turns:2}},
     dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1}},
@@ -751,7 +754,7 @@ function teardownWorld(){
   clearGroup(worldGroup);
   groundMesh=null;fireLight=null;flameMesh=null;
   combatOn=false;order=[];turnIdx=-1;current=null;
-  $('#actionbar').style.display='none';
+  $(UI.actionbar).style.display='none';
   refreshBossBar();
 }
 /* v1.1: сборка карты без фейда — общее ядро switchMap и загрузки сейва.
@@ -777,14 +780,14 @@ function buildMap(id,spots){
   }
   initOverlays();
   phase='explore';
-  $('#round').textContent=MAP_NAME[mapId];
+  $(UI.round).textContent=MAP_NAME[mapId];
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
 async function switchMap(id){
   if(busy||mapId===id||phase==='transition')return;
   busyOn();phase='transition';
   sfx.portal();
-  const f=$('#fade');
+  const f=$(UI.fade);
   f.style.opacity='1';
   await sleep(620);
   teardownWorld();
@@ -794,8 +797,8 @@ async function switchMap(id){
   refreshTracker();refreshParty();refreshBossBar();
   busyOff();
 }
-const BOLT={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
-const SMITE={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
+const BOLT:Weapon={name:'Огненные стрелы',dice:[1,10],abil:'int',range:9,fire:true};
+const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
 
 /* ================= ТВИНЫ / ЭФФЕКТЫ ================= */
 function tween(dur,fn){return new Promise(res=>tweens.push({t:0,dur,fn,res}));}
@@ -838,7 +841,7 @@ function log(msg,cls){
   const p=document.createElement('p');
   if(cls)p.className=cls;
   p.textContent=msg;
-  const lb=$('#logbody');
+  const lb=$(UI.logbody);
   lb.appendChild(p);
   while(lb.children.length>80)lb.removeChild(lb.firstChild!);
   lb.scrollTop=lb.scrollHeight;
@@ -854,16 +857,16 @@ function ftextAbove(ent,text,color){
   const el=document.createElement('div');
   el.className='ft';el.textContent=text;el.style.color=color;
   el.style.left=s.x+'px';el.style.top=s.y+'px';
-  $('#ov').appendChild(el);
+  $(UI.ov).appendChild(el);
   setTimeout(()=>el.remove(),1100);
 }
-function setHint(t){$('#hint').textContent=t||'';}
+function setHint(t){$(UI.hint).textContent=t||'';}
 function bigBanner(text){
-  const b=$('#banner');b.textContent=text;b.style.opacity='1';
+  const b=$(UI.banner);b.textContent=text;b.style.opacity='1';
   setTimeout(()=>{b.style.opacity='0';},2200);
 }
 function initOverlays(){
-  const ov=$('#ov');
+  const ov=$(UI.ov);
   for(const u of units){
     if(u._el)continue;/* v0.8: герои переживают смену карт */
     const el=document.createElement('div');
@@ -887,7 +890,7 @@ function updateOverlays(){
     if(s.behind){el.style.display='none';continue;}
     el.style.display='block';
     el.style.left=s.x+'px';el.style.top=s.y+'px';
-    el.querySelector('.ubar i').style.width=Math.max(0,u.hp/u.maxhp*100)+'%';
+    const bar=el.querySelector<HTMLElement>('.ubar i');if(bar)bar.style.width=Math.max(0,u.hp/u.maxhp*100)+'%';
   }
 }
 
@@ -938,7 +941,7 @@ const fireGeo=new THREE.PlaneGeometry(TILE*0.95,TILE*0.95);
 function igniteTile(x,z,turns){
   const k=key(x,z);
   if(!grass.has(k))return;
-  if(fires.has(k)){const f=fires.get(k);f.turns=Math.max(f.turns,turns);return;}
+  if(fires.has(k)){const f=fires.get(k);if(f){f.turns=Math.max(f.turns,turns);return;}}
   const g=new THREE.Group();
   const m1=new THREE.Mesh(fireGeo,new THREE.MeshBasicMaterial(
     {color:0xff5a1f,transparent:true,opacity:0.55,depthWrite:false}));
@@ -986,7 +989,7 @@ function tickFires(){
   checkEnd();
 }
 /* Боевая математика → systems/combat.ts (Фаза 2): attackMod/blessed/hitChance/avgDamage */
-function addStatus(u,type,turns){
+function addStatus(u:Unit,type:StatusType,turns:number){
   if(!u||!u.alive||u.isBarrel)return;
   if(type==='fear'&&u.fearImmune){log(u.name+' не ведает страха!','g-enemy');return;}/* v0.8 */
   const ex=u.statuses.find(s=>s.type===type);
@@ -1269,8 +1272,8 @@ function startCombat(group){
   for(const u of list)u.init=d(20)+mod(u.dex);
   order=list.sort((a,b)=>b.init-a.init);
   turnIdx=-1;round=1;
-  $('#round').textContent='Раунд 1';
-  $('#actionbar').style.display='block';
+  $(UI.round).textContent='Раунд 1';
+  $(UI.actionbar).style.display='block';
   refreshInit();refreshParty();
   log('Инициатива: '+order.map(u=>u.name+' ('+u.init+')').join(', '),'g-sys');
   endTurn();
@@ -1282,8 +1285,8 @@ function beginTurn(u){
   for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:(x.elite?0xd8b45a:0xa04a3a));/* v1.3: элита — золотое кольцо */
   u.mesh.userData.ring.material.color.setHex(0xd8b45a);
   refreshInit();
-  $('#turnb').textContent=u.side==='hero'?'Ваш ход: '+u.name:'Ход противника: '+u.name;
-  $('#turnb').style.color=u.side==='hero'?'#8fd36a':'#e06c55';
+  $(UI.turnb).textContent=u.side==='hero'?'Ваш ход: '+u.name:'Ход противника: '+u.name;
+  $(UI.turnb).style.color=u.side==='hero'?'#8fd36a':'#e06c55';
   if(fires.has(key(u.x,u.z))){
     const dmg=d(4);
     log(u.name+' стоит в огне: '+dmg+' урона.','g-fire');
@@ -1304,7 +1307,7 @@ function beginTurn(u){
   u.action=u.actionMax;u.bonus=1;u.reaction=1;
   u.moveLeft=u.speed;u.disengaging=false;u.dashUsed=false;
   busy=false;
-  $('#actionbar').style.display='block';
+  $(UI.actionbar).style.display='block';
   if(u.side==='hero'){
     phase='player';
     refreshUI();showReach(u);
@@ -1322,7 +1325,7 @@ function endTurn(){
     turnIdx++;
     if(turnIdx>=order.length){
       turnIdx=0;round++;
-      $('#round').textContent='Раунд '+round;
+      $(UI.round).textContent='Раунд '+round;
       tickFires();
     }
     const c=order[turnIdx];
@@ -1405,19 +1408,19 @@ function levelUp(h){
   refreshParty();
 }
 function showEnd(win){
-  const e=$('#end');
-  $('#contBtn').style.display=win?'block':'none';
+  const e=$(UI.end);
+  $(UI.contBtn).style.display=win?'block':'none';
   e.style.display='flex';
-  $('#endtitle').textContent=win?'ПОБЕДА!':'ПОРАЖЕНИЕ';
-  $('#endtitle').style.color=win?'#d8b45a':'#e06c55';
+  $(UI.endtitle).textContent=win?'ПОБЕДА!':'ПОРАЖЕНИЕ';
+  $(UI.endtitle).style.color=win?'#d8b45a':'#e06c55';
   const lv=units.find(u=>u.side==='hero');
   if(win){
     const qd=Object.values(QUESTS).filter(q=>q.state==='done').length;
     const total=Object.keys(QUESTS).length;
     const fin=qd>=total?' Долгий Дозор будет помнить вас: тракт свободен — и от гоблинов, и от мертвецов!':'';
-    $('#endstats').textContent='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
+    $(UI.endstats).textContent='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
   }else{
-    $('#endstats').textContent='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
+    $(UI.endstats).textContent='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
   }
 }
 
@@ -1818,7 +1821,7 @@ function onLeftClick(){
 
 /* ================= v0.6: ЗАДАНИЯ, ДИАЛОГИ, ТОРГОВЛЯ, ИССЛЕДОВАНИЕ ================= */
 function aliveHeroes(){return units.filter(u=>u.side==='hero'&&u.alive);}
-const QUESTS={
+const QUESTS:Record<string,Quest>={
   main:{name:'Кости и пепел',state:'active',
     desc:'Гоблины племени Костей перекрыли торговый тракт. Разгромите их лагерь на севере и убейте вожака.',
     objs:[{k:'boss',t:'Убить вожака Грата Костолома',done:false}]},
@@ -1832,7 +1835,7 @@ const QUESTS={
     desc:'Мертвецы тракта — не гоблинская работа. Под курганом на северо-востоке открылась крипта, где сидит некромант Вхорил Костепёр и дёргает за ниточки своих костяных кукол.',
     objs:[{k:'enter',t:'Спуститься в крипту',done:false},{k:'boss',t:'Уничтожить Костепёра',done:false}]},
 };
-const QUEST_REWARD={
+const QUEST_REWARD:Record<string,string>={
   main:'300 XP, 150 зол.',
   prisoner:'150 XP, 100 зол., кулон красноречия',
   crate:'150 XP, 100 зол., вечная скидка',
@@ -1871,8 +1874,8 @@ function questDone(id){
 }
 function gainGold(n){S.gold+=n;refreshTracker();sfx.gold();}
 function refreshTracker(){
-  $('#goldTxt').textContent='Золото: '+S.gold+(S.discount?' · скидка 20%':'');
-  const el=$('#qbody');el.innerHTML='';
+  $(UI.goldTxt).textContent='Золото: '+S.gold+(S.discount?' · скидка 20%':'');
+  const el=$(UI.qbody);el.innerHTML='';
   for(const id in QUESTS){
     const q=QUESTS[id];
     if(q.state!=='active')continue;
@@ -1884,10 +1887,10 @@ function refreshTracker(){
   }
   if(!el.children.length)el.innerHTML='<div class="qo">Активных заданий нет. Поговорите с Дамроком или идите на север.</div>';
 }
-function toggleJournal(){const j=$('#journal');if(j.style.display==='block'){closeJournal();return;}renderJournal();j.style.display='block';sfx.ui();}
-function closeJournal(){$('#journal').style.display='none';}
+function toggleJournal(){const j=$(UI.journal);if(j.style.display==='block'){closeJournal();return;}renderJournal();j.style.display='block';sfx.ui();}
+function closeJournal(){$(UI.journal).style.display='none';}
 function renderJournal(){
-  const el=$('#jbody');el.innerHTML='';
+  const el=$(UI.jbody);el.innerHTML='';
   for(const id in QUESTS){
     const q=QUESTS[id];
     if(q.state==='hidden')continue;
@@ -1909,17 +1912,17 @@ function openDlg(npc){
   sfx.dialog();
   S.dlgNpc=npc;
   setHint('');
-  $('#dlgBox').style.display='block';
+  $(UI.dlgBox).style.display='block';
   showNode('start');
 }
 function closeDlg(){
-  $('#dlgBox').style.display='none';
+  $(UI.dlgBox).style.display='none';
   S.dlgNpc=null;
   if(phase==='dialogue'){phase='explore';busyOff();}
   refreshHintExplore();
 }
 function closeDlgHard(){
-  $('#dlgBox').style.display='none';
+  $(UI.dlgBox).style.display='none';
   S.dlgNpc=null;
   busyCount=Math.max(0,busyCount-1);busy=busyCount>0;
 }
@@ -1933,12 +1936,12 @@ function socialCheck(req){
   return ok;
 }
 function showNode(id){
-  const fn=DLGS[S.dlgNpc];
+  const fn=S.dlgNpc?DLGS[S.dlgNpc]:undefined;
   const n=fn?fn(id):null;
   if(!n)return closeDlg();
-  $('#dlgName').textContent=n.name;
-  $('#dlgText').textContent=n.text;
-  const box=$('#dlgOpts');box.innerHTML='';
+  $(UI.dlgName).textContent=n.name;
+  $(UI.dlgText).textContent=n.text;
+  const box=$(UI.dlgOpts);box.innerHTML='';
   for(const o of (n.opts||[])){
     if(o.show&&!o.show())continue;
     const b=document.createElement('button');
@@ -2106,11 +2109,12 @@ async function freeIlva(){
   if(it)interactables.splice(interactables.indexOf(it),1);
   if(QUESTS.prisoner.state==='hidden')questStart('prisoner');
   const path=astar(GW,CAGE.x,CAGE.z,13,21,null,false)||[];
+  const im=S.ilvaMesh as THREE.Object3D;/* Фаза 3: в этой ветке сцена Илвы гарантированно стоит */
   for(const st of path){
-    const a=S.ilvaMesh.position.clone(),b=new THREE.Vector3(W(st.x),0,W(st.z));
-    await tween(0.11,k=>S.ilvaMesh.position.lerpVectors(a,b,k));
+    const a=im.position.clone(),b=new THREE.Vector3(W(st.x),0,W(st.z));
+    await tween(0.11,k=>im.position.lerpVectors(a,b,k));
   }
-  S.ilvaMesh.removeFromParent();S.ilvaMesh=null;/* v0.8 */
+  im.removeFromParent();S.ilvaMesh=null;/* v0.8 */
   busyOff();
   questObj('prisoner','free');
   questDone('prisoner');
@@ -2121,7 +2125,7 @@ async function freeIlva(){
 function takeCrate(){
   if(S.hasCrate)return;
   S.hasCrate=true;
-  S.crateMesh.removeFromParent();S.crateMesh=null;/* v0.8 */
+  (S.crateMesh as THREE.Object3D).removeFromParent();S.crateMesh=null;/* Фаза 3: ящик гарантированно стоит */
   const it=interactables.find(i=>i.label==='Осмотреть ящик');
   if(it)interactables.splice(interactables.indexOf(it),1);
   if(QUESTS.crate.state==='hidden')questStart('crate');
@@ -2192,10 +2196,10 @@ const SHOP=[
   {n:'Кулон красноречия',p:100,d:'+1 ХАР владельцу — проверки убеждения легче.',t:'cha',v:1},
 ];
 const price=it=>S.discount?Math.floor(it.p*0.8):it.p;
-function openShop(){renderShop();$('#shop').style.display='block';sfx.dialog();}
-function closeShop(){$('#shop').style.display='none';}
+function openShop(){renderShop();$(UI.shop).style.display='block';sfx.dialog();}
+function closeShop(){$(UI.shop).style.display='none';}
 function renderShop(){
-  const el=$('#shopList');el.innerHTML='';
+  const el=$(UI.shopList);el.innerHTML='';
   for(const it of SHOP){
     const row=document.createElement('div');row.className='sitem';
     row.innerHTML='<div><div class="sn">'+it.n+'</div><div class="sd">'+it.d+'</div></div>'+
@@ -2209,17 +2213,17 @@ function renderShop(){
   }
 }
 function chooseHero(title,cb){
-  $('#choiceTitle').textContent=title;
-  const el=$('#choiceList');el.innerHTML='';
+  $(UI.choiceTitle).textContent=title;
+  const el=$(UI.choiceList);el.innerHTML='';
   for(const h of aliveHeroes()){
     const b=document.createElement('button');
     b.textContent=h.name+' — '+h.clsName+' (КД '+h.ac+')';
     b.onclick=()=>{closeChoice();cb(h);};
     el.appendChild(b);
   }
-  $('#choice').style.display='block';
+  $(UI.choice).style.display='block';
 }
-function closeChoice(){$('#choice').style.display='none';}
+function closeChoice(){$(UI.choice).style.display='none';}
 function applyItem(it,h){
   S.gold-=price(it);
   if(it.t==='potion')h.potions++;
@@ -2231,14 +2235,14 @@ function applyItem(it,h){
   log('Куплено: '+it.n+' → '+h.short+' (−'+price(it)+' зол.).','g-sys');
   refreshTracker();refreshParty();renderShop();
 }
-$('#shopClose').onclick=closeShop;
-$('#jClose').onclick=closeJournal;
-$('#choiceCancel').onclick=closeChoice;
-$('#contBtn').onclick=()=>{$('#end').style.display='none';};
+$(UI.shopClose).onclick=closeShop;
+$(UI.jClose).onclick=closeJournal;
+$(UI.choiceCancel).onclick=closeChoice;
+$(UI.contBtn).onclick=()=>{$(UI.end).style.display='none';};
 function openExploreUI(){
-  $('#actionbar').style.display='none';
-  $('#turnb').textContent='';
-  $('#round').textContent=MAP_NAME[mapId];/* v0.8 */
+  $(UI.actionbar).style.display='none';
+  $(UI.turnb).textContent='';
+  $(UI.round).textContent=MAP_NAME[mapId];/* v0.8 */
   refreshInit();refreshTracker();
   refreshHintExplore();
 }
@@ -2248,16 +2252,16 @@ function refreshUI(){
   if(phase==='explore'||phase==='dialogue')return;
   const h=current&&current.side==='hero'?current:null;
   if(h){
-    $('#pips').innerHTML=
+    $(UI.pips).innerHTML=
       '<span>Действие <b>'+h.action+'</b></span>'+
       '<span>Бонус <b>'+h.bonus+'</b></span>'+
       '<span>Реакция <b>'+h.reaction+'</b></span>'+
       '<span>Перемещение <b>'+h.moveLeft+'</b> кл.</span>'+
       '<span>Ячейки <b>'+(h.slotsMax?h.slots+'\/'+h.slotsMax:'—')+'</b></span>';
   }else{
-    $('#pips').innerHTML='<span>Ход противника…</span>';
+    $(UI.pips).innerHTML='<span>Ход противника…</span>';
   }
-  const bb=$('#btns');
+  const bb=$(UI.btns);
   bb.innerHTML='';
   if(!h){
     bb.innerHTML='<button disabled>Ожидание…</button>';
@@ -2275,7 +2279,7 @@ function refreshUI(){
   refreshParty();
 }
 function refreshParty(){
-  const el=$('#party');
+  const el=$(UI.party);
   el.innerHTML='';
   for(const h of units.filter(u=>u.side==='hero')){
     const card=document.createElement('div');
@@ -2294,17 +2298,17 @@ function refreshParty(){
 }
 /* v0.8: боссбар сверху экрана */
 function refreshBossBar(){
-  const el=$('#bossbar');
+  const el=$(UI.bossbar);
   if(!el)return;
   const b=combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
   if(!b){el.style.display='none';return;}
   el.style.display='block';
-  $('#bossname').textContent=b.name+' — '+b.clsName;
-  $('#bossfill').style.width=Math.max(0,b.hp/b.maxhp*100)+'%';
+  $(UI.bossname).textContent=b.name+' — '+b.clsName;
+  $(UI.bossfill).style.width=Math.max(0,b.hp/b.maxhp*100)+'%';
 }
 function refreshInit(){
   refreshBossBar();
-  const el=$('#initRow');
+  const el=$(UI.initRow);
   if(!combatOn){el.innerHTML='';return;}
   el.innerHTML=order.map(u=>
     '<span class="chip '+u.side+' '+(u===current?'cur ':'')+(!u.alive?'dead':'')+'">'+u.short+' '+u.init+'</span>').join('');
@@ -2333,7 +2337,7 @@ function showSheet(h){
     spells='<p>Подлый удар: +'+(h.level>=3?'2d6':'1d6')+', если рядом с целью есть союзник</p>'+
       '<p>Отравленный клинок: зарядов на очереди — '+h.poisonBlade+'</p>';
   }
-  $('#sheetbox').innerHTML=
+  $(UI.sheetbox).innerHTML=
     '<h2>'+h.name+'</h2>'+
     '<div class="sub">Человек · '+h.clsName+' · уровень '+h.level+'</div>'+
     '<div class="srow">'+
@@ -2354,9 +2358,9 @@ function showSheet(h){
     h.features.map(f=>'<p>• '+f+'</p>').join('')+
     '<div class="pbar" style="margin-top:10px"><i style="width:'+Math.min(100,h.xp/need*100)+'%"></i></div>'+
     '<p style="margin-top:3px">Опыт: '+h.xp+' / '+need+'</p>';
-  $('#sheet').style.display='flex';
+  $(UI.sheet).style.display='flex';
 }
-$('#sheet').addEventListener('click',e=>{if((e.target as HTMLElement).id==='sheet')$('#sheet').style.display='none';});
+$(UI.sheet).addEventListener('click',e=>{if((e.target as HTMLElement).id==='sheet')$(UI.sheet).style.display='none';});
 
 /* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
    Слоты живут в localStorage (bg3w_slot_1..3), формат — обычный JSON, поэтому
@@ -2364,7 +2368,7 @@ $('#sheet').addEventListener('click',e=>{if((e.target as HTMLElement).id==='shee
 /* SAVE_VER/SLOT_N → constants.ts (Фаза 2) */
 const slotKey=i=>'bg3w_slot_'+i;
 let savesFromEnd=false,importSlot=1;
-function gameSnapshot(){
+function gameSnapshot():SaveData{/* Фаза 3: формат v2 заморожен (types.ts) */
   return {
     v:SAVE_VER,when:Date.now(),
     mapId,mapName:MAP_NAME[mapId],
@@ -2385,11 +2389,11 @@ function gameSnapshot(){
     })),
   };
 }
-function slotMeta(sv){
+function slotMeta(sv:SaveData){
   const lv=sv.heroes&&sv.heroes.length?Math.max(...sv.heroes.map(h=>h.level||1)):1;
   return (sv.mapName||MAP_NAME[sv.mapId]||'?')+' · ур. '+lv+' · '+(sv.gold||0)+' зол. · '+new Date(sv.when).toLocaleString('ru-RU');
 }
-function readSlot(i){
+function readSlot(i:number):SaveData|null{
   try{const raw=localStorage.getItem(slotKey(i));return raw?JSON.parse(raw):null;}
   catch(e){return null;}
 }
@@ -2423,7 +2427,7 @@ function doExport(i){
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   log('Сейв слота '+i+' выгружен в JSON-файл.','g-sys');sfx.ui();
 }
-function doImport(i){importSlot=i;$('#importFile').click();}
+function doImport(i){importSlot=i;$(UI.importFile).click();}
 function onImportFile(e){
   const file=e.target.files&&e.target.files[0];
   e.target.value='';
@@ -2440,12 +2444,12 @@ function onImportFile(e){
     renderSaves();sfx.ui();
   });
 }
-function applyGame(sv){
+function applyGame(sv:SaveData|null){
   if(!sv||sv.v!==SAVE_VER||!Array.isArray(sv.heroes)){log('Сейв повреждён или от другой версии.','g-enemy');return;}
   if(phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
   if(S.dlgNpc)closeDlgHard();
   closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();
-  $('#sheet').style.display='none';$('#end').style.display='none';
+  $(UI.sheet).style.display='none';$(UI.end).style.display='none';
   S.gold=sv.gold||0;S.discount=!!sv.discount;
   const fl=sv.flags||{};
   S.patrolDone=!!fl.patrolDone;S.campDone=!!fl.campDone;S.cageSeen=!!fl.cageSeen;S.knowsBoss=!!fl.knowsBoss;
@@ -2469,7 +2473,7 @@ function applyGame(sv){
     h.level=hd.level||1;h.xp=hd.xp||0;
     h.maxhp=hd.maxhp||h.maxhp;h.hp=clamp(hd.hp||1,1,h.maxhp);
     h.ac=hd.ac||h.ac;
-    ['str','dex','con','int','wis','cha'].forEach(a=>{if(typeof hd[a]==='number')h[a]=hd[a];});
+    (['str','dex','con','int','wis','cha'] as const).forEach(a=>{if(typeof hd[a]==='number')h[a]=hd[a];});
     h.slotsMax=hd.slotsMax||0;h.slots=h.slotsMax;
     h.potions=hd.potions||0;h.oil=hd.oil||0;h.armor=hd.armor||h.armor;h.relic=hd.relic||null;/* v1.3: реликвия элиты */
     if(hd.weapon&&hd.weapon.dice)h.weapon={name:hd.weapon.name,dice:hd.weapon.dice,abil:hd.weapon.abil,range:hd.weapon.range,melee:!!hd.weapon.melee};
@@ -2486,10 +2490,10 @@ function applyGame(sv){
   sfx.ui();
 }
 function renderSaves(){
-  const el=$('#saveList');if(!el)return;
+  const el=$(UI.saveList);if(!el)return;
   el.innerHTML='';
   const hs=units.filter(u=>u.side==='hero');
-  $('#curSave').textContent='Текущая игра: '+MAP_NAME[mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
+  $(UI.curSave).textContent='Текущая игра: '+MAP_NAME[mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
   for(let i=1;i<=SLOT_N;i++){
     const sv=readSlot(i);
     const row=document.createElement('div');row.className='slot';
@@ -2513,23 +2517,23 @@ function renderSaves(){
 function openSaveMenu(fromEnd){
   savesFromEnd=!!fromEnd;
   renderSaves();
-  $('#saves').style.display='block';
+  $(UI.saves).style.display='block';
   sfx.ui();
 }
 function closeSaveMenu(){
-  $('#saves').style.display='none';
+  $(UI.saves).style.display='none';
   if(savesFromEnd){
     savesFromEnd=false;
-    if(phase==='over')$('#end').style.display='flex';/* вернулись на экран поражения */
+    if(phase==='over')$(UI.end).style.display='flex';/* вернулись на экран поражения */
   }
 }
 function toggleSaveMenu(){
-  if($('#saves').style.display==='block')closeSaveMenu();
+  if($(UI.saves).style.display==='block')closeSaveMenu();
   else openSaveMenu(false);
 }
-$('#savesClose').onclick=closeSaveMenu;
-$('#importFile').addEventListener('change',onImportFile);
-$('#loadBtn2').onclick=()=>{$('#end').style.display='none';openSaveMenu(true);};
+$(UI.savesClose).onclick=closeSaveMenu;
+$(UI.importFile).addEventListener('change',onImportFile);
+$(UI.loadBtn2).onclick=()=>{$(UI.end).style.display='none';openSaveMenu(true);};
 
 /* ================= v1.1: НАСТРОЙКИ ГРАФИКИ =================
    Тени / bloom / glow-хала / плотность частиц / разрешение / лимит FPS.
@@ -2574,7 +2578,7 @@ const GFX_ROWS=[
   {k:'fps',label:'Лимит FPS',opts:[['30','30'],['60','60'],['max','Макс']]},
 ];
 function renderGfx(){
-  const el=$('#gfxBody');if(!el)return;
+  const el=$(UI.gfxBody);if(!el)return;
   el.innerHTML='';
   const pl=document.createElement('div');
   pl.style.cssText='font-size:11px;color:#a89f86;margin:2px 0 3px';
@@ -2603,13 +2607,13 @@ function renderGfx(){
     el.appendChild(row);
   }
 }
-function openGfx(){renderGfx();$('#gfx').style.display='block';sfx.ui();}
-function closeGfx(){$('#gfx').style.display='none';}
+function openGfx(){renderGfx();$(UI.gfx).style.display='block';sfx.ui();}
+function closeGfx(){$(UI.gfx).style.display='none';}
 function toggleGfx(){
-  if($('#gfx').style.display==='block')closeGfx();
+  if($(UI.gfx).style.display==='block')closeGfx();
   else openGfx();
 }
-$('#gfxClose').onclick=closeGfx;
+$(UI.gfxClose).onclick=closeGfx;
 
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
@@ -2672,7 +2676,7 @@ function updateHoverFX(e){
   }
 }
 function showTipFor(ent,e){
-  const tip=$('#tip');
+  const tip=$(UI.tip);
   if(!ent){tip.style.display='none';return;}
   let html='';
   if(ent.talkName){
@@ -2710,7 +2714,7 @@ function bindInput(){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   const onKey=e=>{
     sfx.unlock();
-    if(e.key==='Escape'){cancelTargeting();$('#sheet').style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
+    if(e.key==='Escape'){cancelTargeting();$(UI.sheet).style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
       if(phase==='explore'&&!busy){const it=nearestInteract();if(it)it.fn();}
     }
@@ -2748,8 +2752,8 @@ function loop(){
   if(fireLight)fireLight.intensity=22+Math.sin(t*11)*4+Math.sin(t*23.7)*2.5;
   if(flameMesh){flameMesh.scale.y=1+Math.sin(t*13)*0.18;flameMesh.rotation.y+=dt*2;}
   for(const f of fires.values()){
-    f.m1.material.opacity=0.4+0.18*Math.sin(t*6+f.x*1.3);
-    f.m2.material.opacity=0.35+0.2*Math.sin(t*9+f.z);
+    (f.m1.material as THREE.MeshBasicMaterial).opacity=0.4+0.18*Math.sin(t*6+f.x*1.3);
+    (f.m2.material as THREE.MeshBasicMaterial).opacity=0.35+0.2*Math.sin(t*9+f.z);
     f.m2.scale.setScalar(0.5+0.12*Math.sin(t*8+f.x));
   }
   if(shakeT>0){

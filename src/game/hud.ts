@@ -32,3 +32,27 @@ export const HUD_HTML = `<div id="scene"></div>
 <div id="saves" class="panel"><h3>Скрижали судьбы · сохранения</h3><div id="curSave"></div><div id="saveList"></div><input id="importFile" type="file" accept=".json,application/json" style="display:none"><button id="savesClose" style="margin-top:6px">Закрыть (K)</button></div>
 <div id="fade"></div>
 <div id="slowfx"></div>`;
+
+/* ================= Фаза 3: реестр DOM-id =================
+   Единственный источник строковых селекторов: engine обращается к DOM
+   только через $(UI.…). Переименование id — правка в одном месте;
+   опечатка в ключе ловится tsc (typeof UI — union строк). */
+export const UI={
+  scene:'#scene',ov:'#ov',topbar:'#topbar',round:'#round',turnb:'#turnb',initRow:'#initRow',
+  bossbar:'#bossbar',bossname:'#bossname',bossfill:'#bossfill',
+  sndBtn:'#sndBtn',gfxBtn:'#gfxBtn',saveBtn:'#saveBtn',
+  log:'#log',logbody:'#logbody',party:'#party',hint:'#hint',
+  actionbar:'#actionbar',pips:'#pips',btns:'#btns',banner:'#banner',tip:'#tip',
+  end:'#end',endtitle:'#endtitle',endstats:'#endstats',contBtn:'#contBtn',loadBtn2:'#loadBtn2',
+  sheet:'#sheet',sheetbox:'#sheetbox',
+  qtrack:'#qtrack',goldTxt:'#goldTxt',qbody:'#qbody',
+  dlgBox:'#dlgBox',dlgName:'#dlgName',dlgText:'#dlgText',dlgOpts:'#dlgOpts',
+  shop:'#shop',shopList:'#shopList',shopClose:'#shopClose',
+  journal:'#journal',jbody:'#jbody',jClose:'#jClose',
+  choice:'#choice',choiceTitle:'#choiceTitle',choiceList:'#choiceList',choiceCancel:'#choiceCancel',
+  gfx:'#gfx',gfxBody:'#gfxBody',gfxClose:'#gfxClose',
+  saves:'#saves',curSave:'#curSave',saveList:'#saveList',importFile:'#importFile',savesClose:'#savesClose',
+  fade:'#fade',slowfx:'#slowfx',
+} as const;
+
+export type UiId=typeof UI[keyof typeof UI];
