@@ -1638,7 +1638,6 @@ function fleeUnits(arr){
 }
 
 /* ---- взаимодействие и исследование ---- */
-const interactables:any[]=[];
 function addInteract(x,z,r,label,fn,mesh,talkName,talkDesc){
   const it={x,z,r,label,fn,mesh,talkName,talkDesc};
   if(mesh)mesh.userData.it=it;
@@ -2107,7 +2106,7 @@ function updatePick(e){
     if(o)pick.ent=o.userData.ent;
   }
   if(!pick.ent&&G.phase==='explore'){
-    const ims=interactables.filter(it=>it.mesh).map(it=>it.mesh);
+    const ims=interactables.flatMap(it=>it.mesh?[it.mesh]:[]);/* Фаза 4: Interact.mesh опционален */
     const ih=ray.intersectObjects(ims,true);
     if(ih.length){
       let o:any=ih[0].object;
