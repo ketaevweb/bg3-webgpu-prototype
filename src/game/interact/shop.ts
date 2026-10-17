@@ -1,12 +1,11 @@
-/* ================= SHOP (Фазы 4–5 рефакторинга) =================
+/* ================= SHOP (Фазы 4–6 рефакторинга) =================
    Лавка Дамрока, выбор героя, применение предметов. Фаза 5: refreshParty —
-   через шину bus; SHOP/цены/применение типизированы (ShopItem).
-   Перенесено дословно. */
-import { $ } from '../utils';
-import { UI } from '../hud';
+   через шину bus. Фаза 6: DOM-рендер заменён view-моделями zustand-стора;
+   биндинги shopOnClose/choiceOnClose — кнопки «Закрыть»/«Отмена». 1:1. */
 import { sfx } from '../audio';
 import { S } from '../state';
 import { bus } from '../bus';
+import { uiSet } from '../ui/store';
 import { log } from '../ui/overlays';
 import { refreshTracker } from '../interact/quests';
 import { aliveHeroes } from '../entities/units';
@@ -23,34 +22,24 @@ export const SHOP:ShopItem[]=[
   {n:'Кулон красноречия',p:100,d:'+1 ХАР владельцу — проверки убеждения легче.',t:'cha',v:1},
 ];
 export const price=(it:ShopItem):number=>S.discount?Math.floor(it.p*0.8):it.p;
-export function openShop(){renderShop();$(UI.shop).style.display='block';sfx.dialog();}
-export function closeShop(){$(UI.shop).style.display='none';}
+export function openShop(){renderShop();uiSet({shopOpen:true});sfx.dialog();}
+export function closeShop(){uiSet({shopOpen:false});}
 export function renderShop(){
-  const el=$(UI.shopList);el.innerHTML='';
-  for(const it of SHOP){
-    const row=document.createElement('div');row.className='sitem';
-    row.innerHTML='<div><div class="sn">'+it.n+'</div><div class="sd">'+it.d+'</div></div>'+
-      '<div class="sp">'+price(it)+' зол.</div>';
-    const b=document.createElement('button');
-    b.textContent='Купить';
-    b.disabled=S.gold<price(it);
-    b.onclick=()=>chooseHero('Кому: '+it.n+'?',h=>applyItem(it,h));
-    row.appendChild(b);
-    el.appendChild(row);
-  }
+  uiSet({shopRows:SHOP.map(it=>({
+    n:it.n,d:it.d,price:price(it),canBuy:S.gold>=price(it),
+    buy:()=>chooseHero('Кому: '+it.n+'?',h=>applyItem(it,h)),
+  }))});
 }
 export function chooseHero(title:string,cb:(h:Unit)=>void){
-  $(UI.choiceTitle).textContent=title;
-  const el=$(UI.choiceList);el.innerHTML='';
-  for(const h of aliveHeroes()){
-    const b=document.createElement('button');
-    b.textContent=h.name+' — '+h.clsName+' (КД '+h.ac+')';
-    b.onclick=()=>{closeChoice();cb(h);};
-    el.appendChild(b);
-  }
-  $(UI.choice).style.display='block';
+  uiSet({choice:{
+    title,
+    options:aliveHeroes().map(h=>({
+      label:h.name+' — '+h.clsName+' (КД '+h.ac+')',
+      onClick:()=>{closeChoice();cb(h);},
+    })),
+  }});
 }
-export function closeChoice(){$(UI.choice).style.display='none';}
+export function closeChoice(){uiSet({choice:null});}
 export function applyItem(it:ShopItem,h:Unit){
   S.gold-=price(it);
   if(it.t==='potion')h.potions++;
@@ -62,3 +51,6 @@ export function applyItem(it:ShopItem,h:Unit){
   log('Куплено: '+it.n+' → '+h.short+' (−'+price(it)+' зол.).','g-sys');
   refreshTracker();bus.refreshParty.call();renderShop();
 }
+
+/* ---- биндинги UI-колбэков (Фаза 6: кнопки панелей) ---- */
+uiSet({shopOnClose:closeShop,choiceOnClose:closeChoice});

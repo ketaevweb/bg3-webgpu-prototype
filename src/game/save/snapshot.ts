@@ -4,11 +4,11 @@
    doLoad (slots.ts); openExploreUI/refreshParty/refreshBossBar — через шину
    bus. Перенесено дословно из engine.ts. */
 import { SAVE_VER, W } from '../constants';
-import { $, clamp } from '../utils';
-import { UI } from '../hud';
+import { clamp } from '../utils';
 import { sfx } from '../audio';
 import { S, G, units, MAP_NAME } from '../state';
 import { bus } from '../bus';
+import { uiSet } from '../ui/store';
 import { QUESTS, closeJournal, refreshTracker } from '../interact/quests';
 import { closeDlgHard } from '../interact/dialog';
 import { closeShop, closeChoice } from '../interact/shop';
@@ -47,7 +47,7 @@ export function applyGame(sv:SaveData|null){
   if(G.phase==='transition'){log('Идёт переход между картами — подождите.','g-enemy');return;}
   if(S.dlgNpc)closeDlgHard();
   closeJournal();closeShop();closeChoice();closeGfx();
-  $(UI.sheet).style.display='none';$(UI.end).style.display='none';
+  uiSet({sheet:null,endHidden:true});
   S.gold=sv.gold||0;S.discount=!!sv.discount;
   const fl=sv.flags||{};
   S.patrolDone=!!fl.patrolDone;S.campDone=!!fl.campDone;S.cageSeen=!!fl.cageSeen;S.knowsBoss=!!fl.knowsBoss;

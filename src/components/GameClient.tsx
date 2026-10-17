@@ -2,16 +2,18 @@
 
 import { useEffect, useRef } from 'react';
 import '@/game/game.css';
-import { HUD_HTML } from '@/game/hud';
+import Hud from '@/components/hud/Hud';
 
 /**
  * Тонкая React-обёртка над игровым движком.
- * - HUD инжектится синхронно (чистая разметка, SSR-safe);
+ * - императивные слои: #scene (канвас), #ov (HP-полоски/флоат-текст
+ *   покадрово), #fade (переход карт), #slowfx (виньетка слоу-мо);
+ * - весь остальной HUD — React-компоненты (src/components/hud/*) на
+ *   zustand-сторе ui/store.ts (Фаза 6 рефакторинга);
  * - движок (three/webgpu) грузится динамически только на клиенте;
  * - bootGame() возвращает dispose() для чистого размонтирования.
  */
 export default function GameClient() {
-  const hostRef = useRef<HTMLDivElement>(null);
   const disposeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -33,10 +35,15 @@ export default function GameClient() {
   }, []);
 
   return (
-    <div
-      ref={hostRef}
-      style={{ position: 'fixed', inset: 0, background: '#0b0f0c' }}
-      dangerouslySetInnerHTML={{ __html: HUD_HTML }}
-    />
+    <div style={{ position: 'fixed', inset: 0, background: '#0b0f0c' }}>
+      {/* императивные слои (реестр UI — src/game/hud.ts) */}
+      <div id="scene" />
+      <div id="ov" />
+      {/* React-HUD (zustand-стор) */}
+      <Hud />
+      {/* полноэкранные эффекты поверх HUD */}
+      <div id="fade" />
+      <div id="slowfx" />
+    </div>
   );
 }

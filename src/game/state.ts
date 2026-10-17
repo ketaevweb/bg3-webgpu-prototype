@@ -10,6 +10,7 @@
    никогда не переприсваиваются (проверено grep в Фазе 2). */
 import type * as THREE from 'three/webgpu';
 import type { FireTile, GameState, GridWorld, Interact, MapId, Phase, PickState, TargetingState, Unit } from './types';
+import { resetUi } from './ui/store';
 
 /* ---- метапрогресс и флаги квестов (S) ---- */
 export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
@@ -65,8 +66,10 @@ export const CRYPT={
 
 /* ---- чистый ремоут (REFACTORING.md §4: dispose() → resetState()) ----
    Возвращает S/G/контейнеры в состояние первого запуска; хэндлы рендера
-   (hemiLight/sunLight/postFX) сохраняются — это синглтоны render/renderer.ts. */
+   (hemiLight/sunLight/postFX) сохраняются — это синглтоны render/renderer.ts.
+   Фаза 6: вместе с состоянием сбрасывается и UI-стор (React-HUD). */
 export function resetState(){
+  resetUi();
   Object.assign(S,{gold:60,discount:false,patrolDone:false,campDone:false,cageSeen:false,knowsBoss:false,
     hasCrate:false,ilvaFreed:false,mainShown:false,patrolGroup:[],campGroup:[],combatGroup:[],dlgNpc:null,
     cageMesh:null,ilvaMesh:null,crateMesh:null,kayaMesh:null,

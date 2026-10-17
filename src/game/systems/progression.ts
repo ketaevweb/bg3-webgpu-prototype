@@ -4,13 +4,12 @@
    refreshTracker/checkTriggers — через шину bus; цикл progression→party
    разорван (openExploreUI/refreshParty/refreshBossBar — через bus);
    healUnit — из vitals.ts (разрыв progression→combat). Перенесено дословно. */
-import { $ } from '../utils';
 import { roll } from '../rng';
-import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, units } from '../state';
 import { XP_NEED } from '../constants';
 import { bus } from '../bus';
+import { uiSet } from '../ui/store';
 import { bigBanner, log } from '../ui/overlays';
 import { aliveHeroes, removeUnit } from '../entities/units';
 import { healUnit } from './vitals';
@@ -90,18 +89,20 @@ export function levelUp(h:Unit){
   bus.refreshParty.call();
 }
 export function showEnd(win:boolean){
-  const e=$(UI.end);
-  $(UI.contBtn).style.display=win?'block':'none';
-  e.style.display='flex';
-  $(UI.endtitle).textContent=win?'ПОБЕДА!':'ПОРАЖЕНИЕ';
-  $(UI.endtitle).style.color=win?'#d8b45a':'#e06c55';
   const lv=units.find(u=>u.side==='hero');
+  let stats:string;
   if(win){
     const qd=Object.values(QUESTS).filter(q=>q.state==='done').length;
     const total=Object.keys(QUESTS).length;
     const fin=qd>=total?' Долгий Дозор будет помнить вас: тракт свободен — и от гоблинов, и от мертвецов!':'';
-    $(UI.endstats).textContent='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
+    stats='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
   }else{
-    $(UI.endstats).textContent='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
+    stats='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
   }
+  uiSet({endHidden:false,end:{
+    title:win?'ПОБЕДА!':'ПОРАЖЕНИЕ',
+    color:win?'#d8b45a':'#e06c55',
+    stats,
+    canContinue:win,
+  }});
 }

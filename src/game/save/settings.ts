@@ -1,12 +1,12 @@
-/* ================= SETTINGS/GFX (Фаза 4 рефакторинга) =================
-   Настройки графики (тени/bloom/glow/частицы/разрешение/FPS) +
-   пресеты; localStorage bg3w_gfx_v1. bloomOn/fpsLimit/frameAcc живут в G.
-   Перенесено дословно из engine.ts. */
+/* ================= SETTINGS/GFX (Фазы 4–6 рефакторинга) =================
+   Настройки графики (тени/bloom/glow/частицы/разрешение/FPS) + пресеты;
+   localStorage bg3w_gfx_v1. bloomOn/fpsLimit/frameAcc живут в G.
+   Фаза 6: DOM-рендер заменён view-моделью zustand-стора (React-HUD);
+   биндинги gfxOnClose/sys.onGfx. Логика применения — без изменений. */
 import { renderer, fx, glows } from '../render/renderer';
 import { G } from '../state';
-import { $ } from '../utils';
-import { UI } from '../hud';
 import { sfx } from '../audio';
+import { useUi, uiSet } from '../ui/store';
 
 /* ================= v1.1: НАСТРОЙКИ ГРАФИКИ =================
    Тени / bloom / glow-хала / плотность частиц / разрешение / лимит FPS.
@@ -52,41 +52,30 @@ export const GFX_ROWS:{k:GfxKey;label:string;bool?:boolean;opts:[string,string][
   {k:'fps',label:'Лимит FPS',opts:[['30','30'],['60','60'],['max','Макс']]},
 ];
 export function renderGfx(){
-  const el=$(UI.gfxBody);if(!el)return;
-  el.innerHTML='';
-  const pl=document.createElement('div');
-  pl.style.cssText='font-size:11px;color:#a89f86;margin:2px 0 3px';
-  pl.textContent='Пресет качества:';
-  el.appendChild(pl);
-  const pre=document.createElement('div');pre.className='gpre';
-  for(const [k,n] of ([['low','Низкий'],['mid','Средний'],['high','Высокий']] as const)){
-    const b=document.createElement('button');b.textContent=n;
-    b.onclick=()=>{Object.assign(gfx,GFX_PRESETS[k]);applyGfx();renderGfx();sfx.ui();};
-    pre.appendChild(b);
-  }
-  el.appendChild(pre);
-  for(const r of GFX_ROWS){
-    const row=document.createElement('div');row.className='grow';
-    const lab=document.createElement('span');lab.className='gl';lab.textContent=r.label;
-    const seg=document.createElement('div');seg.className='seg';
-    for(const [val,name] of r.opts){
-      const b=document.createElement('button');b.textContent=name;
-      const active=r.bool?(!!gfx[r.k]===(val==='1')):String(gfx[r.k])===val;
-      if(active)b.classList.add('on');
-      b.onclick=()=>{
+  const presets=( [['low','Низкий'],['mid','Средний'],['high','Высокий']] as const ).map(([k,n])=>({
+    name:n,
+    pick:()=>{Object.assign(gfx,GFX_PRESETS[k]);applyGfx();renderGfx();sfx.ui();},
+  }));
+  const rows=GFX_ROWS.map(r=>({
+    label:r.label,
+    segs:r.opts.map(([val,name])=>({
+      name,
+      active:r.bool?(!!gfx[r.k]===(val==='1')):String(gfx[r.k])===val,
+      pick:()=>{
         /* запись в словарь настроек по ключу строки панели */
         (gfx as Record<GfxKey,string|boolean>)[r.k]=r.bool?(val==='1'):val;
         applyGfx();renderGfx();sfx.ui();
-      };
-      seg.appendChild(b);
-    }
-    row.appendChild(lab);row.appendChild(seg);
-    el.appendChild(row);
-  }
+      },
+    })),
+  }));
+  uiSet({gfxPresets:presets,gfxRows:rows});
 }
-export function openGfx(){renderGfx();$(UI.gfx).style.display='block';sfx.ui();}
-export function closeGfx(){$(UI.gfx).style.display='none';}
+export function openGfx(){renderGfx();uiSet({gfxOpen:true});sfx.ui();}
+export function closeGfx(){uiSet({gfxOpen:false});}
 export function toggleGfx(){
-  if($(UI.gfx).style.display==='block')closeGfx();
+  if(useUi.getState().gfxOpen)closeGfx();
   else openGfx();
 }
+
+/* ---- биндинги UI-колбэков (Фаза 6: кнопка ⚙ и «Закрыть (G)») ---- */
+uiSet(s=>({sys:{...s.sys,onGfx:toggleGfx},gfxOnClose:closeGfx}));

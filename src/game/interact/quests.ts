@@ -1,14 +1,12 @@
-/* ================= QUESTS (Фазы 4–5 рефакторинга) =================
+/* ================= QUESTS (Фазы 4–6 рефакторинга) =================
    Журнал заданий, награды, золото, трекер. Фаза 5: данные (QUESTS/
-   QUEST_REWARD) переехали в лист interact/questData.ts (разрыв цикла
-   quests⇄progression — progression.showEnd читает данные); refreshParty —
-   через шину bus; refreshTracker привязан к шине (progression зовёт через
-   bus). Перенесено дословно из engine.ts. */
-import { $ } from '../utils';
-import { UI } from '../hud';
+   QUEST_REWARD) — в листе interact/questData.ts; refreshTracker привязан
+   к шине bus. Фаза 6: трекер и журнал — view-модели в zustand-стор
+   (React-HUD); биндинг journalOnClose — кнопка «Закрыть (J)». 1:1. */
 import { sfx } from '../audio';
 import { S } from '../state';
 import { bus } from '../bus';
+import { useUi, uiSet } from '../ui/store';
 import { bigBanner, log } from '../ui/overlays';
 import { aliveHeroes } from '../entities/units';
 import { awardXP } from '../systems/progression';
@@ -51,36 +49,27 @@ export function questDone(id:string){
 }
 export function gainGold(n:number){S.gold+=n;refreshTracker();sfx.gold();}
 export function refreshTracker(){
-  $(UI.goldTxt).textContent='Золото: '+S.gold+(S.discount?' · скидка 20%':'');
-  const el=$(UI.qbody);el.innerHTML='';
-  for(const id in QUESTS){
-    const q=QUESTS[id];
-    if(q.state!=='active')continue;
-    const d=document.createElement('div');
-    d.className='q';
-    d.innerHTML='<div class="qn">'+q.name+'</div>'+q.objs.map(o=>
-      '<div class="qo'+(o.done?' done':'')+'">'+(o.done?'✓':'·')+' '+o.t+'</div>').join('');
-    el.appendChild(d);
-  }
-  if(!el.children.length)el.innerHTML='<div class="qo">Активных заданий нет. Поговорите с Дамроком или идите на север.</div>';
+  const quests=Object.keys(QUESTS).filter(id=>QUESTS[id].state==='active').map(id=>({
+    name:QUESTS[id].name,
+    objs:QUESTS[id].objs.map(o=>({t:o.t,done:o.done})),
+  }));
+  uiSet({tracker:{gold:'Золото: '+S.gold+(S.discount?' · скидка 20%':''),quests}});
 }
-export function toggleJournal(){const j=$(UI.journal);if(j.style.display==='block'){closeJournal();return;}renderJournal();j.style.display='block';sfx.ui();}
-export function closeJournal(){$(UI.journal).style.display='none';}
+export function toggleJournal(){
+  if(useUi.getState().journalOpen){closeJournal();return;}
+  renderJournal();uiSet({journalOpen:true});sfx.ui();
+}
+export function closeJournal(){uiSet({journalOpen:false});}
 export function renderJournal(){
-  const el=$(UI.jbody);el.innerHTML='';
-  for(const id in QUESTS){
+  const items=Object.keys(QUESTS).filter(id=>QUESTS[id].state!=='hidden').map(id=>{
     const q=QUESTS[id];
-    if(q.state==='hidden')continue;
-    const d=document.createElement('div');
-    d.className='jq';
-    d.innerHTML='<div class="jn">'+q.name+'<span class="jst'+(q.state==='done'?' done':'')+'">'+
-      (q.state==='done'?'выполнено':'активно')+'</span></div>'+
-      '<div class="jd">'+q.desc+'</div>'+
-      q.objs.map(o=>'<div class="jo'+(o.done?' done':'')+'">'+(o.done?'✓':'○')+' '+o.t+'</div>').join('')+
-      '<div class="jr">Награда: '+QUEST_REWARD[id]+'</div>';
-    el.appendChild(d);
-  }
+    return {name:q.name,done:q.state==='done',desc:q.desc,
+      objs:q.objs.map(o=>({t:o.t,done:o.done})),reward:QUEST_REWARD[id]};
+  });
+  uiSet({journalItems:items});
 }
 
 /* ---- регистрация на шине (Фаза 5: progression → refreshTracker без цикла) ---- */
 bus.refreshTracker.bind(refreshTracker);
+/* ---- биндинг UI-колбэка (Фаза 6: кнопка «Закрыть (J)») ---- */
+uiSet({journalOnClose:closeJournal});

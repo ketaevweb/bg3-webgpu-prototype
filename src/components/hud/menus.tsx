@@ -1,0 +1,126 @@
+'use client';
+/* ================= HUD MENUS (Фаза 6 рефакторинга) =================
+   Панель настроек графики (G), меню сохранений (K, сэкспорт/импорт JSON),
+   экран победы/поражения, лист персонажа. Данные/колбэки собирают
+   движковые модули (save/settings.ts, save/slots.ts, systems/progression.ts,
+   ui/party.ts). Классы/id 1:1 с прежним DOM — game.css не изменён. */
+import { useUi, uiSet } from '@/game/ui/store';
+
+/* ---- настройки графики: пресеты + строки-сегменты ---- */
+export function GfxPanel(){
+  const open=useUi(s=>s.gfxOpen);
+  const presets=useUi(s=>s.gfxPresets);
+  const rows=useUi(s=>s.gfxRows);
+  const onClose=useUi(s=>s.gfxOnClose);
+  if(!open)return null;
+  return (
+    <div id="gfx" className="panel" style={{display:'block'}}>
+      <h3>Настройки графики</h3>
+      <div id="gfxBody">
+        <div style={{fontSize:'11px',color:'#a89f86',margin:'2px 0 3px'}}>Пресет качества:</div>
+        <div className="gpre">
+          {presets.map((p,i)=><button key={i} onClick={p.pick}>{p.name}</button>)}
+        </div>
+        {rows.map((r,i)=>(
+          <div key={i} className="grow">
+            <span className="gl">{r.label}</span>
+            <div className="seg">
+              {r.segs.map((sg,j)=>
+                <button key={j} className={sg.active?'on':undefined} onClick={sg.pick}>{sg.name}</button>)}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button style={{marginTop:'6px'}} onClick={onClose}>Закрыть (G)</button>
+    </div>
+  );
+}
+
+/* ---- меню сохранений: 3 слота + скрытый input импорта JSON ---- */
+export function SavesPanel(){
+  const open=useUi(s=>s.savesOpen);
+  const cur=useUi(s=>s.savesCur);
+  const slots=useUi(s=>s.savesSlots);
+  const onImportFile=useUi(s=>s.onImportFile);
+  const onClose=useUi(s=>s.savesOnClose);
+  if(!open)return null;
+  return (
+    <div id="saves" className="panel" style={{display:'block'}}>
+      <h3>Скрижали судьбы · сохранения</h3>
+      <div id="curSave">{cur}</div>
+      <div id="saveList">
+        {slots.map(sl=>(
+          <div key={sl.i} className="slot">
+            <div className="smeta">Слот {sl.i}{sl.has?'':' — пуст'}</div>
+            <div className="ssub">{sl.sub}</div>
+            <div className="sbtns">
+              <button onClick={sl.onSave}>Сохранить</button>
+              <button disabled={!sl.has} onClick={sl.onLoad}>Загрузить</button>
+              <button disabled={!sl.has} onClick={sl.onExport}>Экспорт JSON</button>
+              <button onClick={sl.onImport}>Импорт JSON</button>
+              <button disabled={!sl.has} className="danger" onClick={sl.onDelete}>Удалить</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <input id="importFile" type="file" accept=".json,application/json" style={{display:'none'}}
+        ref={el=>uiSet({importInput:el})}
+        onChange={e=>onImportFile(e)}/>
+      <button style={{marginTop:'6px'}} onClick={onClose}>Закрыть (K)</button>
+    </div>
+  );
+}
+
+/* ---- экран победы/поражения ---- */
+export function EndScreen(){
+  const end=useUi(s=>s.end);
+  const endHidden=useUi(s=>s.endHidden);
+  const sys=useUi(s=>s.sys);
+  if(!end||endHidden)return null;
+  return (
+    <div id="end" style={{display:'flex'}}>
+      <h1 style={{color:end.color}}>{end.title}</h1>
+      <p>{end.stats}</p>
+      {end.canContinue &&
+        <button onClick={()=>uiSet({endHidden:true})}>Продолжить исследование</button>}
+      <button onClick={sys.onLoadFromEnd}>Загрузить игру</button>
+      <button onClick={()=>location.reload()}>Играть снова</button>
+    </div>
+  );
+}
+
+/* ---- лист персонажа (клик по карточке; Esc/клик по фону — закрыть) ---- */
+export function SheetModal(){
+  const sheet=useUi(s=>s.sheet);
+  if(!sheet)return null;
+  return (
+    <div id="sheet" style={{display:'flex'}}
+      onClick={e=>{if(e.target===e.currentTarget)uiSet({sheet:null});}}>
+      <div id="sheetbox">
+        <h2>{sheet.name}</h2>
+        <div className="sub">{sheet.sub}</div>
+        <div className="srow">
+          {sheet.row.map((r,i)=><div key={i}><span>{r.k}</span><b>{r.v}</b></div>)}
+        </div>
+        <div className="abgrid">
+          {sheet.ab.map((a,i)=>
+            <div key={i} className="ab"><span>{a.l}</span><b>{a.v}</b><i>{a.m}</i></div>)}
+        </div>
+        <h3>Снаряжение</h3>
+        <p>Оружие: <b>{sheet.weapon.name}</b> — {sheet.weapon.dice}{sheet.weapon.mod}, {sheet.weapon.mode}</p>
+        <p>Доспех: <b>{sheet.armor.name}</b> (КД {sheet.armor.ac})</p>
+        <p>{sheet.potions}</p>
+        {sheet.spells&&<>
+          {sheet.spells.cells&&<p>Ячейки заклинаний: <b>{sheet.spells.cells}</b></p>}
+          {sheet.spells.lines.map((l,i)=><p key={i}>{l}</p>)}
+        </>}
+        <h3>Умения</h3>
+        {sheet.features.map((f,i)=><p key={i}>• {f}</p>)}
+        <div className="pbar" style={{marginTop:'10px'}}>
+          <i style={{width:sheet.xpPct+'%'}}/>
+        </div>
+        <p style={{marginTop:'3px'}}>{sheet.xpText}</p>
+      </div>
+    </div>
+  );
+}

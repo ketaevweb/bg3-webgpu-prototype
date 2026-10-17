@@ -1,13 +1,13 @@
-/* ================= SLOTS (Фазы 4–5 рефакторинга) =================
+/* ================= SLOTS (Фазы 4–6 рефакторинга) =================
    3 слота localStorage + экспорт/импорт JSON + меню сохранений.
-   Фаза 5: closeSaveMenu переехал сюда из applyGame (разрыв цикла
-   slots⇄snapshot — applyGame зовётся только из doLoad); sv типизирован
-   (SaveData|null); параметры типизированы. Перенесено дословно. */
+   Фаза 5: closeSaveMenu переехал сюда из applyGame; sv типизирован.
+   Фаза 6: DOM-рендер заменён view-моделью zustand-стора; биндинги
+   sys.onSaves/onLoadFromEnd/savesOnClose/onImportFile; скрытый
+   input#importFile живёт в React-панели (ref — в сторе). 1:1. */
 import { SAVE_VER, SLOT_N } from '../constants';
-import { $ } from '../utils';
-import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, units, MAP_NAME } from '../state';
+import { useUi, uiSet } from '../ui/store';
 import { log } from '../ui/overlays';
 import { gameSnapshot, applyGame } from './snapshot';
 import type { SaveData } from '../types';
@@ -15,7 +15,6 @@ import type { SaveData } from '../types';
 /* ================= v1.1: СОХРАНЕНИЯ (3 слота + экспорт/импорт JSON) =================
    Слоты живут в localStorage (bg3w_slot_1..3), формат — обычный JSON, поэтому
    экспорт/импорт — это просто скачивание файла и обратная запись в слот. */
-/* SAVE_VER/SLOT_N → constants.ts (Фаза 2) */
 export const slotKey=(i:number):string=>'bg3w_slot_'+i;
 let savesFromEnd=false,importSlot=1;
 
@@ -61,9 +60,13 @@ export function doExport(i:number){
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   log('Сейв слота '+i+' выгружен в JSON-файл.','g-sys');sfx.ui();
 }
-export function doImport(i:number){importSlot=i;$(UI.importFile).click();}
-export function onImportFile(e:Event){
-  const inp=e.target as HTMLInputElement;
+export function doImport(i:number){
+  importSlot=i;
+  const inp=useUi.getState().importInput;
+  if(inp)inp.click();/* внутри пользовательского жеста — диалог файла открывается */
+}
+export function onImportFile(e:{target:HTMLInputElement}){
+  const inp=e.target;
   const file=inp.files&&inp.files[0];
   inp.value='';
   if(!file)return;
@@ -82,44 +85,43 @@ export function onImportFile(e:Event){
 
 
 export function renderSaves(){
-  const el=$(UI.saveList);if(!el)return;
-  el.innerHTML='';
   const hs=units.filter(u=>u.side==='hero');
-  $(UI.curSave).textContent='Текущая игра: '+MAP_NAME[G.mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
+  const cur='Текущая игра: '+MAP_NAME[G.mapId]+' · ур. '+Math.max(1,...hs.map(h=>h.level))+' · '+S.gold+' зол.';
+  const slots:{i:number;has:boolean;meta:string;sub:string;
+    onSave:()=>void;onLoad:()=>void;onExport:()=>void;onImport:()=>void;onDelete:()=>void}[]=[];
   for(let i=1;i<=SLOT_N;i++){
     const sv=readSlot(i);
-    const row=document.createElement('div');row.className='slot';
-    row.innerHTML='<div class="smeta">Слот '+i+(sv?'':' — пуст')+'</div>'+
-      '<div class="ssub">'+(sv?slotMeta(sv):'Нет данных. Сохраните игру или импортируйте JSON-файл.')+'</div>';
-    const btns=document.createElement('div');btns.className='sbtns';
-    const mk=(t:string,fn:()=>void,dis?:boolean,danger?:boolean)=>{
-      const b=document.createElement('button');b.textContent=t;b.disabled=!!dis;
-      if(danger)b.className='danger';
-      b.onclick=fn;btns.appendChild(b);
-    };
-    mk('Сохранить',()=>doSave(i));
-    mk('Загрузить',()=>doLoad(i),!sv);
-    mk('Экспорт JSON',()=>doExport(i),!sv);
-    mk('Импорт JSON',()=>doImport(i));
-    mk('Удалить',()=>doDelete(i),!sv,true);
-    row.appendChild(btns);
-    el.appendChild(row);
+    slots.push({
+      i,has:!!sv,
+      meta:'Слот '+i+(sv?'':' — пуст'),
+      sub:sv?slotMeta(sv):'Нет данных. Сохраните игру или импортируйте JSON-файл.',
+      onSave:()=>doSave(i),
+      onLoad:()=>doLoad(i),
+      onExport:()=>doExport(i),
+      onImport:()=>doImport(i),
+      onDelete:()=>doDelete(i),
+    });
   }
+  uiSet({savesCur:cur,savesSlots:slots});
 }
 export function openSaveMenu(fromEnd:boolean){
   savesFromEnd=!!fromEnd;
   renderSaves();
-  $(UI.saves).style.display='block';
+  uiSet({savesOpen:true});
   sfx.ui();
 }
 export function closeSaveMenu(){
-  $(UI.saves).style.display='none';
+  uiSet({savesOpen:false});
   if(savesFromEnd){
     savesFromEnd=false;
-    if(G.phase==='over')$(UI.end).style.display='flex';/* вернулись на экран поражения */
+    if(G.phase==='over')uiSet({endHidden:false});/* вернулись на экран поражения */
   }
 }
 export function toggleSaveMenu(){
-  if($(UI.saves).style.display==='block')closeSaveMenu();
+  if(useUi.getState().savesOpen)closeSaveMenu();
   else openSaveMenu(false);
 }
+
+/* ---- биндинги UI-колбэков (Фаза 6) ---- */
+uiSet(s=>({sys:{...s.sys,onSaves:toggleSaveMenu,onLoadFromEnd:()=>{uiSet({endHidden:true});openSaveMenu(true);}},
+  savesOnClose:closeSaveMenu,onImportFile}));

@@ -4,12 +4,12 @@
    привязаны к шине bus (turns/explore зовут через неё); сам dialog
    спокойно импортирует turns/explore/progression — теперь это одна
    сторона графа. DLGS/опции типизированы (DlgFn/DlgOpt/DlgNode). */
-import { $, mod } from '../utils';
+import { mod } from '../utils';
 import { d } from '../rng';
-import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, KAYA_SPOT, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
+import { uiSet } from '../ui/store';
 import { setHint, log } from '../ui/overlays';
 import { aliveHeroes, removeUnit } from '../entities/units';
 import { startCombat } from '../systems/turns';
@@ -28,17 +28,16 @@ export function openDlg(npc:string){
   sfx.dialog();
   S.dlgNpc=npc;
   setHint('');
-  $(UI.dlgBox).style.display='block';
   showNode('start');
 }
 export function closeDlg(){
-  $(UI.dlgBox).style.display='none';
+  uiSet({dlg:null});
   S.dlgNpc=null;
   if(G.phase==='dialogue'){G.phase='explore';busyOff();}
   refreshHintExplore();
 }
 export function closeDlgHard(){
-  $(UI.dlgBox).style.display='none';
+  uiSet({dlg:null});
   S.dlgNpc=null;
   G.busyCount=Math.max(0,G.busyCount-1);G.busy=G.busyCount>0;
 }
@@ -55,15 +54,10 @@ export function showNode(id:string){
   const fn=S.dlgNpc?DLGS[S.dlgNpc]:undefined;
   const n=fn?fn(id):null;
   if(!n)return closeDlg();
-  $(UI.dlgName).textContent=n.name;
-  $(UI.dlgText).textContent=n.text;
-  const box=$(UI.dlgOpts);box.innerHTML='';
-  for(const o of (n.opts||[])){
-    if(o.show&&!o.show())continue;
-    const b=document.createElement('button');
-    b.textContent=o.t;
-    if(o.req)b.className='req';
-    b.onclick=()=>{
+  const opts=(n.opts||[]).filter(o=>!o.show||o.show()).map(o=>({
+    t:o.t,
+    req:!!o.req,
+    onClick:()=>{
       if(o.req){
         const ok=socialCheck(o.req);
         showNode(ok?(o.ok||'start'):(o.fail||'start'));
@@ -71,9 +65,9 @@ export function showNode(id:string){
       }
       if(o.end){closeDlg();if(o.fn)o.fn();return;}
       if(o.fn)o.fn();
-    };
-    box.appendChild(b);
-  }
+    },
+  }));
+  uiSet({dlg:{name:n.name,text:n.text,opts}});
 }
 export const DLGS:Record<string,DlgFn>={
   patrol(id){

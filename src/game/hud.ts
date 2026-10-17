@@ -1,58 +1,15 @@
-// HUD markup (injected by GameClient before engine boot)
-// v0.8: + #bossbar, #fade
-// v1.1: + #gfxBtn/#saveBtn, панели #gfx и #saves (3 слота + JSON export/import),
-//         кнопка «Загрузить игру» на экране конца (#loadBtn2)
-// v1.2: разметка без изменений — спутники (Илва/Кая) живут в #party как обычные карточки героев
-// v1.3: разметка без изменений — элита/спеллкастеры/лут-таблицы живут в движке и журнале боя
-export const HUD_HTML = `<div id="scene"></div>
-<div id="ov"></div>
-<div id="topbar" class="panel">
-  <div id="round">Подготовка…</div>
-  <div id="turnb"></div>
-  <div id="initRow"></div>
-</div>
-<div id="bossbar"><div id="bossname"></div><div class="bbar"><i id="bossfill"></i></div></div>
-<button id="sndBtn" title="Звук вкл/выкл">🔊</button>
-<button id="gfxBtn" title="Настройки графики (G)">⚙</button>
-<button id="saveBtn" title="Сохранения (K)">💾</button>
-<div id="log" class="panel"><h3>Журнал боя</h3><div id="logbody"></div></div>
-<div id="party"></div>
-<div id="hint"></div>
-<div id="actionbar" class="panel"><div id="pips"></div><div id="btns"></div></div>
-<div id="banner"></div>
-<div id="tip"></div>
-<div id="end"><h1 id="endtitle"></h1><p id="endstats"></p><button id="contBtn" style="display:none">Продолжить исследование</button><button id="loadBtn2">Загрузить игру</button><button onclick="location.reload()">Играть снова</button></div>
-<div id="sheet"><div id="sheetbox"></div></div>
-<div id="qtrack" class="panel"><h3>Задания · <span id="goldTxt">Золото: 0</span></h3><div id="qbody"></div></div>
-<div id="dlgBox" class="panel"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgOpts"></div></div>
-<div id="shop" class="panel"><h3>Товары Дамрока</h3><div id="shopList"></div><button id="shopClose" style="margin-top:6px">Закрыть</button></div>
-<div id="journal" class="panel"><h3>Журнал заданий</h3><div id="jbody"></div><button id="jClose" style="margin-top:6px">Закрыть (J)</button></div>
-<div id="choice" class="panel"><h3 id="choiceTitle">Выбрать героя</h3><div id="choiceList"></div><button id="choiceCancel">Отмена</button></div>
-<div id="gfx" class="panel"><h3>Настройки графики</h3><div id="gfxBody"></div><button id="gfxClose" style="margin-top:6px">Закрыть (G)</button></div>
-<div id="saves" class="panel"><h3>Скрижали судьбы · сохранения</h3><div id="curSave"></div><div id="saveList"></div><input id="importFile" type="file" accept=".json,application/json" style="display:none"><button id="savesClose" style="margin-top:6px">Закрыть (K)</button></div>
-<div id="fade"></div>
-<div id="slowfx"></div>`;
-
-/* ================= Фаза 3: реестр DOM-id =================
-   Единственный источник строковых селекторов: engine обращается к DOM
-   только через $(UI.…). Переименование id — правка в одном месте;
-   опечатка в ключе ловится tsc (typeof UI — union строк). */
+/* ================= HUD (Фаза 6 рефакторинга) =================
+   HUD_HTML и панельный DOM убраны — интерфейс рендерят React-компоненты
+   (src/components/hud/*) из zustand-стора ui/store.ts. Здесь остались
+   только ИМПЕРАТИВНЫЕ слои, которым React противопоказан:
+   - #scene — канвас-хост (render/renderer.ts, один раз при boot);
+   - #ov    — покадровые HP-полоски над юнитами и всплывающий текст
+              (ui/overlays.ts, проекция 3D→экран каждый кадр);
+   - #fade  — фейд перехода между картами (world/maps.ts);
+   - #slowfx— виньетка слоу-мо (slowmo.ts, getElementById).
+   game.css не изменён: позиционирование этих слоёв завязано на id. */
 export const UI={
-  scene:'#scene',ov:'#ov',topbar:'#topbar',round:'#round',turnb:'#turnb',initRow:'#initRow',
-  bossbar:'#bossbar',bossname:'#bossname',bossfill:'#bossfill',
-  sndBtn:'#sndBtn',gfxBtn:'#gfxBtn',saveBtn:'#saveBtn',
-  log:'#log',logbody:'#logbody',party:'#party',hint:'#hint',
-  actionbar:'#actionbar',pips:'#pips',btns:'#btns',banner:'#banner',tip:'#tip',
-  end:'#end',endtitle:'#endtitle',endstats:'#endstats',contBtn:'#contBtn',loadBtn2:'#loadBtn2',
-  sheet:'#sheet',sheetbox:'#sheetbox',
-  qtrack:'#qtrack',goldTxt:'#goldTxt',qbody:'#qbody',
-  dlgBox:'#dlgBox',dlgName:'#dlgName',dlgText:'#dlgText',dlgOpts:'#dlgOpts',
-  shop:'#shop',shopList:'#shopList',shopClose:'#shopClose',
-  journal:'#journal',jbody:'#jbody',jClose:'#jClose',
-  choice:'#choice',choiceTitle:'#choiceTitle',choiceList:'#choiceList',choiceCancel:'#choiceCancel',
-  gfx:'#gfx',gfxBody:'#gfxBody',gfxClose:'#gfxClose',
-  saves:'#saves',curSave:'#curSave',saveList:'#saveList',importFile:'#importFile',savesClose:'#savesClose',
-  fade:'#fade',slowfx:'#slowfx',
+  scene:'#scene',ov:'#ov',fade:'#fade',slowfx:'#slowfx',
 } as const;
 
 export type UiId=typeof UI[keyof typeof UI];

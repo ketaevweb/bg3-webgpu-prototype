@@ -1,19 +1,18 @@
-/* ================= ACTIONBAR (Фазы 4–5 рефакторинга) =================
+/* ================= ACTIONBAR (Фазы 4–6 рефакторинга) =================
    Таблица действий игрока (ACTIONS) и refreshUI. Фаза 5: refreshUI живёт
-   на шине bus (разрыв циклов systems → ui); реализация привязывается здесь.
-   Перенесено дословно из engine.ts. */
-import { $ } from '../utils';
+   на шине bus. Фаза 6: вместо DOM — view-модель в zustand-стор
+   (React-HUD рендерит кнопки; клики — колбэки ACTIONS.run). 1:1. */
 import { roll } from '../rng';
-import { UI } from '../hud';
 import { G } from '../state';
 import { bus } from '../bus';
+import { uiSet } from './store';
 import { enterTarget, cancelTargeting } from './targeting';
 import { radiantNova } from '../systems/abilities';
 import { endTurn } from '../systems/turns';
 import { addStatus } from '../systems/statuses';
 import { healUnit } from '../systems/vitals';
-import { log } from '../ui/overlays';
-import { showReach } from '../ui/markers';
+import { log } from './overlays';
+import { showReach } from './markers';
 import type { ActionDef } from '../types';
 
 /* ================= ДЕЙСТВИЯ ИГРОКА ================= */
@@ -56,29 +55,20 @@ function renderUI(){
   if(G.phase==='explore'||G.phase==='dialogue')return;
   const h=G.current&&G.current.side==='hero'?G.current:null;
   if(h){
-    $(UI.pips).innerHTML=
-      '<span>Действие <b>'+h.action+'</b></span>'+
-      '<span>Бонус <b>'+h.bonus+'</b></span>'+
-      '<span>Реакция <b>'+h.reaction+'</b></span>'+
-      '<span>Перемещение <b>'+h.moveLeft+'</b> кл.</span>'+
-      '<span>Ячейки <b>'+(h.slotsMax?h.slots+'\/'+h.slotsMax:'—')+'</b></span>';
+    uiSet({actionbar:{visible:true,waiting:false,pips:[
+      {label:'Действие',value:String(h.action)},
+      {label:'Бонус',value:String(h.bonus)},
+      {label:'Реакция',value:String(h.reaction)},
+      {label:'Перемещение',value:h.moveLeft+' кл.'},
+      {label:'Ячейки',value:h.slotsMax?h.slots+'/'+h.slotsMax:'—'},
+    ],btns:ACTIONS.filter(a=>!a.only||a.only(h)).map(a=>({
+      label:a.label+(a.sub?' · '+a.sub:''),
+      cls:a.cls,
+      disabled:!a.enabled(h)||G.phase!=='player',
+      onClick:()=>{if(G.phase==='player'&&!G.busy)a.run(h);},
+    }))}});
   }else{
-    $(UI.pips).innerHTML='<span>Ход противника…</span>';
-  }
-  const bb=$(UI.btns);
-  bb.innerHTML='';
-  if(!h){
-    bb.innerHTML='<button disabled>Ожидание…</button>';
-    return;
-  }
-  for(const a of ACTIONS){
-    if(a.only&&!a.only(h))continue;
-    const b=document.createElement('button');
-    b.textContent=a.label+(a.sub?' · '+a.sub:'');
-    if(a.cls)b.className=a.cls;
-    b.disabled=!a.enabled(h)||G.phase!=='player';
-    b.onclick=()=>{if(G.phase==='player'&&!G.busy)a.run(h);};
-    bb.appendChild(b);
+    uiSet({actionbar:{visible:true,waiting:true,pips:[],btns:[]}});
   }
   bus.refreshParty.call();
 }

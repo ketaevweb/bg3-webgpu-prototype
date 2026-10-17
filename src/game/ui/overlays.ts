@@ -1,23 +1,18 @@
-/* ================= OVERLAYS (Фаза 4b рефакторинга) =================
-   Журнал боя, всплывающий текст над юнитами, подсказки, баннеры,
-   полоски HP над головами. Перенесено дословно из engine.ts. */
+/* ================= OVERLAYS (Фаза 6 рефакторинга) =================
+   Журнал боя, подсказки и баннеры — через zustand-стор (React-HUD).
+   Покадровые слои (#ov: HP-полоски над юнитами, всплывающий текст)
+   остались императивными — React противопоказан при 60 fps проекции
+   3D→экран. Перенесено дословно (тексты/классы 1:1). */
 import * as THREE from 'three/webgpu';
 import { UI } from '../hud';
 import { $ } from '../utils';
 import { units } from '../state';
 import { camera } from '../render/renderer';
 import { STATUS } from '../constants';
+import { pushLog, uiSet } from './store';
 import type { Status, Unit } from '../types';
 
-export function log(msg:string,cls?:string){
-  const p=document.createElement('p');
-  if(cls)p.className=cls;
-  p.textContent=msg;
-  const lb=$(UI.logbody);
-  lb.appendChild(p);
-  while(lb.children.length>80)lb.removeChild(lb.firstChild!);
-  lb.scrollTop=lb.scrollHeight;
-}
+export function log(msg:string,cls?:string){pushLog(msg,cls);}
 const pv=new THREE.Vector3();
 export function projectPos(x:number,y:number,z:number){
   pv.set(x,y,z).project(camera);
@@ -32,10 +27,10 @@ export function ftextAbove(ent:{mesh:THREE.Object3D},text:string,color:string){
   $(UI.ov).appendChild(el);
   setTimeout(()=>el.remove(),1100);
 }
-export function setHint(t:string){$(UI.hint).textContent=t||'';}
+export function setHint(t:string){uiSet({hint:t||''});}
 export function bigBanner(text:string){
-  const b=$(UI.banner);b.textContent=text;b.style.opacity='1';
-  setTimeout(()=>{b.style.opacity='0';},2200);
+  uiSet({banner:text,bannerOn:true});
+  setTimeout(()=>uiSet({bannerOn:false}),2200);
 }
 export function initOverlays(){
   const ov=$(UI.ov);

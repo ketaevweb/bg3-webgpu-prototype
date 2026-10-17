@@ -3,14 +3,14 @@
    BOLT/SMITE — общие боевые «заговоры». Фаза 5: refreshUI — через шину bus
    (разрыв цикла targeting→actionbar); explode — из combat (переехал из
    abilities). Перенесено дословно из engine.ts. */
-import { $, cheb, mod } from '../utils';
+import { cheb, mod } from '../utils';
 import { roll } from '../rng';
-import { UI } from '../hud';
 import { GRID, RANGE_FB, RANGE_OIL, STATUS } from '../constants';
 import { G, units, barrels, pick, GW, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { addMarker, clearMarkers, clearDots, showReach } from '../ui/markers';
-import { setHint, log, ftextAbove } from '../ui/overlays';
+import { setHint, log, ftextAbove } from './overlays';
+import { uiSet } from './store';
 import { passable } from '../world/grid';
 import { doAttack, hitChance, avgDamage, explode } from '../systems/combat';
 import { healUnit } from '../systems/vitals';
@@ -80,6 +80,10 @@ export async function resolveTargetClick():Promise<void>{
       const flank=aliveHeroes().some(a=>a!==h&&a.alive&&cheb(a,tgt)<=1);
       if(flank){const sd=h.level>=3?2:1;await doAttack(h,tgt,h.weapon,{sneakBonus:roll(sd,6)});}
       else{log(h.name+' бьёт без фланга — подлый удар не сработал.','g-sys');await doAttack(h,tgt,h.weapon);}
+    }else if(t.type==='bolt'){/* Фаза 6-фикс: латентный баг v1.2 — bolt ловился else-веткой SMITE
+      (огненные стрелы били «Каранием света» и жгли ячейку); по описанию способности —
+      безъячейковый заговор 1d10 огня */
+      await doAttack(h,tgt,BOLT);
     }else{/* v1.2: карание света */
       h.slots--;
       await doAttack(h,tgt,SMITE);
@@ -120,9 +124,8 @@ export async function resolveTargetClick():Promise<void>{
 }
 
 
-export function showTipFor(ent0:Unit|Interact|null,e:PointerEvent){
-  const tip=$(UI.tip);
-  if(!ent0){tip.style.display='none';return;}
+export function showTipFor(ent0:Unit|Interact|null,e?:PointerEvent){
+  if(!ent0||!e){uiSet({tip:null});return;}
   let html='';
   if('talkName' in ent0){/* интерактивная точка мира */
     html='<b>'+ent0.talkName+'</b><br>'+ent0.talkDesc;
@@ -143,8 +146,7 @@ export function showTipFor(ent0:Unit|Interact|null,e:PointerEvent){
       }
     }
   }
-  tip.innerHTML=html;
-  tip.style.display='block';
-  tip.style.left=Math.min(innerWidth-260,e.clientX+14)+'px';
-  tip.style.top=Math.min(innerHeight-90,e.clientY+12)+'px';
+  uiSet({tip:{html,
+    x:Math.min(innerWidth-260,e.clientX+14),
+    y:Math.min(innerHeight-90,e.clientY+12)}});
 }

@@ -6,12 +6,12 @@ import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
 import { upgradeUnitRig } from './animation';
-import { $, clamp, cheb } from './utils';
+import { clamp, cheb } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
-import { UI } from './hud';
 import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
 import { bus } from './bus';
+import { uiSet } from './ui/store';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';
 import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
@@ -28,7 +28,7 @@ import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/ma
 import { cancelTargeting, resolveTargetClick, showTipFor } from './ui/targeting';
 import { tryMove } from './systems/movement';
 import { gameSnapshot } from './save/snapshot';
-import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu, onImportFile } from './save/slots';
+import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMenu } from './save/slots';
 import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/settings';
 import { closeShop, closeChoice } from './interact/shop';
 /* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
@@ -75,17 +75,9 @@ function onLeftClick(){
 
 setInterval(checkTriggers,700);
 
-$(UI.sheet).addEventListener('click',e=>{if((e.target as HTMLElement).id==='sheet')$(UI.sheet).style.display='none';});
-$(UI.shopClose).onclick=closeShop;
-$(UI.jClose).onclick=closeJournal;
-$(UI.choiceCancel).onclick=closeChoice;
-$(UI.contBtn).onclick=()=>{$(UI.end).style.display='none';};
-
-$(UI.savesClose).onclick=closeSaveMenu;
-$(UI.importFile).addEventListener('change',onImportFile);
-$(UI.loadBtn2).onclick=()=>{$(UI.end).style.display='none';openSaveMenu(true);};
-
-$(UI.gfxClose).onclick=closeGfx;
+/* Фаза 6: панельные биндинги убраны — кнопки в React-HUD зовут колбэки
+   из стора (закрытия биндят владельцы: shop/quests/settings/slots);
+   экран конца и лист персонажа обрабатывают клики сами. */
 
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
@@ -161,7 +153,7 @@ function bindInput(){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   const onKey=(e:KeyboardEvent)=>{
     sfx.unlock();
-    if(e.key==='Escape'){cancelTargeting();$(UI.sheet).style.display='none';closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
+    if(e.key==='Escape'){cancelTargeting();uiSet({sheet:null});closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
       if(G.phase==='explore'&&!G.busy){const it=nearestInteract();if(it)it.fn();}
     }
@@ -258,18 +250,15 @@ let disposed=false;
   G.phase='explore';
   bus.refreshUI.call();bus.refreshParty.call();
   bus.openExploreUI.call();
-  /* v1.1: настройки графики + меню сохранений */
+  /* v1.1: настройки графики + меню сохранений (view-модели стора) */
   loadGfx();applyGfx();renderGfx();renderSaves();
-  const gb=document.getElementById('gfxBtn');
-  if(gb){const f=()=>toggleGfx();gb.addEventListener('click',f);disposers.push(()=>gb.removeEventListener('click',f));}
-  const svb=document.getElementById('saveBtn');
-  if(svb){const f=()=>toggleSaveMenu();svb.addEventListener('click',f);disposers.push(()=>svb.removeEventListener('click',f));}
-  const sb=document.getElementById('sndBtn');
-  if(sb){
-    const onSnd=()=>{sfx.unlock();sfx.setMuted(!sfx.isMuted());sb.textContent=sfx.isMuted()?'🔇':'🔊';sfx.ui();};
-    sb.addEventListener('click',onSnd);
-    disposers.push(()=>sb.removeEventListener('click',onSnd));
-  }
+  /* v0.7: звук — биндинг в стор (React-кнопка #sndBtn, Фаза 6) */
+  const onSnd=()=>{
+    sfx.unlock();sfx.setMuted(!sfx.isMuted());
+    uiSet(s=>({sys:{...s.sys,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
+    sfx.ui();
+  };
+  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
   log('BG3 Web-прототип v1.3 «Слуги Костепёра»: партия четырёх героев, элитные враги и лут-таблицы — добыча выпадает из каждого врага.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, а в крипте ждут культисты, ученик-целитель и скелет-рыцарь. Элита носит реликвии!','g-sys');

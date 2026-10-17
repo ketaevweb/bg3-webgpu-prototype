@@ -4,12 +4,12 @@
    statuses замыкал цикл combat⇄statuses); closeDlgHard/aiTurn — через
    шину bus (разрыв cycles turns⇄dialog и turns⇄ai); UI-refresh — через
    bus. Импорты однонаправленные. Перенесено дословно из engine.ts. */
-import { $, key, mod } from '../utils';
+import { key, mod } from '../utils';
 import { d } from '../rng';
-import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, S, units, fires, grass, GW } from '../state';
 import { bus } from '../bus';
+import { setActionbarVisible, setRound, setTopbar } from '../ui/store';
 import { bigBanner, log, ftextAbove, setHint, refreshIcons } from '../ui/overlays';
 import { aliveHeroes } from '../entities/units';
 import { unitAt, barrelAt } from '../world/grid';
@@ -67,8 +67,8 @@ export function startCombat(group:Unit[]){
   for(const u of list)u.init=d(20)+mod(u.dex);
   G.order=list.sort((a,b)=>(b.init||0)-(a.init||0));/* init задан строкой выше */
   G.turnIdx=-1;G.round=1;
-  $(UI.round).textContent='Раунд 1';
-  $(UI.actionbar).style.display='block';
+  setRound('Раунд 1');
+  setActionbarVisible(true);
   bus.refreshInit.call();bus.refreshParty.call();
   log('Инициатива: '+G.order.map(u=>u.name+' ('+u.init+')').join(', '),'g-sys');
   endTurn();
@@ -80,8 +80,8 @@ export function beginTurn(u:Unit){
   for(const x of units)x.mesh.userData.ring.material.color.setHex(x.side==='hero'?0x5a8fc0:(x.elite?0xd8b45a:0xa04a3a));/* v1.3: элита — золотое кольцо */
   u.mesh.userData.ring.material.color.setHex(0xd8b45a);
   bus.refreshInit.call();
-  $(UI.turnb).textContent=u.side==='hero'?'Ваш ход: '+u.name:'Ход противника: '+u.name;
-  $(UI.turnb).style.color=u.side==='hero'?'#8fd36a':'#e06c55';
+  const heroTurn=u.side==='hero';
+  setTopbar({turn:heroTurn?'Ваш ход: '+u.name:'Ход противника: '+u.name,turnColor:heroTurn?'#8fd36a':'#e06c55'});
   if(fires.has(key(u.x,u.z))){
     const dmg=d(4);
     log(u.name+' стоит в огне: '+dmg+' урона.','g-fire');
@@ -102,7 +102,7 @@ export function beginTurn(u:Unit){
   u.action=u.actionMax;u.bonus=1;u.reaction=1;
   u.moveLeft=u.speed;u.disengaging=false;u.dashUsed=false;
   G.busy=false;
-  $(UI.actionbar).style.display='block';
+  setActionbarVisible(true);
   if(u.side==='hero'){
     G.phase='player';
     bus.refreshUI.call();showReach(u);
@@ -120,7 +120,7 @@ export function endTurn(){
     G.turnIdx++;
     if(G.turnIdx>=G.order.length){
       G.turnIdx=0;G.round++;
-      $(UI.round).textContent='Раунд '+G.round;
+      setRound('Раунд '+G.round);
       tickFires();
     }
     const c=G.order[G.turnIdx];

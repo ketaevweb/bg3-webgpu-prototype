@@ -7,6 +7,7 @@ import { UI } from '../hud';
 import { sfx } from '../audio';
 import { G, CRYPT, MAP_NAME, units, barrels, fires, interactables, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
+import { setActionbarVisible, setRound } from '../ui/store';
 import { worldGroup, fx, glows, controls, clearGroup, applyAtmosphere } from '../render/renderer';
 import { seedForest, seedCrypt, buildWorld } from './props';
 import { buildForestScenery, buildCryptScenery } from '../interact/explore';
@@ -31,7 +32,7 @@ export function teardownWorld(){
   clearGroup(worldGroup);
   G.groundMesh=null;G.fireLight=null;G.flameMesh=null;
   G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;
-  $(UI.actionbar).style.display='none';
+  setActionbarVisible(false);
   bus.refreshBossBar.call();
 }
 /* v1.1: сборка карты без фейда — общее ядро switchMap и загрузки сейва.
@@ -57,7 +58,7 @@ export function buildMap(id:MapId,spots:number[][]|null){
   }
   initOverlays();
   G.phase='explore';
-  $(UI.round).textContent=MAP_NAME[G.mapId];
+  setRound(MAP_NAME[G.mapId]);
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
 export async function switchMap(id:MapId):Promise<void>{
