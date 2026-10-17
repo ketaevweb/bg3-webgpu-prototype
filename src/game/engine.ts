@@ -15,6 +15,9 @@ import { LOOT } from './systems/loot';
 import { UI } from './hud';
 import type { Barrel, Quest, SaveData, StatusType, Unit, UnitTemplate, Weapon } from './types';
 import { S, G, busyOn, busyOff, units, barrels, fires, pick, solid, grass, GW, gobCount, interactables, CAGE, CRATE, MERCHANT, KAYA_SPOT, MAP_NAME, CRYPT } from './state';
+import { log, projectPos, ftextAbove, setHint, bigBanner, initOverlays, refreshIcons, updateOverlays } from './ui/overlays';
+import { initMarkers, addMarker, clearMarkers, addDot, clearDots, showReach } from './ui/markers';
+import { refreshParty, refreshBossBar, refreshInit, showSheet } from './ui/party';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, applyAtmosphere, applyLighting, clearGroup, setupPostFX } from './render/renderer';
 import { tween, faceTo, lunge, boomFX, shake, tickTweens, projMesh } from './fx/tweens';
 
@@ -723,102 +726,6 @@ const BOLT:Weapon={name:'Огненные стрелы',dice:[1,10],abil:'int',r
 const SMITE:Weapon={name:'Карание света',dice:[2,6],abil:'wis',range:6,smite:true};/* v1.2 */
 
 
-/* ================= ИНТЕРФЕЙС: ЛОГ / ТЕКСТ / ПОДСКАЗКИ ================= */
-function log(msg,cls){
-  const p=document.createElement('p');
-  if(cls)p.className=cls;
-  p.textContent=msg;
-  const lb=$(UI.logbody);
-  lb.appendChild(p);
-  while(lb.children.length>80)lb.removeChild(lb.firstChild!);
-  lb.scrollTop=lb.scrollHeight;
-}
-const pv=new THREE.Vector3();
-function projectPos(x,y,z){
-  pv.set(x,y,z).project(camera);
-  return {x:(pv.x*0.5+0.5)*innerWidth,y:(-pv.y*0.5+0.5)*innerHeight,behind:pv.z>1};
-}
-function ftextAbove(ent,text,color){
-  const s=projectPos(ent.mesh.position.x,ent.mesh.position.y+1.6,ent.mesh.position.z);
-  if(s.behind)return;
-  const el=document.createElement('div');
-  el.className='ft';el.textContent=text;el.style.color=color;
-  el.style.left=s.x+'px';el.style.top=s.y+'px';
-  $(UI.ov).appendChild(el);
-  setTimeout(()=>el.remove(),1100);
-}
-function setHint(t){$(UI.hint).textContent=t||'';}
-function bigBanner(text){
-  const b=$(UI.banner);b.textContent=text;b.style.opacity='1';
-  setTimeout(()=>{b.style.opacity='0';},2200);
-}
-function initOverlays(){
-  const ov=$(UI.ov);
-  for(const u of units){
-    if(u._el)continue;/* v0.8: герои переживают смену карт */
-    const el=document.createElement('div');
-    el.className='uhp '+u.side;
-    el.innerHTML='<div class="nm">'+u.name+'</div><div class="ubar"><i></i></div><div class="uic"></div>';
-    ov.appendChild(el);
-    u._el=el;
-  }
-}
-function refreshIcons(u){
-  if(!u._el)return;
-  const el=u._el.querySelector('.uic');
-  if(el)el.innerHTML=u.statuses.map(s=>
-    '<span style="background:'+STATUS[s.type].css+'">'+STATUS[s.type].tag+s.turns+'</span>').join('');
-}
-function updateOverlays(){
-  for(const u of units){
-    const el=u._el;if(!el)continue;
-    if(!u.alive){el.style.display='none';continue;}
-    const s=projectPos(u.mesh.position.x,u.mesh.position.y+2.05,u.mesh.position.z);
-    if(s.behind){el.style.display='none';continue;}
-    el.style.display='block';
-    el.style.left=s.x+'px';el.style.top=s.y+'px';
-    const bar=el.querySelector<HTMLElement>('.ubar i');if(bar)bar.style.width=Math.max(0,u.hp/u.maxhp*100)+'%';
-  }
-}
-
-/* ================= МАРКЕРЫ / ТОЧКИ ПУТИ ================= */
-const markerPool:any[]=[],dotPool:any[]=[];
-let mi=0,di=0;
-const circGeo=new THREE.CircleGeometry(0.52,20);
-const dotGeo=new THREE.SphereGeometry(0.09,8,8);
-function initMarkers(){
-  for(let i=0;i<210;i++){
-    const m=new THREE.Mesh(circGeo,new THREE.MeshBasicMaterial(
-      {color:0xffffff,transparent:true,opacity:0.3,depthWrite:false}));
-    m.rotation.x=-Math.PI/2;m.position.y=0.05;m.visible=false;m.renderOrder=2;
-    scene.add(m);markerPool.push(m);
-  }
-  for(let i=0;i<36;i++){
-    const m=new THREE.Mesh(dotGeo,new THREE.MeshBasicMaterial({color:0x8fe0ff}));
-    m.visible=false;scene.add(m);dotPool.push(m);
-  }
-}
-function addMarker(x,z,color,scale){
-  if(mi>=markerPool.length)return;
-  const m=markerPool[mi++];
-  m.visible=true;m.position.set(W(x),0.05,W(z));
-  m.material.color.setHex(color);m.material.opacity=0.32;
-  m.scale.setScalar(scale||1);
-}
-function clearMarkers(){mi=0;for(const m of markerPool)m.visible=false;}
-function addDot(x,z,inRange){
-  if(di>=dotPool.length)return;
-  const m=dotPool[di++];
-  m.visible=true;m.position.set(W(x),0.12,W(z));
-  m.material.color.setHex(inRange?0x8fe0ff:0x3a5560);
-}
-function clearDots(){di=0;for(const m of dotPool)m.visible=false;}
-function showReach(u){
-  clearMarkers();
-  if(!G.combatOn||G.phase!=='player'||!u||!u.alive)return;
-  const nodes=reachNodes(GW,u,false);
-  for(const n of nodes.values())if(n.g>0)addMarker(n.x,n.z,0x3f7fae,0.45);
-}
 
 /* A* и достижимость → world/grid.ts (Фаза 2): astar/reachNodes/nodePath
    принимают GW первым аргументом (явный контекст сетки). */
@@ -2164,88 +2071,6 @@ function refreshUI(){
     bb.appendChild(b);
   }
   refreshParty();
-}
-function refreshParty(){
-  const el=$(UI.party);
-  el.innerHTML='';
-  for(const h of units.filter(u=>u.side==='hero')){
-    const card=document.createElement('div');
-    card.className='panel pcard'+(G.current===h&&h.alive?' active':'');
-    const st=h.statuses.map(s=>
-      '<span class="stb" style="background:'+STATUS[s.type].css+'">'+STATUS[s.type].tag+s.turns+'</span>').join('');
-    const need=XP_NEED(h.level);
-    card.innerHTML=
-      '<div class="prow"><span class="pname">'+h.name+'</span><span class="pcls">'+h.clsName+' · ур. '+h.level+'</span></div>'+
-      '<div class="pbar"><i style="width:'+Math.max(0,h.hp/h.maxhp*100)+'%"></i></div>'+
-      '<div class="pinfo"><span>HP '+Math.max(0,h.hp)+'/'+h.maxhp+' • КД '+h.ac+'</span><span>Зелий: '+h.potions+'</span></div>'+
-      '<div class="pst">'+st+'<span style="color:#8f866d;margin-left:auto">XP '+h.xp+'/'+need+'</span></div>';
-    card.onclick=()=>showSheet(h);
-    el.appendChild(card);
-  }
-}
-/* v0.8: боссбар сверху экрана */
-function refreshBossBar(){
-  const el=$(UI.bossbar);
-  if(!el)return;
-  const b=G.combatOn?S.combatGroup.find(g=>g.isBoss&&g.alive):null;
-  if(!b){el.style.display='none';return;}
-  el.style.display='block';
-  $(UI.bossname).textContent=b.name+' — '+b.clsName;
-  $(UI.bossfill).style.width=Math.max(0,b.hp/b.maxhp*100)+'%';
-}
-function refreshInit(){
-  refreshBossBar();
-  const el=$(UI.initRow);
-  if(!G.combatOn){el.innerHTML='';return;}
-  el.innerHTML=G.order.map(u=>
-    '<span class="chip '+u.side+' '+(u===G.current?'cur ':'')+(!u.alive?'dead':'')+'">'+u.short+' '+u.init+'</span>').join('');
-}
-function showSheet(h){
-  const ab=(l,v)=>{
-    const m=mod(v);
-    return '<div class="ab"><span>'+l+'</span><b>'+v+'</b><i>'+(m>=0?'+':'')+m+'</i></div>';
-  };
-  const w=h.weapon,wm=mod(h[w.abil]);
-  const need=XP_NEED(h.level);
-  let spells='';
-  if(h.cls==='wizard'){
-    spells='<p>Ячейки заклинаний: <b>'+h.slots+'/'+h.slotsMax+'</b></p>'+
-      '<p>• Огненные стрелы — 1d10+'+mod(h.int)+' огонь (действие)</p>'+
-      '<p>• Огненный шар — 3d6 огонь, радиус 2.5 кл. (действие+ячейка)</p>'+
-      '<p>• Лечащее слово — 1d4+'+mod(h.int)+' (бонус+ячейка)</p>'+
-      '<p>• Благословение — +1d4 к атакам, 3 хода (бонус+ячейка)</p>';
-  }else if(h.cls==='cleric'){/* v1.2 */
-    spells='<p>Ячейки заклинаний: <b>'+h.slots+'/'+h.slotsMax+'</b></p>'+
-      '<p>• Лечение — 1d8+'+mod(h.wis)+' (действие+ячейка)</p>'+
-      '<p>• Щит веры — +2 КД, 3 хода (бонус+ячейка)</p>'+
-      '<p>• Карание света — 2d6 излучения (действие+ячейка)</p>'+
-      '<p>• Гнев рассвета — 2d6 излучения вокруг, нежить ×2 (1/бой)</p>';
-  }else if(h.cls==='rogue'){/* v1.2 */
-    spells='<p>Подлый удар: +'+(h.level>=3?'2d6':'1d6')+', если рядом с целью есть союзник</p>'+
-      '<p>Отравленный клинок: зарядов на очереди — '+h.poisonBlade+'</p>';
-  }
-  $(UI.sheetbox).innerHTML=
-    '<h2>'+h.name+'</h2>'+
-    '<div class="sub">Человек · '+h.clsName+' · уровень '+h.level+'</div>'+
-    '<div class="srow">'+
-      '<div><span>КД</span><b>'+h.ac+'</b></div>'+
-      '<div><span>Хиты</span><b>'+Math.max(0,h.hp)+'/'+h.maxhp+'</b></div>'+
-      '<div><span>Скорость</span><b>'+h.speed+' кл.</b></div>'+
-      '<div><span>Иниц.</span><b>'+(mod(h.dex)>=0?'+':'')+mod(h.dex)+'</b></div>'+
-    '</div>'+
-    '<div class="abgrid">'+
-      ab('СИЛ',h.str)+ab('ЛОВ',h.dex)+ab('ТЕЛ',h.con)+ab('ИНТ',h.int)+ab('МДР',h.wis)+ab('ХАР',h.cha)+
-    '</div>'+
-    '<h3>Снаряжение</h3>'+
-    '<p>Оружие: <b>'+w.name+'</b> — '+w.dice[0]+'d'+w.dice[1]+(wm>=0?'+':'')+wm+', '+(w.melee?'ближний бой':'дальность '+w.range+' кл.')+'</p>'+
-    '<p>Доспех: <b>'+h.armor+'</b> (КД '+h.ac+')</p>'+
-    '<p>Зелья лечения: '+h.potions+' — 2d4+2 (бонусное действие)</p>'+
-    (h.cls==='wizard'?spells:'')+
-    '<h3>Умения</h3>'+
-    h.features.map(f=>'<p>• '+f+'</p>').join('')+
-    '<div class="pbar" style="margin-top:10px"><i style="width:'+Math.min(100,h.xp/need*100)+'%"></i></div>'+
-    '<p style="margin-top:3px">Опыт: '+h.xp+' / '+need+'</p>';
-  $(UI.sheet).style.display='flex';
 }
 $(UI.sheet).addEventListener('click',e=>{if((e.target as HTMLElement).id==='sheet')$(UI.sheet).style.display='none';});
 
