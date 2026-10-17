@@ -61,3 +61,20 @@ Work Log:
 Stage Summary:
 - План готов и лежит в REFACTORING.md; ожидает команды «рефакторинг 1» (старт Фазы 0–1: тег-база, typecheck-скрипт, механический перевод engine.js → engine.ts)
 - Оценка: ~6 сеансов до DoD (engine.ts ≤800 строк, все модули TS strict, 9 E2E-сценариев зелёные)
+
+---
+Task ID: 4
+Agent: main (Z.ai)
+Task: Рефакторинг, Фазы 0–1 — страховочная база + механический перевод engine.js → engine.ts
+
+Work Log:
+- Фаза 0: тег v1.3-refactor-base на базе; npm run typecheck (tsc --noEmit); skills/ исключены из tsconfig (посторонние ошибки); particles.ts — тип spawn() приведён к фактически потребляемым полям (color/life/gravity обязательны, vx/vy/vz опциональны) — базовая линия 0 ошибок
+- Фаза 1: git mv engine.js → engine.ts (rename 98%, история сохранена); 581 ошибка strict → 0 за 6 итераций: any[]-аннотации контейнеров (units/order/tweens/pools/fires Map<string,any>), $():HTMLElement, Set<string>/Map<string,any> для A*, опциональные параметры (doAttack opts?, mk dis?/danger?), style.opacity строками (равнозначная CSSOM-коэрция), null-init локали → any (TODO refactor-p3/p4), disposers.pop() с guard, (e.target as HTMLElement).id, (renderer.backend as any)?.isWebGPUBackend
+- Правило соблюдено: 0 изменений логики — только аннотации, `?`-параметры, приведения типов; any-долг помечен TODO(refactor-p3/p4) для types.ts
+- E2E-гейт (agent-browser): boot '[bg3] v1.3 boot complete' (WebGL2+bloom) без ошибок; старт боя — инициатива/ходы тикают, лог растёт, ошибок нет; сейв doSave(1) → JSON v2 в localStorage → doLoad(1) восстанавливает героев 1-в-1 (fighter hp14 lv1, wizard hp10 lv1, золото 60); скриншот .zscripts/verify-refactor-p1.png
+- .gitignore += *.tsbuildinfo; REFACTORING.md — статус Фаз 0–1 ✅
+- Git: коммит 46b57c4 + тег refactor-p1; пуш в приватный ketaevweb/bg3-webgpu-prototype с токеном из чата, remote URL очищен после пуша (см. Task 5)
+
+Stage Summary:
+- engine.ts компилируется под strict (strictNullChecks), tsc --noEmit = 0 ошибок; поведение идентично v1.3
+- Следующий шаг: «рефакторинг 2» — Фаза 2 (чистые листья: rng/utils/constants/grid/боевая математика/лут)
