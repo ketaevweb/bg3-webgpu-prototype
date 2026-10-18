@@ -545,3 +545,27 @@ Stage Summary:
 - download/bg3_polny_otchet_ru.mp3 (5 мин 14 c, 3.8 МБ) + download/bg3_polny_otchet_ru.txt (текст-компаньон)
 - piper ruslan — рабочий путь русской озвучки на будущее; z-ai tts для русского непригоден
 - Игровой код не менялся; репозиторий в состоянии v2.4, следующий релизный пункт — v2.5
+
+---
+Task ID: 22
+Agent: main (Z.ai)
+Task: v2.5 «Голоса Глубин» — озвучка реплик/баннеров игры (голоса по характеру, полу и тону)
+
+Work Log:
+- Верификация: HEAD eef566b (v2.4), дерево чистое; разведка dialog.ts (12 НПС), tutorial, quests, season, overlays, settings, engine, E2E-харнес
+- Голоса: piper ru_RU medium ×4 (ruslan/denis/dmitri/irina, ~63 МБ каждый, scripts/piper/); kseniya не существует в piper-voices (404) — женские роли на irina с разной обработкой
+- voicecfg.ts (лист, 88 строк): VOICES — 14 голосов (база+темп len/высота pitch/эхо aecho/срез lowpass/громкость), NPC_VOICE (12 DLGS-ключей), numRu 0..999, ttsNormalize (числа→слова, символы), bannerSlug (транслит) — ЕДИНЫЙ источник для клиента/сервера/генератора
+- ui/voice.ts (лист, 148 строк): initVoice (манифест no-throw), play(id, dyn?) — манифест→кэш буферов→startBuf; say — /api/tts; banner (слаг→манифест, иначе рассказчик с сервера); remember-at-start + gen-счётчик (новая реплика перебивает старую и отложенные загрузки — как в BG3); setEnabled (gfx.voice); voiceState() для E2E; фасад voice={...}
+- /api/tts (route.ts, 76 строк): валидация (voice∈VOICES, ≤400 зн.), piper→tmp wav→ffmpeg (asetrate/atempo/lowpass/aecho/volume)→mp3, дисковый кэш .voicecache/<v>-<md5>.mp3 (в .gitignore), 400/503 no-throw
+- Хуки: dialog.showNode — voice узла (ключ dlg.<npc>.<node>, промах+dyn → say с голосом НПС: казна призрака) + опции по RAW-индексам (dlg.…o<i>, цитаты «» — отряд, (…) — рассказчик); closeDlg/closeDlgHard — stopVoice; tutorial.show — tut.<id>; quests.start/done — bigBanner(silent)+quest.<id>.start/done; season.announceSeason — season.<i>; overlays.bigBanner(text, silent=false) — voice.banner; settings — gfx.voice + строка «Голоса» в панели G + applyGfx→setEnabled; engine — await initVoice() ДО initTutorial (первый шаг наставника озвучен), __bg3 += voice/dlgProbe/tutSteps/openDlg/closeDlg; types.ts синхронно
+- Генератор: gen_voices.cjs (браузерные пробы через dev-сервер: dlgProbe/tutSteps/QUESTS/forceSeason → voice_lines.json, 154 строки) → voicesynth.ts (bun, импорт voicecfg) → public/voices/*.mp3 (154 файла, ~9.3 мин, 6.8 МБ) + manifest.json; идемпотентен
+- Уроки: (1) bun -e для JSON-дампа TS-конфига в cjs-скрипты; (2) waitForFunction сериализует только данные — предикаты-функции аргументами нельзя; (3) remember-at-start: last/hist фиксируются в момент СТАРТА реплики, звучит последняя по gen — иначе гонка openDlg (tut.talk vs dlg.damrock.start) рандомизирует last; (4) stopVoice НЕ двигает gen (опция «Покажи товар» играет после closeDlg), gen двигает только setEnabled(false); (5) вайп волны N: arenaNext(N) завершается ПОСЛЕ waitCalm — синхронизация по best>=N и следующему combatOn; чистая остановка цепочки — arenaSetWave(0) при живой волне → вайп → arenaNext(0) no-op; (6) ASR не принимает mp3 (только WAV/WebM) — конвертация ffmpeg для проверки; высота/эхо снижают точность ASR — слышимость для человека сохранена
+- E2E pw_v25 11 гейтов GREEN ×2: G1 boot+манифест+целостность 154 файлов+tut.move; G2 голос Дамрока; G3 опция o0 (лавка); G4 соц-опция o3; G5 призрак — динамика /api/tts; G6 quest.main.done; G7 арена: season.0 + статичный баннер + dyn 2; G8 вайпы 6→7→8, баннер волны 7 динамикой, цепочка остановлена (best=7, wave=0); G9 выключатель (on/frozen/backOn); G10 сейв/лоад 1:1 (best 7); G11 чистый reload (0 ошибок, 0 bad404, /voices 404 нет)
+- Регрессии pw_v20–v24 GREEN (в init-скрипты добавлен voice:false — детерминизм без голосов)
+- Гейты статические: tsc 0; ESLint 0/0; NO CYCLES; 0 any в коде; модули ≤400 (engine 370, dialog 350, voice 148, voicecfg 88, api/tts 76)
+- README: шапка v2.5 + «Предыдущая v2.4» + структура (voice.ts/voicecfg.ts/api/tts) + роадмап (идеи v2.6: благословения, сезонные составы, итог сезона, боевые реплики героев, громкость); layout.tsx метаданные v2.5
+
+Stage Summary:
+- v2.5 «Голоса Глубин» готова: игра говорит — 12 голосов НПС + рассказчик, офлайн-манифест 154 реплик (6.8 МБ) + серверная динамика, перебивание как в BG3, выключатель в панели G
+- Сейв v2 без изменения формата (voice — настройка gfx, не сейв); статические гейты и E2E (v25 ×2 + регрессии v20–v24) зелёные
+- Далее: коммит + tag v2.5 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена
