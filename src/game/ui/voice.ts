@@ -1,4 +1,4 @@
-/* ================= VOICE (v2.5 «Голоса Глубин») =================
+/* ================= VOICE (v2.5 «Голоса Глубин» + v2.6 громкость) =================
    Озвучка реплик и баннеров: офлайн-манифест (public/voices/manifest.json,
    генератор scripts/gen_voices.cjs) + динамика через /api/tts (piper на
    сервере, дисковый кэш) — для строк с интерполяцией (золото призрака,
@@ -17,6 +17,7 @@ export interface DynReq{v:string;t:string;}
 
 let man:Manifest|null=null;
 let on=true;
+let vol=1;/* v2.6: громкость голосов 0..1 (панель G «Громкость») */
 let ctx:AudioContext|null=null;
 let gain:GainNode|null=null;
 let cur:AudioBufferSourceNode|null=null;
@@ -28,6 +29,13 @@ export function voiceEnabled():boolean{return on&&!!man;}
 export function setEnabled(v:boolean){
   on=!!v;
   if(!v){gen++;/* отложенные загрузки — в расход */stopVoice();}
+}
+
+/* v2.6: громкость голосов (0..1); живая правка gain + сохранение для
+   unlock() — контекст создаётся лениво, при первом звуке */
+export function setVolume(v:number){
+  vol=Math.max(0,Math.min(1,v||0));
+  try{if(gain)gain.gain.value=0.9*vol;}catch{}
 }
 
 /* манифест грузится один раз (bootGame после loadGfx); no-throw */
@@ -47,7 +55,7 @@ function unlock():void{
       if(!AC)return;
       ctx=new AC();
       gain=ctx.createGain();
-      gain.gain.value=0.9;
+      gain.gain.value=0.9*vol;
       gain.connect(ctx.destination);
     }
     if(ctx.state==='suspended')void ctx.resume();
@@ -141,8 +149,8 @@ export function banner(text:string):void{
 /* инспектор E2E (только чтение) */
 export function voiceState(){
   return{on,ready:!!man,lines:man?Object.keys(man.lines).length:0,
-    last:lastId,lastAt,playing:!!cur,dyn:dynCount,lastDynOk,hist:[...hist]};
+    last:lastId,lastAt,playing:!!cur,dyn:dynCount,lastDynOk,hist:[...hist],vol};
 }
 
 /* фасад для модулей игры: единая точка вызова озвучки */
-export const voice={play,say,banner,stopVoice,setEnabled,initVoice,voiceState,voiceEnabled};
+export const voice={play,say,banner,stopVoice,setEnabled,initVoice,voiceState,voiceEnabled,setVolume};

@@ -16,6 +16,7 @@ import { healUnit } from './vitals';
 import { tween } from '../fx/tweens';
 import { fx, glows } from '../render/renderer';
 import { QUESTS } from '../interact/questData';
+import { bark } from '../ui/barks';/* v2.6: боевые реплики */
 import type { Unit } from '../types';
 
 /* ================= ВОЛНЫ / ОПЫТ / УРОВНИ ================= */
@@ -30,6 +31,7 @@ export function checkEnd(){
 export function victorySequence(){
   log('=== ПОБЕДА! ===','g-sys');
   bigBanner('ПОБЕДА!');
+  if(!G.arenaWave)bark('won');/* v2.6: герой празднует победу (в арене свой цикл волн) */
   sfx.stinger('victory');
   fx.burstAtMesh(aliveHeroes()[0]||units[0],{count:36,color:0xffd54f,speed:3.2,size:0.14,life:1.1,gravity:-1.2});
   for(const h of aliveHeroes())healUnit(h,roll(2,6)+2,'перевязка после боя');

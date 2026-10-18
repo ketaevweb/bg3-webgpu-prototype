@@ -66,6 +66,7 @@ import { addStatus, igniteTile } from './statuses';
 import { awardXP, checkEnd } from './progression';
 import { rollLoot } from './loot';
 import { questObj, questDone } from '../interact/quests';
+import { bark } from '../ui/barks';/* v2.6: боевые реплики */
 import type { ExplodeOpts, Unit, Weapon } from '../types';
 export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:number;aoo?:boolean}={}){
   if(!att.alive||!def.alive)return;
@@ -105,6 +106,7 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
       sfx.crit();slowmo.trigger(0.55,0.22);
       fx.burstAtMesh(def,{count:30,color:0xffd54f,speed:4.6,size:0.15,life:0.85});
       glows.flashAtMesh(def,0xffd54f,1.5);
+      if(att.side==='hero')bark('crit',att);/* v2.6: герой на криту */
     }
     damageUnit(def,dmg,att);
     if(w.status&&def.alive)addStatus(def,w.status.type,w.status.turns);
@@ -126,13 +128,17 @@ export function damageUnit(t:Unit,dmg:number,src:Unit|null){
     t.reinforced=true;
     bus.champCall.call(t);
   }
+  /* v2.6: реплики героя — падение (force, перебивает всё) и ранение (раз за бой) */
+  if(t.hp<=0&&t.side==='hero'&&!t.summoned)bark('down',t,true);
+  else if(t.side==='hero'&&t.alive&&t.hp<=t.maxhp*0.35&&!t.barkHurt){t.barkHurt=true;bark('hurt',t);}
   if(t.hp<=0)die(t,src);
 }
 
 
-export function die(t:Unit,_src:Unit|null){
+export function die(t:Unit,src:Unit|null){
   if(!t.alive)return;
   if(t.isBarrel){explodeBarrel(t);return;}
+  if(t.side==='goblin'&&src&&src.side==='hero'&&!src.summoned)bark('kill',src);/* v2.6: герой добил */
   t.alive=false;t.hp=0;
   log(t.name+' повержен!','g-sys');
   ftextAbove(t,'Повержен','#d8b45a');

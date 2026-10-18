@@ -273,9 +273,10 @@ function champCallImpl(c:Unit){
   bus.refreshParty.call();
 }
 
-/* ---- E2E: мгновенно положить живых врагов волны и свести конец боя ---- */
+/* ---- E2E: мгновенно положить живых врагов волны и свести конец боя.
+   v2.6: источник — первый живой герой: kill-bark честно срабатывает ---- */
 export function arenaWipe(){
-  for(const e of S.combatGroup)if(e.alive)die(e,null);
+  for(const e of S.combatGroup)if(e.alive)die(e,aliveHeroes()[0]||null);
   checkEnd();
 }
 export function arenaState(){return {wave:G.arenaWave,best:S.arenaBest||0,endless:G.arenaWave>WAVES};}

@@ -1,16 +1,18 @@
-/* voicesynth.ts — СИНТЕЗ озвучки v2.5 «Голоса Глубины» (bun).
+/* voicesynth.ts — СИНТЕЗ озвучки v2.5+v2.6 (bun).
    Вход:  scripts/voice_lines.json (пробы из gen_voices.cjs — тексты 1:1
-   с DLGS/туториалом/сезонами/заданиями/баннерами).
+   с DLGS/туториалом/сезонами/заданиями/баннерами) + BARKS из voicecfg
+   (v2.6: боевые реплики героев — статичные тексты, без браузерных проб).
    Выход: public/voices/<id>.mp3 (piper + ffmpeg-обработка тона по
    voicecfg.VOICES) + public/voices/manifest.json {id → {v, d}}.
-   Ключи 'bannerraw:<текст>' → 'bann.'+bannerSlug(текст), голос рассказчика.
+   Ключи 'bannerraw:<текст>' → 'bann.'+bannerSlug(текст), голос рассказчика;
+   барьки → 'bark.<герой>.<событие>', голос героя по HERO_VOICE.
    Идемпотентен: существующие mp3 (>1КБ) не пересинтезируются.
    Запуск: bun scripts/voicesynth.ts */
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { VOICES, ttsNormalize, bannerSlug } from '../src/game/voicecfg';
+import { VOICES, ttsNormalize, bannerSlug, BARKS, HERO_VOICE, BARK_KINDS } from '../src/game/voicecfg';
 
 interface LineDef{v:string;t:string;}
 interface ManLine{v:string;d:number;}
@@ -58,6 +60,15 @@ function main():void{
       const text=rawId.slice('bannerraw:'.length);
       jobs['bann.'+bannerSlug(text)]={v:line.v,t:text.toLowerCase()};
     }else jobs[rawId]=line;
+  }
+  /* v2.6: барьки героев — bark.<транслит>.<событие>, голос по HERO_VOICE */
+  for(const hero of Object.keys(BARKS)){
+    const voiceId=HERO_VOICE[hero];
+    if(!voiceId||!VOICES[voiceId])throw new Error('bark voice missing: '+hero);
+    for(const kind of BARK_KINDS){
+      const t=BARKS[hero][kind];
+      if(t&&t.trim())jobs['bark.'+bannerSlug(hero)+'.'+kind]={v:voiceId,t};
+    }
   }
   const manifest:Record<string,ManLine>={};
   let done=0,skipped=0,total=0;

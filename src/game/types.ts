@@ -63,6 +63,7 @@ export interface Unit{
   /* флаги роли/ИИ */
   keepDist:boolean;elite?:boolean;caster?:boolean;healer?:boolean;
   champ?:boolean;reinforced?:boolean;depth?:number;/* v2.1: чемпион бездны (аура/подкрепление) и глубина волны */
+  barkHurt?:boolean;/* v2.6: реплика «ранен» уже прозвучала (раз за бой) */
   aura?:number;/* v2.2: аура властителя — враги рядом с носителем бьют +N (чемпионы и боссы кампании) */
   atkBonus?:number;/* v2.2: бонус к броскам атаки (Осколок портала) */
   summoned?:boolean;summoner?:Unit|null;
@@ -283,7 +284,11 @@ export interface Bg3Debug{
   records:()=>unknown;/* v2.4: снимок панели «Летопись Глубин» */
   /* v2.5: голоса Глубин — инспектор озвучки + пробы реплик (генератор) */
   voice:()=>{on:boolean;ready:boolean;lines:number;last:string;lastAt:number;
-    playing:boolean;dyn:number;lastDynOk:boolean;hist:string[]};
+    playing:boolean;dyn:number;lastDynOk:boolean;hist:string[];vol:number};
+  /* v2.6: эхо битвы — проба барьков + каталог */
+  barkProbe:(kind:'start'|'crit'|'kill'|'hurt'|'down'|'won',hero?:string)=>{ok:boolean;id:string};
+  barkKinds:()=>{cd:number;heroes:string[]};
+  heroPass:()=>void;/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
   tutSteps:()=>{id:string;title:string;text:string}[];
   openDlg:(npc:string)=>void;

@@ -13,7 +13,7 @@ import { useUi, uiSet } from '../ui/store';
    Тени / bloom / glow-хала / плотность частиц / разрешение / лимит FPS.
    Всё применяется на живую и хранится в localStorage (bg3w_gfx_v1). */
 export const GFX_KEY='bg3w_gfx_v1';
-export const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max',voice:true};
+export const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max',voice:true,vol:'100'};/* v2.6: +vol (громкость голосов, %) */
 
 export function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.assign(gfx,JSON.parse(raw));}catch{}}
 export function applyShadows(){
@@ -36,6 +36,7 @@ export function applyGfx(){
   renderer.setPixelRatio(Math.min(devicePixelRatio,2)*(gfx.res==='50'?0.5:(gfx.res==='75'?0.75:1)));
   G.fpsLimit=gfx.fps==='30'?30:(gfx.fps==='60'?60:0);
   voice.setEnabled(gfx.voice!==false);/* v2.5: голоса подчиняются панели G */
+  voice.setVolume((parseInt(gfx.vol,10)||100)/100);/* v2.6: громкость голосов */
   G.frameAcc=0;
   try{localStorage.setItem(GFX_KEY,JSON.stringify(gfx));}catch{}
 }
@@ -53,6 +54,7 @@ export const GFX_ROWS:{k:GfxKey;label:string;bool?:boolean;opts:[string,string][
   {k:'res',label:'Разрешение',opts:[['50','50%'],['75','75%'],['100','100%']]},
   {k:'fps',label:'Лимит FPS',opts:[['30','30'],['60','60'],['max','Макс']]},
   {k:'voice',label:'Голоса',bool:true,opts:[['1','Вкл'],['0','Выкл']]},/* v2.5 */
+  {k:'vol',label:'Громкость',opts:[['60','60%'],['80','80%'],['100','100%']]},/* v2.6 */
 ];
 export function renderGfx(){
   const presets=( [['low','Низкий'],['mid','Средний'],['high','Высокий']] as const ).map(([k,n])=>({

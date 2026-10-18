@@ -17,6 +17,7 @@ import { igniteTile, removeFire, addStatus } from './statuses';
 import { damageUnit, explodeBarrel } from './combat';
 import { checkEnd } from './progression';
 import { clearMarkers, clearDots, showReach } from '../ui/markers';
+import { bark } from '../ui/barks';/* v2.6: боевые реплики */
 import type { Unit } from '../types';
 
 /* ================= ОГОНЬ: ТИК КОНЦА РАУНДА (Фаза 5: из statuses.ts) ================= */
@@ -55,6 +56,7 @@ export function startCombat(group:Unit[]){
   bus.tutEvent.call('fight');/* v1.4: шаг обучения «Первый бой» */
   log('=== БОЙ НАЧИНАЕТСЯ ===','g-sys');
   sfx.stinger('combat');
+  bark('start');/* v2.6: герой выкрикивает начало боя */
   if(S.combatGroup.some(g=>g.cryptBoss)){/* v0.8: аутро босса крипты */
     bigBanner('ВХОРИЛ КОСТЕПЁР');
     log('Из тьмы поднимается Вхорил Костепёр — глаза горят могильным огнём.','g-enemy');

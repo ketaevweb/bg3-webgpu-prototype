@@ -1,4 +1,4 @@
-/* ================= VOICE CFG (v2.5 «Голоса Глубин») =================
+/* ================= VOICE CFG (v2.5+v2.6 «Голоса Глубин/Эхо битвы») =================
    Каталог голосов озвучки — ЕДИНЫЙ источник для трёх потребителей:
    ui/voice.ts (клиент: манифест+динамика), /api/tts (сервер: piper+ffmpeg)
    и scripts/gen_voices.cjs (офлайн-генератор манифеста, читает через bun).
@@ -33,6 +33,7 @@ export const VOICES:Record<string,VoiceDef>={
   ilva:{base:'irina',len:0.88,pitch:1.5,gain:0},/* Илва — живая разведчица */
   olkha:{base:'irina',len:1.1,pitch:0.5,gain:-1},/* Ольха — спокойная друидка */
   ulva:{base:'irina',len:1.15,pitch:-2,gain:0,echo:'0.35:0.33:70:0.4'},/* Ульва — Матерь Топей */
+  mirella:{base:'irina',len:0.98,pitch:0.5,gain:0},/* v2.6: Мирелла — ясная волшебница */
 };
 
 /* DLGS-ключ → голос (реплики НПС в showNode) */
@@ -40,6 +41,51 @@ export const NPC_VOICE:Record<string,string>={
   patrol:'patrol',boss:'grat',damrock:'damrock',ilva:'ilva',kaya:'kaya',
   necro:'necro',swampboss:'ulva',olkha:'olkha',haldir:'haldir',ghost:'ghost',
   giantboss:'garrum',citadelboss:'malveh',
+};
+
+/* ================= v2.6 «ЭХО БИТВЫ»: боевые реплики героев =================
+   Краткие выкрики в бою — как barks в BG3: герой отзывается на событие
+   (начало боя, крит, убийство, ранение, падение, победа) своим голосом.
+   HERO_VOICE — ключ героя (по Unit.short, нижний регистр) → голос из
+   VOICES; BARKS — тексты: [герой][событие]. Единый источник для
+   ui/barks.ts (выбор/кулдаун) и voicesynth.ts (синтез манифеста).
+   Ключи файлов — транслит bannerSlug (bark.torik.start). */
+export const HERO_VOICE:Record<string,string>={
+  торик:'hero',мирелла:'mirella',илва:'ilva',кая:'kaya',ольха:'olkha',хальдир:'haldir',
+};
+export type BarkKind='start'|'crit'|'kill'|'hurt'|'down'|'won';
+export const BARK_KINDS:BarkKind[]=['start','crit','kill','hurt','down','won'];/* порядок стабилен (манифест) */
+export const BARKS:Record<string,Record<BarkKind,string>>={
+  торик:{
+    start:'К оружию! Держим строй!',crit:'Вот это удар!',
+    kill:'Ещё один!',hurt:'Я держусь... держусь!',
+    down:'Не конец... для меня...',won:'Так им! Ни шагу назад!',
+  },
+  мирелла:{
+    start:'Огонь готов!',crit:'Сила стихий!',
+    kill:'Испепелена!',hurt:'Ячейки... на исходе!',
+    down:'Досадно... я почти справилась...',won:'Чисто сработано.',
+  },
+  илва:{
+    start:'Тихо... ага, к бою!',crit:'Прямо в щель доспеха!',
+    kill:'Легко и изящно.',hurt:'Эй! Я же под уклонением!',
+    down:'Ушла в тень... навсегда.',won:'Ни шума, ни пыли.',
+  },
+  кая:{
+    start:'Рассвет с нами!',crit:'Свет покарал!',
+    kill:'Да будет так.',hurt:'Силы слабеют...',
+    down:'Я ухожу... к свету.',won:'Все живы? Хорошо.',
+  },
+  ольха:{
+    start:'Глубина не пройдёт!',crit:'Гнев тиса!',
+    kill:'Круг замкнулся.',hurt:'Корни держат... едва.',
+    down:'Возвращаюсь... к земле.',won:'Природа выдохнула.',
+  },
+  хальдир:{
+    start:'Дозор не отступает!',crit:'Карающим ударом!',
+    kill:'За Дозор!',hurt:'Клятва держит!',
+    down:'Дозор... помнит...',won:'Долг исполнен.',
+  },
 };
 
 /* ---- числа словами 0..999 (баннеры: «ВОЛНА 12» → «волна двенадцать») ---- */

@@ -19,7 +19,7 @@ import { switchMap } from './world/maps';
 import { buildHeroes, spawnEnemies } from './entities/roster';
 import { doAttack, damageUnit, bossAura } from './systems/combat';
 import { LOOT, rollLoot } from './systems/loot';
-import { startCombat } from './systems/turns';
+import { startCombat, endTurn } from './systems/turns';/* v2.6: endTurn — проба пропуска хода (E2E) */
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
 import { openDlg, closeDlg, DLGS } from './interact/dialog';
 import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
@@ -42,6 +42,7 @@ import { closeShop, closeChoice } from './interact/shop';
 import { toggleBag, equipItem, unequipSlot, addToBag, GEAR } from './systems/gear';/* v1.6: снаряжение */
 import { initTutorial, tutState, TUT_STEPS } from './ui/tutorial';/* v1.4: наставник; v2.5: шаги для генератора озвучки */
 import { initVoice, voiceState } from './ui/voice';/* v2.5: голоса Глубин */
+import { barkProbe, barkHeroes, barks } from './ui/barks';/* v2.6: эхо битвы */
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
 import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
 import { cloudPull, serverPull } from './save/slots';
@@ -347,7 +348,10 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   season:()=>seasonState(),forceSeason:(i)=>forceSeason(i),/* v2.4: сезон глубины (E2E) */
   records:()=>({open:useUi.getState().recordsOpen,data:useUi.getState().records}),/* v2.4: летопись (E2E) */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
-  voice:()=>voiceState(),/* v2.5: инспектор озвучки (on/ready/last/hist/dyn) */
+  voice:()=>voiceState(),/* v2.5: инспектор озвучки (on/ready/last/hist/dyn/vol) */
+  barkProbe:(kind,hero)=>barkProbe(kind,hero),/* v2.6: проба боевых реплик (E2E) */
+  barkKinds:()=>({cd:barks.BARK_CD,heroes:barkHeroes()}),/* v2.6: каталог барьков (E2E) */
+  heroPass:()=>{if(G.combatOn&&G.current&&G.current.side==='hero'&&G.phase==='player')endTurn();},/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;
     return n?{name:n.name,text:n.text,opts:(n.opts||[]).map(o=>o.t)}:null;},/* v2.5: пробы реплик (генератор озвучки) */
   tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
