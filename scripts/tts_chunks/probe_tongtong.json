@@ -1,0 +1,14 @@
+{
+  "created": 1792334818,
+  "id": "202610182246589323898f5ec646dc",
+  "request_id": "202610182246589323898f5ec646dc",
+  "text": "When do you know? When shall I go? When shall I go?",
+  "usage": {
+    "completion_tokens": 16,
+    "prompt_tokens": 107,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 123
+  }
+}
