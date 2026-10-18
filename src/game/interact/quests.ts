@@ -12,6 +12,7 @@ import { aliveHeroes } from '../entities/units';
 import { awardXP } from '../systems/progression';
 import { addToBag } from '../systems/gear';/* v1.6: Каменное сердце — в сумку */
 import { QUESTS, QUEST_REWARD } from './questData';
+import { voice } from '../ui/voice';/* v2.5: рассказчик озвучивает задания */
 
 /* реэкспорт данных — существующие импорты (engine/snapshot/maps/dialog/shop)
    продолжают работать; новые модули могут импортировать прямо из questData */
@@ -22,7 +23,8 @@ export function questStart(id:string){
   const q=QUESTS[id];
   if(q.state!=='hidden')return;
   q.state='active';
-  bigBanner('НОВОЕ ЗАДАНИЕ');
+  bigBanner('НОВОЕ ЗАДАНИЕ',true);/* v2.5: баннер молчит — говорит рассказчик */
+  voice.play('quest.'+id+'.start');
   log('Новое задание: «'+q.name+'».','g-sys');
   refreshTracker();
 }
@@ -60,7 +62,8 @@ export function questDone(id:string){
     gainGold(300);awardXP(500);
     log('Печать на сундуке коменданта рассыпалась — откройте его во внутреннем дворе!','g-heal');
   }
-  bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
+  bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО',true);/* v2.5: баннер молчит — говорит рассказчик */
+  voice.play('quest.'+id+'.done');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
   refreshTracker();bus.refreshParty.call();
 }

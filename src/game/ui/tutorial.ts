@@ -12,6 +12,7 @@ import { bus } from '../bus';
 import { uiSet } from './store';
 import { log } from './overlays';
 import { sfx } from '../audio';
+import { voice } from './voice';/* v2.5: наставник говорит голосом рассказчика */
 
 const LS_KEY='bg3w_tut_v1';
 
@@ -33,6 +34,7 @@ function persist(){try{localStorage.setItem(LS_KEY,JSON.stringify({step,done}));
 function show(){
   const s=TUT_STEPS[step];
   uiSet({tut:s?{title:s.title,text:s.text,i:step+1,n:TUT_STEPS.length,onSkip:tutSkip}:null});
+  if(s)void voice.play('tut.'+s.id);/* v2.5: шаг озвучен */
 }
 function finish(msg:string){
   done=true;persist();

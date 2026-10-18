@@ -11,3 +11,5 @@ db/
 tool-results/
 next-env.d.ts
 upload/
+.voicecache/
+scripts/piper/*.onnx

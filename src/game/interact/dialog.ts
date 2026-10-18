@@ -7,6 +7,8 @@
 import { mod } from '../utils';
 import { d } from '../rng';
 import { sfx } from '../audio';
+import { voice } from '../ui/voice';/* v2.5: озвучка реплик (лист) */
+import { NPC_VOICE } from '../voicecfg';/* v2.5: НПС → голос (лист) */
 import { G, S, units, KAYA_SPOT, SWAMP, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { uiSet } from '../ui/store';
@@ -83,12 +85,14 @@ export function openDlg(npc:string){
   showNode('start');
 }
 export function closeDlg(){
+  voice.stopVoice();/* v2.5: реплика обрывается закрытием диалога */
   uiSet({dlg:null});
   S.dlgNpc=null;
   if(G.phase==='dialogue'){G.phase='explore';busyOff();}
   refreshHintExplore();
 }
 export function closeDlgHard(){
+  voice.stopVoice();/* v2.5 */
   uiSet({dlg:null});
   S.dlgNpc=null;
   G.busyCount=Math.max(0,G.busyCount-1);G.busy=G.busyCount>0;
@@ -103,13 +107,20 @@ export function socialCheck(req:{skill:string;dc:number}):boolean{
   return ok;
 }
 export function showNode(id:string){
-  const fn=S.dlgNpc?DLGS[S.dlgNpc]:undefined;
+  const npc=S.dlgNpc||'';
+  const fn=npc?DLGS[npc]:undefined;
   const n=fn?fn(id):null;
   if(!n)return closeDlg();
-  const opts=(n.opts||[]).filter(o=>!o.show||o.show()).map(o=>({
+  /* v2.5: голос узла — из манифеста; строки с интерполяцией (казна
+     призрака) — динамикой /api/tts. Опции — по RAW-индексу (до фильтра
+     show): ключи генератора озвучки dlg.<npc>.<node>.o<i> стабильны */
+  voice.play('dlg.'+npc+'.'+id,{v:NPC_VOICE[npc]||'narrator',t:n.text});
+  const raw=(n.opts||[]).map((o,i)=>({o,i}));
+  const opts=raw.filter(x=>!x.o.show||x.o.show()).map(({o,i})=>({
     t:o.t,
     req:!!o.req,
     onClick:()=>{
+      voice.play('dlg.'+npc+'.'+id+'.o'+i);/* v2.5: реплика отряда */
       if(o.req){
         const ok=socialCheck(o.req);
         showNode(ok?(o.ok||'start'):(o.fail||'start'));

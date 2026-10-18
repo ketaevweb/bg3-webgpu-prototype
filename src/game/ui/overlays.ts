@@ -10,6 +10,7 @@ import { units } from '../state';
 import { camera } from '../render/renderer';
 import { STATUS } from '../constants';
 import { pushLog, uiSet } from './store';
+import { voice } from './voice';/* v2.5: баннеры говорит рассказчик */
 import type { Status, Unit } from '../types';
 
 export function log(msg:string,cls?:string){pushLog(msg,cls);}
@@ -28,8 +29,12 @@ export function ftextAbove(ent:{mesh:THREE.Object3D},text:string,color:string){
   setTimeout(()=>el.remove(),1100);
 }
 export function setHint(t:string){uiSet({hint:t||''});}
-export function bigBanner(text:string){
+/* v2.5: баннер озвучивается рассказчиком (слаг → манифест, иначе —
+   /api/tts); silent=true — когда вместо баннера говорит конкретная
+   строка (задания: quest.<id>.start/done) */
+export function bigBanner(text:string,silent=false){
   uiSet({banner:text,bannerOn:true});
+  if(!silent)voice.banner(text);
   setTimeout(()=>uiSet({bannerOn:false}),2200);
 }
 export function initOverlays(){

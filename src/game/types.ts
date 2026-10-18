@@ -281,6 +281,13 @@ export interface Bg3Debug{
   season:()=>{idx:number;name:string;desc:string;tint:number};/* v2.4: текущий сезон глубины */
   forceSeason:(i:number|null)=>void;/* v2.4: форс сезона (−1 — вне сезона, null — реальная неделя) */
   records:()=>unknown;/* v2.4: снимок панели «Летопись Глубин» */
+  /* v2.5: голоса Глубин — инспектор озвучки + пробы реплик (генератор) */
+  voice:()=>{on:boolean;ready:boolean;lines:number;last:string;lastAt:number;
+    playing:boolean;dyn:number;lastDynOk:boolean;hist:string[]};
+  dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
+  tutSteps:()=>{id:string;title:string;text:string}[];
+  openDlg:(npc:string)=>void;
+  closeDlg:()=>void;
   spawnBoss:(k:'malveh'|'garrum'|'grat',x:number,z:number)=>unknown;/* v2.2: пробы аур боссов (E2E) */
   buyRelic:(id:string)=>boolean;/* v2.2: обмен реликвий у стелы (E2E) */
   awardXP:(n:number)=>void;/* v2.2: калибровка опыта (E2E) */

@@ -15,6 +15,7 @@ import { G, S } from '../state';
 import { uiSet, useUi } from '../ui/store';
 import { topScores } from '../save/leaderboard';
 import { log } from '../ui/overlays';
+import { voice } from '../ui/voice';/* v2.5: анонс сезона голосом рассказчика */
 import type { Unit } from '../types';
 
 export interface SeasonDef{name:string;desc:string;tint:number;}
@@ -69,6 +70,7 @@ export function seasonBoost(u:Unit){
 export function announceSeason(){
   const d=seasonDef();
   if(!d)return;
+  voice.play('season.'+seasonIndex());/* v2.5: сезон объявляет рассказчик */
   log('СЕЗОН ГЛУБИНЫ: «'+d.name+'» — '+d.desc+' (смена — на следующей неделе).','g-sys');
 }
 /* ---- HUD-панель «Летопись Глубин» (T / 🏆): сезон, рекорд, журнал,

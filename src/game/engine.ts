@@ -21,7 +21,7 @@ import { doAttack, damageUnit, bossAura } from './systems/combat';
 import { LOOT, rollLoot } from './systems/loot';
 import { startCombat } from './systems/turns';
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
-import { openDlg } from './interact/dialog';
+import { openDlg, closeDlg, DLGS } from './interact/dialog';
 import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
 import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
@@ -40,7 +40,8 @@ import { doSave, doLoad, renderSaves, openSaveMenu, toggleSaveMenu, closeSaveMen
 import { gfx, applyGfx, loadGfx, renderGfx, toggleGfx, closeGfx } from './save/settings';
 import { closeShop, closeChoice } from './interact/shop';
 import { toggleBag, equipItem, unequipSlot, addToBag, GEAR } from './systems/gear';/* v1.6: снаряжение */
-import { initTutorial, tutState } from './ui/tutorial';/* v1.4: наставник */
+import { initTutorial, tutState, TUT_STEPS } from './ui/tutorial';/* v1.4: наставник; v2.5: шаги для генератора озвучки */
+import { initVoice, voiceState } from './ui/voice';/* v2.5: голоса Глубин */
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
 import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
 import { cloudPull, serverPull } from './save/slots';
@@ -272,8 +273,9 @@ let disposed=false;
   G.phase='explore';
   bus.refreshUI.call();bus.refreshParty.call();
   bus.openExploreUI.call();
-  /* v1.1: настройки графики + меню сохранений (view-модели стора); v1.4: наставник */
+  /* v1.1: настройки графики + меню сохранений (view-модели стора); v1.4: наставник; v2.5: голоса */
   loadGfx();applyGfx();renderGfx();renderSaves();
+  await initVoice();/* v2.5: манифест ДО наставника — первый шаг озвучен */
   initTutorial();
   /* v0.7: звук — биндинг в стор (React-кнопка #sndBtn, Фаза 6) */
   const onSnd=()=>{
@@ -282,7 +284,7 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
-  log('BG3 Web-прототип v2.4 «Сезоны глубины»: бесконечная арена под недельными аффиксами — сезон глубины красит тени и меняет баланс (смена — раз в неделю).','g-sys');
+  log('BG3 Web-прототип v2.5 «Голоса Глубины»: озвучка как в большой BG3 — у каждого НПС свой голос (темп/высота/эхо по характеру), рассказчик ведёт баннеры, наставника и задания; настройка «Голоса» — в панели G.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
@@ -290,7 +292,7 @@ let disposed=false;
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v2.4 boot complete');
+  console.log('[bg3] v2.5 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -345,6 +347,11 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   season:()=>seasonState(),forceSeason:(i)=>forceSeason(i),/* v2.4: сезон глубины (E2E) */
   records:()=>({open:useUi.getState().recordsOpen,data:useUi.getState().records}),/* v2.4: летопись (E2E) */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
+  voice:()=>voiceState(),/* v2.5: инспектор озвучки (on/ready/last/hist/dyn) */
+  dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;
+    return n?{name:n.name,text:n.text,opts:(n.opts||[]).map(o=>o.t)}:null;},/* v2.5: пробы реплик (генератор озвучки) */
+  tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
+  openDlg:(n)=>openDlg(n),closeDlg:()=>closeDlg(),/* v2.5: диалог для E2E */
 };
 return function dispose(){
   disposed=true;
