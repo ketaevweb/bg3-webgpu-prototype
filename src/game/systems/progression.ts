@@ -97,17 +97,20 @@ export function levelUp(h:Unit){
 }
 export function showEnd(win:boolean){
   const lv=units.find(u=>u.side==='hero');
+  const fin=S.campaignDone&&win;/* v1.8: финал кампании */
   let stats:string;
   if(win){
     const qd=Object.values(QUESTS).filter(q=>q.state==='done').length;
     const total=Object.keys(QUESTS).length;
-    const fin=qd>=total?' Долгий Дозор будет помнить вас: тракт свободен — и от гоблинов, и от мертвецов!':'';
-    stats='Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'+fin;
+    stats=fin
+      ?'КАМПАНИЯ ЗАВЕРШЕНА! Малвех свободен, цитадель — снова дом Долгого Дозора, а тракт от леса до глубин — чист. Заданий: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'. Долгой памяти — и Долгого Дозора!'
+      :'Заданий выполнено: '+qd+'/'+total+' • Опыт: '+(lv?lv.xp:0)+' • Золото: '+S.gold+'.'
+        +(qd>=total?' Долгий Дозор будет помнить вас: тракт свободен — и от гоблинов, и от мертвецов!':'');
   }else{
     stats='Отряд пал в бою. Попробуйте иную тактику: огонь, бочки и переговоры.';
   }
   uiSet({endHidden:false,end:{
-    title:win?'ПОБЕДА!':'ПОРАЖЕНИЕ',
+    title:fin?'ДОЛГОЙ ДОЗОР!':(win?'ПОБЕДА!':'ПОРАЖЕНИЕ'),
     color:win?'#d8b45a':'#e06c55',
     stats,
     canContinue:win,

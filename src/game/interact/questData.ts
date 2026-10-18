@@ -26,6 +26,9 @@ export const QUESTS:Record<string,Quest>={
   giants:{name:'Перевал великанов',state:'hidden',/* v1.6 */
     desc:'Северный тракт к цитадели Долгого Дозора проходит через перевал, где обустроились огры. Их вожак Гаррум Камнегрыз швыряет валуны в каждого, кто подойдёт к мосту. Дорога на север должна быть свободна.',
     objs:[{k:'enter',t:'Пройти на перевал и найти вожака',done:false},{k:'boss',t:'Победить Гаррума Камнегрыза',done:false}]},
+  citadel:{name:'Долгий Дозор',state:'hidden',/* v1.8 — финал кампании */
+    desc:'Цитадель Долгого Дозора пала: лорд-комендант Малвех поддался песне Глубинного, и теперь в её дворах поют утопленники. Освободите цитадель — и тракт от гоблинов до глубин станет свободен.',
+    objs:[{k:'enter',t:'Найти цитадель Долгого Дозора',done:false},{k:'boss',t:'Освободить Малвеха, лорда-коменданта',done:false}]},
 };
 export const QUEST_REWARD:Record<string,string>={
   main:'300 XP, 150 зол.',
@@ -34,6 +37,7 @@ export const QUEST_REWARD:Record<string,string>={
   crypt:'300 XP, 150 зол., перстень Костепёра',
   swamp:'350 XP, 200 зол., Болотный жемчуг',
   giants:'400 XP, 250 зол., Каменное сердце',
+  citadel:'500 XP, 300 зол., сундук коменданта',
 };
 
 /* v1.6 (фикс из E2E): сброс квестов в исходное — нужен чистому ремоуту
@@ -41,7 +45,7 @@ export const QUEST_REWARD:Record<string,string>={
    из-за чего после Fast-Refresh квесты оставались «done». */
 export function resetQuests(){
   QUESTS.main.state='active';QUESTS.main.objs.forEach(o=>{o.done=false;});
-  for(const id of ['prisoner','crate','crypt','swamp','giants']){
+  for(const id of ['prisoner','crate','crypt','swamp','giants','citadel']){
     QUESTS[id].state='hidden';QUESTS[id].objs.forEach(o=>{o.done=false;});
   }
 }

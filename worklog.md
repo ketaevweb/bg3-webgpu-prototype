@@ -277,3 +277,31 @@ Stage Summary:
 - Архитектурно: motion.ts (лист) + animation.ts (стейт-машина) + офлайн bake_motions.mjs; боевые хуки в combat/abilities; runtime — проверенный v1.6-путь ригов
 - Уроки сессии: (1) у Soldier.glb identity inverseBindMatrices; (2) GLTFLoader санитизирует имена костей (mixamorig: → mixamorig); (3) WebGPURenderer.render() асинхронен — same-task toDataURL неверен; (4) в этой песочнице 4GB — chromium под SwiftShader деградирует от OOM, E2E держать лёгким (gfx-пресет через addInitScript, CDP-скриншоты по одному)
 - Тег v1.7 + push — в этом же таске
+
+---
+Task ID: 14
+Agent: main (Z.ai)
+Task: v1.8 «Цитадель Долгого Дозора» — финал кампании: пятая карта (стена с воротами, дворы цитадели), финальный босс Малвех (Глас глубин), экран финала «ДОЛГОЙ ДОЗОР!», Знамя Дозора; фикс латентных багов v1.6
+
+Work Log:
+- Старт: конвейер p0–p6 закрыт, v1.4–v1.7 на GitHub; сводка контекста снова была устаревшей (претендовала на «Phase 2»). Дорожная карта README определяла v1.8: пятая карта/цитадель + клановые враги
+- КАРТА: CITADEL-константы (WALL_Z=10, GATE 13–14, BRAZIERS/PILLARS/BOSS/CHEST/KEEP/BANNERS, EXIT/ENTER, TRAIL [25,2] на перевале); seedCitadel (стена solid кроме ворот, бразиры/устои/сундук solid, бочки двора, редкая трава); buildWorld: грунт/заплатки/крошка цитадели, валуны как на перевале; renderer: applyAtmosphere/applyLighting 'citadel' (изумрудная мгла 0x0a1012, холодный свет)
+- interact/citadel.ts (НОВЫЙ, 166): buildCitadelTrail (ступени+указатель на перевале, гейт QUESTS.giants), enterCitadel; buildCitadelScenery — стена из SM_Prop_StoneWall_01/02 по клеткам z=10, устои ворот + перемычка, фасад KEEP (стена-декор z=1, портал с изумрудной дверью + glow/ember, черепа), бразиры Глубинного (зелёное пламя), POLYGON-устои, знамёна Дозора (полотнище+золотая кайма), сундук (placeNatureSync, печать: units.some(citadelBoss&&alive)), спуск на перевал; openCitadelChest (Знамя+150+d100 зол), startCitadelQuest
+- РОСТЕР: makeKnight (Рыцарь-отступник 26hp/КД15/2d6, элита), makeAdept (Адепт Глубин 18hp/целитель/Струя бездны 1d8, элита), makeMalveh (Малвех 72hp/КД16/клеймо 2d6+СИЛ + копьё бездны 1d8 яд, citadelBoss/fearImmune); spawnEnemies 'citadel': Малвех+2 рыцаря+адепт+2 культиста (citadelDone → пусто)
+- ИИ: фаза 2 по фабрике — cit-ветка «ГЛАС ГЛУБИН»: КД +2, 2 утопленника (makeDrowned+joinCombat), зелёный взрыв; nova cit-ветка «ВОЛНА БЕЗДНЫ» (2d6 некроз соседям, зелёные партиклы)
+- СМЕРТЬ БОССА: die() citadelBoss → citadelDone+campaignDone, questObj/questDone('citadel'), стингер победы, финальные логи; checkEnd → victorySequence → showEnd: финал-ветка — заголовок «ДОЛГОЙ ДОЗОР!», текст кампании (задания/опыт/золото)
+- КВЕСТЫ: QUESTS.citadel «Долгий Дозор» (enter/boss) + QUEST_REWARD + resetQuests; questDone('citadel') = 300 зол + 500 XP (Знамя — только из сундука; двойная выдача устранена при E2E-дизайне); диалоги: DLGS.citadelboss (убеждение СЛ 18 «вспомнить Дозор»), Дамрок citadelinfo после перевала; триггер босса в checkTriggers (радиус 7)
+- СНАРЯЖЕНИЕ: GEAR.watch_banner «Знамя Дозора» (+2 КД, талисман); анимация: CFG knight (blade) / lord (heavy, зелёный тинт); rig Малвеха в buildMap ×1.18
+- СЕЙВ: SaveFlags + citadelDone/campaignDone/citadelChest (опциональные, v2 совместим); snapshot/applyGame + mapId 'citadel'; MAP_NAME; resetState флаги/группа
+- E2E-ИНСТРУМЕНТАРИЙ: __bg3 + turn() (phase/combatOn/hero/action/round/mapId), solidAt, inters, callInter — типизированы в Bg3Debug
+- ФИКСЫ ЛАТЕНТНЫХ БАГОВ (вскрыты 404-монитором E2E): (1) giants.ts — дробные имена POLYGON-моделей хребта ((z/4)%3 → «SM_Terrain_Mountain_01.75.fbx» 404, горы молча не грузились с v1.6) → Math.floor; (2) SM_Terrain_Rubble_Pebbles_02 не существует в паке → замена на _01; (3) FBX ссылаются на атлас «PolygonNature_01.png», а на диске лежал PolygonNature.png → алиас-копия (атлас молча не применялся с v1.6); (4) rollLoot: Гаррум лутался по гоблинской таблице (giantBoss не входил в isBoss) → +giantBoss/citadelBoss
+- E2E playwright (scripts/pw_v18.cjs, 9/9): boot v1.8; прокачка questDone ×3 (ур. 3); перевал: тропа есть, гейт честно блокирует (mapId giants), после questDone('giants') вход → цитадель; гарнизон 6, Малвех 72/КД16, квест active+enter, стена solid/[13,14] ворота проходимы, сундук запечатан (banner не крадётся); бой: болты по боссу (72→25), ФАЗА 2 (КД 18, 2 утопленника), добивание → die → финал: citadelDone/campaignDone, #end h1 «ДОЛГОЙ ДОЗОР!», текст кампании; сундук (181 зол + Знамя), экипировка +2 КД (16→18); сейв/лоад слот 2 — 1:1 (золото/герои/сумка), гарнизон не респаунится, флаги восстановлены; reload чистый (1 canvas, forest)
+- Уроки E2E-песочницы: рендер SwiftShader ~30с/раунд ИИ на тяжёлой сцене → бой держать коротким (телепорт врагов к отряду + hp-подрезка; проверяется механика, не выживание); text= в playwright — strict-mode-ошибки → точные JS-клики по '#btns button'; проверка финала — '#end h1' (innerText ловит лог загрузки); адепт-целитель латает мобов → повторная hp-подрезка каждый ход
+- Кадры: upload/e2e/v18_gate.jpg (ворота/стена/бразиры/босс), v18_finale_screen.png (экран финала «ДОЛГОЙ ДОЗОР!»)
+- Гейты статические: tsc 0; ESLint 0/0; NO CYCLES; 0 any; модули ≤400 (макс explore 393; новый citadel 166)
+- README: шапка/механики/структура (+citadel.ts)/дорожная карта (v1.8 зачёркнут; идеи v1.9: постгейм, шестой спутник, миникарта); layout.tsx метаданные v1.8
+
+Stage Summary:
+- v1.8 «Цитадель Долгого Дозора» готова: финал кампании — пятая карта (стена/ворота/дворы), финальный босс Малвех с фазой «Глас глубин», спецэкран «ДОЛГОЙ ДОЗОР!», Знамя Дозора; 4 латентных бага v1.6 закрыты
+- Сейв v2 сохранён совместимым (новые флаги опциональные); E2E 9/9 + кадры финала
+- Далее: коммит + tag v1.8 + push (token-процесс) — см. следующую запись

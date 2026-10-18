@@ -144,6 +144,16 @@ export function die(t:Unit,_src:Unit|null){
     shake(0.5);
     log('Гаррум оседает грудой камней. Перевал великанов свободен!','g-sys');
   }
+  if(t.citadelBoss){/* v1.8: Малвех — финал кампании */
+    S.citadelDone=true;S.campaignDone=true;
+    questObj('citadel','boss');questDone('citadel');
+    fx.burstAtMesh(t,{count:52,color:0x6fd3a0,speed:3.8,size:0.16,life:1.2,gravity:0.5});
+    glows.flashAtMesh(t,0x6fd3a0,3.0);
+    shake(0.6);
+    sfx.stinger('victory');
+    log('Малвех падает, и зелёная пелена спадает с его глаз: «Дозор... стойте... Дозор.»','g-sys');
+    log('Печать Глубинного рассыпается. Цитадель Долгого Дозора — НАША. КАМПАНИЯ ЗАВЕРШЕНА!','g-heal');
+  }
   checkEnd();
 }
 

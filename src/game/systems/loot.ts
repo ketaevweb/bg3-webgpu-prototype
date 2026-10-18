@@ -42,7 +42,9 @@ export function giveToParty(kind:'potion'|'oil',why:string):Unit|null{
 }
 export function rollLoot(t:Unit){
   if(!t||t.isBarrel||t.side!=='goblin'||t.summoned)return;
-  const isBoss=!!(t.mainBoss||t.cryptBoss||t.swampBoss);/* v1.5: +Матерь Топей */
+  /* v1.8-фикс: в босс-таблицу добавлены Гаррум (v1.6 — латентный пропуск)
+    и Малвех (v1.8) — раньше великан лутался по гоблинской таблице */
+  const isBoss=!!(t.mainBoss||t.cryptBoss||t.swampBoss||t.giantBoss||t.citadelBoss);
   const tbl=isBoss?LOOT.boss:(t.caster?LOOT.cultist:(t.cls==='undead'?LOOT.undead:LOOT.goblin));
   const g=ri(tbl.gold[0],tbl.gold[1])*(t.elite?2:1);
   gainGold(g);

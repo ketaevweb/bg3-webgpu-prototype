@@ -59,6 +59,13 @@ export const GEAR:Record<string,GearItem>={
     eq:h=>{h.ac+=1;return h.short+': КД +1 ('+h.ac+').';},
     uneq:h=>{h.ac-=1;},
   },
+  /* v1.8: финальный трофей — знамя коменданта цитадели */
+  watch_banner:{
+    id:'watch_banner',n:'Знамя Дозора',slot:'trinket',
+    d:'Талисман: +2 КД. Знамя лорда-коменданта — Долгий Дозор снова поднимает его над цитаделью.',
+    eq:h=>{h.ac+=2;return h.short+': КД +2 ('+h.ac+').';},
+    uneq:h=>{h.ac-=2;},
+  },
 };
 const SLOT_LABEL:Record<GearSlot,string>={weapon:'Оружие',armor:'Доспех',trinket:'Талисман'};
 

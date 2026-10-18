@@ -378,6 +378,9 @@ export function checkTriggers(){
   if(G.mapId==='giants'&&!S.giantsDone&&S.giantsGroup.some(g=>g.alive&&g.isBoss)){/* v1.6: триггер Гаррума */
     if(hs.some(h=>S.giantsGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('giantboss');return;}
   }
+  if(G.mapId==='citadel'&&!S.citadelDone&&S.citadelGroup.some(g=>g.alive&&g.citadelBoss)){/* v1.8: триггер Малвеха */
+    if(hs.some(h=>S.citadelGroup.some(g=>cheb(h,g)<=7))){bus.openDlg.call('citadelboss');return;}
+  }
   refreshHintExplore();
 }
 export function refreshHintExplore(){

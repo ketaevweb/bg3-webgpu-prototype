@@ -113,6 +113,7 @@ export const DLGS:Record<string,DlgFn>={
         {t:'«Что известно о крипте в кургане?»',show:()=>QUESTS.main.state==='done'&&QUESTS.crypt.state==='hidden',fn:()=>gotoNode('cryptinfo')},
         {t:'«Что за песня доносится с восточных болот?»',show:()=>QUESTS.crypt.state==='done'&&QUESTS.swamp.state==='hidden',fn:()=>gotoNode('swampinfo')},/* v1.5 */
         {t:'«Тропа на северо-запад — куда она ведёт?»',show:()=>QUESTS.swamp.state==='done'&&QUESTS.giants.state==='hidden',fn:()=>gotoNode('giantsinfo')},/* v1.6 */
+        {t:'«Цитадель Дозора — что о ней слыхано?»',show:()=>QUESTS.giants.state==='done'&&QUESTS.citadel.state==='hidden',fn:()=>gotoNode('citadelinfo')},/* v1.8 */
         {t:'«До встречи.»',end:true},
       ]};
     if(id==='story')return{name:'Дамрок Бочкарь',
@@ -133,6 +134,9 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='giantsinfo')return{name:'Дамрок Бочкарь',/* v1.6 */
       text:'Не ходи туда, ой не ходи... Хотя тебе-то что, ты герои. Слыхал: перевал на северо-запад огры заняли, а старшой ихний Гаррум Камнегрыз валунами издалека кидается. Большие, аги! Но жадные: вожак свой сундук с добром при лагере держит. Разгоните — и дорога к дозорным откроется.',
       opts:[{t:'«Перевал будет наш.»',fn:()=>{questStart('giants');gotoNode('start');}}]};
+    if(id==='citadelinfo')return{name:'Дамрок Бочкарь',/* v1.8 */
+      text:'Цитадель?.. Плохие новости, герой. Дозорные не выходили на тракт три луны, а с севера ветер несёт песню — ту самую, что с болот. Раз Гаррум повержен — тракт на северо-восток перевала свободен, ступени сами покажутся. Но возьми всё: в цитадели теперь поют утопленники, а комендант ихний... говорят, сам МАЛВЕХ им поёт. Вот это поворот, да?',
+      opts:[{t:'«Цитадель будет нашей. Дозор встанет.»',fn:()=>{questStart('citadel');gotoNode('start');}}]};
   },
   ilva(id){
     if(id==='start')return{name:'Илва (в клетке)',
@@ -217,6 +221,21 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='fight')return{name:'Гаррум Камнегрыз',
       text:'ГРА-А-АВ! КАМНИ НА ГОТОВЕ!',
       opts:[{t:'«В бой!»',fn:()=>startCombat(S.giantsGroup.filter(g=>g.alive))}]};
+  },
+  citadelboss(id){/* v1.8: лорд-комендант цитадели — финальный босс */
+    if(id==='start')return{name:'Малвех, лорд-комендант',
+      text:'Дозорные?.. Нет. Дозорные — внизу, в тине. Я слышал её песню на стене и понял: глубина — это покой. Опустите оружие. ГЛУБИНА ПРИМЕТ ВСЕХ.',
+      opts:[
+        {t:'[Убеждение СЛ 18] «Малвех! Дозор не сдаёт стен. Ты — Дозор. Вспомни!»',req:{skill:'Убеждение',dc:18},ok:'waver',fail:'fight'},
+        {t:'«Цитадель вернём. С мечом — так с мечом!»',fn:()=>gotoNode('fight')},
+        {t:'«Медленно отойти за ворота.»',end:true,fn:()=>{log('Малвех поёт — и бразиры двора гаснут до синевы.','g-enemy');}},
+      ]};
+    if(id==='waver')return{name:'Малвех, лорд-комендант',
+      text:'Дозор... не сдаёт... СТЕН?! Н-нет. НЕТ! ГЛУБИНА — МОЙ ДОЗОР ТЕПЕРЬ!',
+      opts:[{t:'«Как знаешь, комендант.»',fn:()=>startCombat(S.citadelGroup.filter(g=>g.alive))}]};
+    if(id==='fight')return{name:'Малвех, лорд-комендант',
+      text:'ТОГДА ТИНА ПОГЛАДИТ И ВАС! ГЛУБИНА! СЛУШАЙ ЗОВ!',
+      opts:[{t:'«В бой!»',fn:()=>startCombat(S.citadelGroup.filter(g=>g.alive))}]};
   },
 };
 export function bossFear(){

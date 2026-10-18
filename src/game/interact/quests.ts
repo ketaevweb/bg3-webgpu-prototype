@@ -56,6 +56,10 @@ export function questDone(id:string){
     addToBag('stone_heart');
     log('Сердце великана ещё тёплое — наденьте его через панель снаряжения (I).','g-heal');
   }
+  if(id==='citadel'){/* v1.8: финал кампании — золото и опыт; Знамя — в сундуке коменданта (печать пала) */
+    gainGold(300);awardXP(500);
+    log('Печать на сундуке коменданта рассыпалась — откройте его во внутреннем дворе!','g-heal');
+  }
   bigBanner('ЗАДАНИЕ ВЫПОЛНЕНО');
   log('Задание «'+q.name+'» выполнено! Награда: '+QUEST_REWARD[id]+'.','g-heal');
   refreshTracker();bus.refreshParty.call();

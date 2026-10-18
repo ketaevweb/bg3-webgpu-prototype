@@ -31,6 +31,7 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       kayaJoined:!!S.kayaJoined,/* v1.2 */
       swampDone:!!S.swampDone,olkhaJoined:!!S.olkhaJoined,/* v1.5: опциональные поля — v2 совместим */
       giantsDone:!!S.giantsDone,giantsChest:!!S.giantsChest,/* v1.6 */
+      citadelDone:!!S.citadelDone,campaignDone:!!S.campaignDone,citadelChest:!!S.citadelChest,/* v1.8 */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -60,6 +61,7 @@ export function applyGame(sv:SaveData|null){
   S.kayaJoined=!!fl.kayaJoined;/* v1.2 */
   S.swampDone=!!fl.swampDone;S.olkhaJoined=!!fl.olkhaJoined;/* v1.5: в старых сейвах полей нет — дефолт false */
   S.giantsDone=!!fl.giantsDone;S.giantsChest=!!fl.giantsChest;/* v1.6 */
+  S.citadelDone=!!fl.citadelDone;S.campaignDone=!!fl.campaignDone;S.citadelChest=!!fl.citadelChest;/* v1.8 */
   S.bag=Array.isArray(sv.bag)?sv.bag.filter((id:unknown)=>typeof id==='string'):[];/* v1.6 */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
@@ -71,7 +73,7 @@ export function applyGame(sv:SaveData|null){
   }
   cancelTargeting();
   teardownWorld();
-  buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='giants'?'giants':(sv.mapId==='crypt'?'crypt':'forest')),null);/* v1.5: +болота; v1.6: +перевал */
+  buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='giants'?'giants':(sv.mapId==='citadel'?'citadel':(sv.mapId==='crypt'?'crypt':'forest'))),null);/* v1.5: +болота; v1.6: +перевал; v1.8: +цитадель */
   ensureCompanions();/* v1.2: восстановить Илву и Каю по флагам сейва */
   ensureOlkha();/* v1.5: восстановить Ольху по флагу сейва */
   for(const hd of sv.heroes){

@@ -9,7 +9,7 @@ import type * as THREE from 'three/webgpu';
 /* --- примитивы --- */
 export type Side='hero'|'goblin';
 export type Abil='str'|'dex'|'con'|'int'|'wis'|'cha';
-export type MapId='forest'|'crypt'|'swamp'|'giants';/* v1.6: +перевал великанов */
+export type MapId='forest'|'crypt'|'swamp'|'giants'|'citadel';/* v1.6: +перевал; v1.8: +цитадель Дозора */
 export type StatusType='burn'|'poison'|'bless'|'fear'|'dodge'|'faith';
 export type QuestState='hidden'|'active'|'done';
 
@@ -66,6 +66,7 @@ export interface Unit{
   bossBrain?:boolean;isBoss?:boolean;mainBoss?:boolean;cryptBoss?:boolean;
   swampBoss?:boolean;/* v1.5: Ульва, Матерь Топей */
   giantBoss?:boolean;/* v1.6: Гаррум Камнегрыз */
+  citadelBoss?:boolean;/* v1.8: Малвех, лорд-комендант цитадели */
   phase2?:boolean;fearImmune?:boolean;isBarrel?:true;
   pacified?:boolean;/* v0.6: запуган — реакция атаки недоступна */
   /* кэш DOM-полоски над головой (updateOverlays) */
@@ -104,7 +105,8 @@ export interface GameState{
   chestLooted:boolean;necroSlain:boolean;kayaJoined:boolean;
   swampDone:boolean;olkhaJoined:boolean;/* v1.5 */
   giantsDone:boolean;giantsChest:boolean;/* v1.6 */
-  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];
+  citadelDone:boolean;campaignDone:boolean;citadelChest:boolean;/* v1.8: финал кампании */
+  patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];citadelGroup:Unit[];/* v1.8: +гарнизон цитадели */
   /* v1.6: сумка отряда — ненадетые предметы снаряжения (id GEAR) */
   bag:string[];
   dlgNpc:string|null;
@@ -132,6 +134,8 @@ export interface SaveFlags{
   swampDone?:boolean;olkhaJoined?:boolean;
   /* v1.6: перевал великанов + сундук с секирой */
   giantsDone?:boolean;giantsChest?:boolean;
+  /* v1.8: финал кампании — цитадель и сундук со знаменем */
+  citadelDone?:boolean;campaignDone?:boolean;citadelChest?:boolean;
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -246,5 +250,10 @@ export interface Bg3Debug{
   step:(x:number,z:number)=>void;/* v1.7: боевое перемещение для E2E */
   fire:(x:number,z:number)=>Promise<void>;
   animStats:()=>unknown;/* v1.7: сводка анимационной системы (motion+rigs) */
+  /* v1.8: инспекторы E2E (только чтение) */
+  turn:()=>{phase:string;combatOn:boolean;hero:boolean;action:number;round:number;mapId:string};
+  solidAt:(x:number,z:number)=>boolean;
+  inters:()=>string[];
+  callInter:(label:string)=>void;
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

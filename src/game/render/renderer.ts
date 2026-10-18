@@ -51,13 +51,14 @@ export function initRenderer(){
 }
 
 /* v0.8: атмосфера и свет — параметризованы по карте; v1.5: +болота */
-export function applyAtmosphere(m:'forest'|'crypt'|'swamp'|'giants'){
+export function applyAtmosphere(m:'forest'|'crypt'|'swamp'|'giants'|'citadel'){
   if(m==='crypt'){scene.background=new THREE.Color(0x0a0a12);scene.fog=new THREE.FogExp2(0x0a0a12,0.018);}
   else if(m==='swamp'){scene.background=new THREE.Color(0x0e1410);scene.fog=new THREE.FogExp2(0x0e1410,0.019);}
   else if(m==='giants'){scene.background=new THREE.Color(0x121822);scene.fog=new THREE.FogExp2(0x121822,0.016);}/* v1.6: холодная синева высоты */
+  else if(m==='citadel'){scene.background=new THREE.Color(0x0a1012);scene.fog=new THREE.FogExp2(0x0a1012,0.02);}/* v1.8: мертвенная изумрудная мгла */
   else{scene.background=new THREE.Color(0x0c1510);scene.fog=new THREE.FogExp2(0x0c1510,0.014);}
 }
-export function applyLighting(m:'forest'|'crypt'|'swamp'|'giants'){
+export function applyLighting(m:'forest'|'crypt'|'swamp'|'giants'|'citadel'){
   if(!G.hemiLight||!G.sunLight){
     const hemi=new THREE.HemisphereLight(0xbcd8e8,0x2a3325,0.85);
     const sun=new THREE.DirectionalLight(0xffeecf,2.4);
@@ -79,6 +80,9 @@ export function applyLighting(m:'forest'|'crypt'|'swamp'|'giants'){
   }else if(m==='giants'){/* v1.6: холодный свет высокогорья */
     hemi.color.setHex(0xa8c0d8);hemi.groundColor.setHex(0x242a34);hemi.intensity=0.78;
     sun.color.setHex(0xd8e4f0);sun.intensity=1.8;
+  }else if(m==='citadel'){/* v1.8: изумрудные сумерки Глубинного */
+    hemi.color.setHex(0x8ab0a4);hemi.groundColor.setHex(0x141e1a);hemi.intensity=0.7;
+    sun.color.setHex(0xb4d8c8);sun.intensity=1.25;
   }else{
     hemi.color.setHex(0xbcd8e8);hemi.groundColor.setHex(0x2a3325);hemi.intensity=0.85;
     sun.color.setHex(0xffeecf);sun.intensity=2.4;

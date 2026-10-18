@@ -6,7 +6,7 @@ import { srand } from '../rng';
 import { key } from '../utils';
 import { GRID, TILE, W } from '../constants';
 import { worldGroup, applyLighting } from '../render/renderer';
-import { G, S, solid, grass, barrels, CRYPT, SWAMP, GIANTS } from '../state';
+import { G, S, solid, grass, barrels, CRYPT, SWAMP, GIANTS, CITADEL } from '../state';
 import { placePine, placeDeadPine, placeBoulder } from './nature';
 import type { Barrel } from '../types';
 
@@ -88,8 +88,33 @@ export function seedGiants(){
   }
   for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
 }
-
-/* passable/unitAt/barrelAt/cheb/dangerAt → utils.ts и world/grid.ts (Фаза 2) */
+/* v1.8: цитадель Дозора — каменная стена с воротами, бразиры, устои,
+   сундук со знаменем; деревьев нет — крепостной двор */
+export function seedCitadel(){
+  G.TREES=[];
+  G.ROCKS=[[4,14],[24,15],[5,21],[23,20],[10,15],[18,15]];
+  G.TENTS=[];G.FIREPIT=null;G.BARREL_POS=[[7,18],[21,18],[12,21]];/* взрывные бочки внешнего двора */
+  solid.clear();grass.clear();
+  for(let i=0;i<GRID;i++){solid.add(key(i,0));solid.add(key(i,GRID-1));solid.add(key(0,i));solid.add(key(GRID-1,i));}
+  /* стена поперёк карты (z=WALL_Z) — проход только через ворота по центру */
+  for(let x=1;x<GRID-1;x++){
+    if(CITADEL.GATE.some(g=>g===x))continue;
+    solid.add(key(x,CITADEL.WALL_Z));
+  }
+  for(const [x,z] of CITADEL.BRAZIERS)solid.add(key(x,z));
+  for(const [x,z] of CITADEL.PILLARS)solid.add(key(x,z));
+  solid.add(key(CITADEL.CHEST[0],CITADEL.CHEST[1]));
+  /* редкая блёклая трава у ворот и входа */
+  for(const [cx,cz] of [[14,12],[14,21]]){
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      const x=cx+dx,z=cz+dz;
+      if(x<1||z<1||x>=GRID-1||z>=GRID-1)continue;
+      if(solid.has(key(x,z)))continue;
+      if(srand()<0.4)grass.add(key(x,z));
+    }
+  }
+  for(const [x,z] of G.BARREL_POS)grass.add(key(x,z));
+}
 
 /* ================= ПОСТРОЕНИЕ МИРА ================= */
 export function addTree(x:number,z:number){
@@ -193,8 +218,8 @@ export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет
 export function buildWorld(){
   applyLighting(G.mapId);
   /* v1.5: цвет грунта/заплаток — по карте (лес/крипта/болото) */
-  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:(G.mapId==='giants'?0x4a4640:0x3a5530));
-  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:(G.mapId==='giants'?0x403c37:0x324a2a));
+  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:(G.mapId==='giants'?0x4a4640:(G.mapId==='citadel'?0x42444a:0x3a5530)));
+  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:(G.mapId==='giants'?0x403c37:(G.mapId==='citadel'?0x3a3c42:0x324a2a)));
   G.groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
     new THREE.MeshStandardMaterial({color:groundColor,roughness:1}));
   G.groundMesh.rotation.x=-Math.PI/2;G.groundMesh.receiveShadow=true;
@@ -244,6 +269,15 @@ export function buildWorld(){
       m.castShadow=true;
       worldGroup.add(m);
     }
+  }else if(G.mapId==='citadel'){/* v1.8: булыжная крошка двора */
+    const gravM=new THREE.MeshStandardMaterial({color:0x565860,roughness:1});
+    for(let i=0;i<14;i++){
+      const m=new THREE.Mesh(new THREE.DodecahedronGeometry(0.12+srand()*0.14,0),gravM);
+      m.position.set((srand()-0.5)*GRID*TILE*0.85,0.06,(srand()-0.5)*GRID*TILE*0.85);
+      m.rotation.set(srand()*3,srand()*3,0);
+      m.castShadow=true;
+      worldGroup.add(m);
+    }
   }else if(G.mapId==='swamp'){/* v1.5: лужи стоячей воды + камыш */
     const watM=new THREE.MeshStandardMaterial({color:0x1d3a3a,roughness:0.25,metalness:0.15});
     for(let i=0;i<14;i++){
@@ -272,7 +306,7 @@ export function buildWorld(){
     else addTree(x,z);
   }
   for(const [x,z] of G.ROCKS){
-    if(G.mapId==='giants')placeBoulder(x,z,0.85+srand()*0.6);
+    if(G.mapId==='giants'||G.mapId==='citadel')placeBoulder(x,z,0.85+srand()*0.6);
     else addRock(x,z);
   }
   for(const [x,z] of G.TENTS)addTent(x,z);

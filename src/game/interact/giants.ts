@@ -46,14 +46,16 @@ export function enterGiants(){
   void bus.switchMap.call('giants');
 }
 export function buildGiantsScenery(){/* v1.6: обрыв, мост, лагерь, пещера, спуск */
-  /* горный хребет по периметру (декор — границы и так solid); в метрах горы ~20-30м */
+  /* горный хребет по периметру (декор — границы и так solid); в метрах горы ~20-30м.
+    v1.8-фикс: Math.floor в индексах моделей — (z/4)%3 давал дробные имена
+    («SM_Terrain_Mountain_01.75.fbx» → 404, горы молча не грузились) */
   for(let x=0;x<28;x+=3){
-    placeNature('SM_Terrain_Mountain_0'+(1+(x/3)%3),x,0,{s:1.1+((x/3)%3)*0.15,spin:true});
-    placeNature('SM_Terrain_Mountain_0'+(1+((x+2)/3)%3),x,27,{s:1.2+((x/3)%3)*0.12,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(x/3)%3),x,0,{s:1.1+Math.floor(x/3)%3*0.15,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((x+2)/3)%3),x,27,{s:1.2+Math.floor(x/3)%3*0.12,spin:true});
   }
   for(let z=3;z<28;z+=4){
-    placeNature('SM_Terrain_Mountain_0'+(1+((z/4)%3)),0,z,{s:1.1+((z/4)%3)*0.15,spin:true});
-    placeNature('SM_Terrain_Mountain_0'+(1+((z+2)/4)%3),27,z,{s:1.15+((z/4)%3)*0.12,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(z/4)%3),0,z,{s:1.1+Math.floor(z/4)%3*0.15,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((z+2)/4)%3),27,z,{s:1.15+Math.floor(z/4)%3*0.12,spin:true});
   }
   /* обрыв: тёмная полоса между рядами z 13..14, кроме клеток моста */
   const chM=new THREE.MeshStandardMaterial({color:0x0d0c10,roughness:1});
@@ -63,7 +65,7 @@ export function buildGiantsScenery(){/* v1.6: обрыв, мост, лагерь
   worldGroup.add(strip);
   placeNature('SM_Terrain_DustPile_Small_01',11,15,{s:1.5});
   placeNature('SM_Terrain_Rubble_Pebbles_01',16,12,{s:1.4});
-  placeNature('SM_Terrain_Rubble_Pebbles_02',9,12,{s:1.3});
+  placeNature('SM_Terrain_Rubble_Pebbles_01',9,12,{s:1.3,spin:true});/* v1.8-фикс: Pebbles_02 не существует в паке → 404 */
   /* мост через обрыв (доски на каменных опорах — детерминированный выравнивание) */
   const brM=new THREE.MeshStandardMaterial({color:0x5f4a34,roughness:1});
   for(let i=0;i<5;i++){

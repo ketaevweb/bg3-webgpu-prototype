@@ -2,7 +2,7 @@
    Шаблоны врагов (GOB/SKEL/SKEL_KNIGHT/CULT), фабрики, элита,
    отряд героев и спавн врагов по карте/прогрессу.
    Перенесено дословно из engine.ts. */
-import { S, G, gobCount, units, SWAMP, GIANTS } from '../state';
+import { S, G, gobCount, units, SWAMP, GIANTS, CITADEL } from '../state';
 import { makeUnit } from './units';
 import type { Unit, UnitTemplate } from '../types';
 
@@ -235,6 +235,56 @@ export function makeGarrum(){
       'Не ведает страха — запугивание бесполезно'],
   });
 }
+/* ================= v1.8: ЦИТАДЕЛЬ — РЫЦАРИ-ОСТУПНИКИ, АДЕПТ, МАЛВЕХ =================
+   Гарнизон финала: рыцари Дозора, павшие под песню Глубинного (элитная
+   тяжёлая пехота), адепт-целитель и лорд-комендант Малвех — финальный
+   босс с «Гласом глубин» на полсмерти. */
+const KNIGHT:UnitTemplate={name:'Рыцарь-отступник',short:'Рыцарь',hp:26,ac:15,xp:200,color:0x5a6a7a,
+  weapon:{name:'Клеймор Дозора',dice:[2,6],abil:'str',melee:true,range:1}};
+export function makeKnight(x:number,z:number){
+  gobCount[KNIGHT.short]=(gobCount[KNIGHT.short]||0)+1;
+  const n=gobCount[KNIGHT.short];
+  const u=makeUnit({
+    name:KNIGHT.name+(n>1?' №'+n:''),short:KNIGHT.short+(n>1?' '+n:''),side:'goblin',
+    cls:'knight',clsName:'Рыцарь-отступник',x,z,
+    str:16,dex:12,con:14,int:8,wis:10,cha:8,
+    hp:KNIGHT.hp,maxhp:KNIGHT.hp,ac:KNIGHT.ac,speed:6,xp:KNIGHT.xp,
+    color:KNIGHT.color,skin:0xcac2ae,
+    weapon:KNIGHT.weapon,dagger:null,keepDist:false,features:['Дозорный рыцарь, ушедший за песней Глубинного. Бьёт тяжело и стоит крепко'],
+  });
+  return applyElite(u);
+}
+export function makeAdept(x:number,z:number){
+  gobCount['Адепт']=(gobCount['Адепт']||0)+1;
+  const n=gobCount['Адепт'];
+  const u=makeUnit({
+    name:'Адепт Глубин'+(n>1?' №'+n:''),short:'Адепт'+(n>1?' '+n:''),side:'goblin',
+    cls:'cultist',clsName:'Адепт Глубин',x,z,
+    str:10,dex:14,con:12,int:16,wis:14,cha:12,
+    hp:18,maxhp:18,ac:13,speed:6,xp:180,color:0x3f6a5a,skin:0xcfc2a8,
+    staff:true,tipColor:0x8fe87f,
+    weapon:{name:'Струя бездны',dice:[1,8],abil:'int',range:8,necro:true},
+    dagger:{name:'Ритуальный нож',dice:[1,4],abil:'str',melee:true,range:1},
+    keepDist:true,healer:true,features:['Латает раненых «могильной песнью» — сначала вырубите его'],
+  });
+  return applyElite(u);
+}
+export function makeMalveh(){
+  return makeUnit({
+    name:'Малвех, лорд-комендант',short:'Малвех',cls:'lord',clsName:'Лорд-комендант',side:'goblin',
+    str:18,dex:12,con:16,int:14,wis:14,cha:16,
+    hp:72,maxhp:72,ac:16,speed:5,xp:600,x:CITADEL.BOSS[0],z:CITADEL.BOSS[1],
+    color:0x2f4f45,skin:0xb8c2ae,staff:false,tipColor:0x6fd3a0,
+    keepDist:false,bossBrain:true,isBoss:true,citadelBoss:true,fearImmune:true,phase2:false,
+    weapon:{name:'Клеймо коменданта',dice:[2,6],abil:'str',melee:true,range:1},
+    dagger:{name:'Копьё бездны',dice:[1,8],abil:'int',range:6,necro:true,status:{type:'poison',turns:2}},
+    features:['Клеймо коменданта — двуручный меч Дозора, 2d6+СИЛ в упор',
+      'Волна бездны — некротический шквал вокруг него (всем соседям)',
+      'На половине хитов: «ГЛАС ГЛУБИН» — зовёт утопленников из-под двора, КД +2',
+      'Не ведает страха — запугивание бесполезно',
+      'Печать сундука держится, пока он «жив»'],
+  });
+}
 export function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(G.mapId==='forest'){
@@ -254,6 +304,11 @@ export function spawnEnemies(){/* v0.8: враги зависят от карт�
     S.patrolGroup=[];S.campGroup=[];
     if(S.giantsDone){S.giantsGroup=[];return;}/* убитый Гаррум не встаёт вновь */
     S.giantsGroup=[makeGarrum(),makeOgre(10,8),makeOgre(18,8),applyElite(makeOgre(21,5))];
+  }else if(G.mapId==='citadel'){/* v1.8: гарнизон цитадели — Малвех, рыцари, адепт, культисты */
+    S.patrolGroup=[];S.campGroup=[];
+    if(S.citadelDone){S.citadelGroup=[];return;}/* убитый Малвех не встаёт вновь */
+    S.citadelGroup=[makeMalveh(),makeKnight(10,8),makeKnight(18,8),makeAdept(12,4),
+      makeCultist('deep',16,5),makeCultist('deep',11,6)];
   }else{
     S.patrolGroup=[];S.campGroup=[];
     if(S.necroSlain){S.cryptGroup=[];return;}/* v1.1: убитый некромант не поднимается вновь */

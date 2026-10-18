@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
 import { upgradeUnitRig, animOptsFor, animStats } from './animation';/* v1.7: риги + сводка анимации */
-import { clamp, cheb } from './utils';
+import { clamp, cheb, key } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
 import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
@@ -270,14 +270,14 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.7 «Хореография битвы»: полная анимационная система на клипах Unity (Blink RPG Animations + DoubleL) — локомоция, атаки по классу, реакции на урон и смерть на скелетном риге.','g-sys');
+  log('BG3 Web-прототип v1.8 «Цитадель Долгого Дозора»: финал кампании — пятая карта (крепостная стена, ворота, дворы цитадели), гарнизон Глубинного (рыцари-отступники, адепт, лорд-комендант Малвех) и экран финала «ДОЛГОЙ ДОЗОР!».','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
-  log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, а на перевале (северо-запад) камни грызёт великан Гаррум. Элита носит реликвии!','g-sys');
+  log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
-  log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), а за болотами — тропа на перевал (северо-запад).','g-sys');
+  log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.7 boot complete');
+  console.log('[bg3] v1.8 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -309,6 +309,11 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   openBag:()=>toggleBag(),
   gearKeys:()=>Object.keys(GEAR),
   animStats,/* v1.7: E2E-гейт анимации */
+  turn:()=>({phase:G.phase,combatOn:G.combatOn,hero:!!G.current&&G.current.side==='hero',
+    action:G.current?G.current.action:0,round:G.round,mapId:G.mapId}),/* v1.8: инспектор хода */
+  solidAt:(x,z)=>GW.solid.has(key(x,z)),/* v1.8: проверка стены цитадели */
+  inters:()=>interactables.map(i=>i.label),/* v1.8: список интерактов */
+  callInter:(label)=>{const it=interactables.find(i=>i.label===label);if(it)it.fn();},/* v1.8: вызов интеракта */
 };
 return function dispose(){
   disposed=true;

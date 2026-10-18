@@ -205,11 +205,12 @@ export async function aiTurn(u:Unit){
   while(G.combatOn&&u.alive&&guard++<6){
     const plan:AIPlan|null=u.bossBrain?planNecro(u):planGoblin(u);/* v0.8: у босса свой мозг */
     if(!plan)break;
-    if(plan.type==='phase2'){/* v0.8: подъём мёртвых; v1.5: Ульва поднимает утопленников; v1.6: Гаррум каменеет */
+    if(plan.type==='phase2'){/* v0.8: подъём мёртвых; v1.5: Ульва поднимает утопленников; v1.6: Гаррум каменеет; v1.8: Малвех — Глас глубин */
       u.phase2=true;
       const swamp=u.swampBoss===true;
       const giant=u.giantBoss===true;
-      bigBanner(swamp?'ФАЗА 2: ТРЯСИНА ПРОСЫПАЕТСЯ':(giant?'ФАЗА 2: ГОРЫ ДРОЖАТ':'ФАЗА 2: ПОДЪЁМ МЁРТВЫХ'));
+      const cit=u.citadelBoss===true;
+      bigBanner(swamp?'ФАЗА 2: ТРЯСИНА ПРОСЫПАЕТСЯ':(giant?'ФАЗА 2: ГОРЫ ДРОЖАТ':(cit?'ФАЗА 2: ГЛАС ГЛУБИН':'ФАЗА 2: ПОДЪЁМ МЁРТВЫХ')));
       if(giant){
         u.ac+=3;
         log('Гаррум: «КАМЕНЬ — МОЯ КОЖА!» Шкура великана твердеет: КД '+u.ac+'.','g-enemy');
@@ -217,6 +218,22 @@ export async function aiTurn(u:Unit){
         fx.burstAtMesh(u,{count:44,color:0xb0b8c0,speed:3.0,size:0.15,life:1.2,gravity:-0.6});
         glows.flashAtMesh(u,0xb0b8c0,2.6);
         shake(0.5);
+        await sleep(700);continue;
+      }
+      if(cit){/* v1.8: Малвех — КД +2 и утопленники из-под камней двора */
+        u.ac+=2;
+        log('Малвех: «ГЛУБИНА! ПОДНИМИ МОИХ РЫЦАРЕЙ!» Кожа коменданта зеленеет: КД '+u.ac+'.','g-enemy');
+        sfx.bones();
+        fx.burstAtMesh(u,{count:46,color:0x6fd3a0,speed:3.3,size:0.16,life:1.2,gravity:-1.0});
+        glows.flashAtMesh(u,0x6fd3a0,2.8);
+        shake(0.45);
+        for(let i=0;i<2;i++){
+          const spot=freeSpotNear(GW,u,2);
+          if(!spot)break;
+          const sum=makeDrowned(spot.x,spot.z);
+          sum.summoned=true;
+          joinCombat(sum);
+        }
         await sleep(700);continue;
       }
       log(swamp?'Ульва: «ТОНИТЕ. ТОНИТЕ ВСЕ!»':'Костепёр: «ВСТАНЬТЕ, МОИ ВЕРНЫЕ КОСТИ!»','g-enemy');
@@ -233,9 +250,10 @@ export async function aiTurn(u:Unit){
       }
       await sleep(700);continue;
     }
-    if(plan.type==='nova'){/* v0.8: костяной шквал; v1.6: у Гаррума — оползень */
+    if(plan.type==='nova'){/* v0.8: костяной шквал; v1.6: у Гаррума — оползень; v1.8: у Малвеха — волна бездны */
       u.action--;
       const giant=u.giantBoss===true;
+      const cit=u.citadelBoss===true;
       if(giant){
         log('ОПОЛЗЕНЬ! Гаррум обрушивает каменный град вокруг себя!','g-enemy');
         sfx.nova();shake(0.45);
@@ -247,6 +265,21 @@ export async function aiTurn(u:Unit){
           const dmg=roll(2,6);
           ftextAbove(h,'−'+dmg,'#b8c0c8');
           log('Каменный град бьёт '+h.name+': '+dmg+' урона.','g-enemy');
+          damageUnit(h,dmg,u);
+        }
+        await sleep(500);continue;
+      }
+      if(cit){/* v1.8: волна бездны — некротический шквал коменданта */
+        log('ВОЛНА БЕЗДНЫ! Малвех выплёскивает некроз вокруг себя!','g-enemy');
+        sfx.nova();shake(0.42);
+        const cx=W(u.x),cz=W(u.z);
+        fx.burst(cx,0.7,cz,{count:42,color:0x6fd3a0,speed:4.6,life:0.85,gravity:1.6,spread:0.8});
+        fx.burst(cx,0.4,cz,{count:16,color:0x2f5f4a,speed:3.0,life:0.9,gravity:1.2,spread:0.6});
+        glows.flash(cx,cz,3.2,0x5fae7f);
+        for(const h of aliveHeroes())if(cheb(u,h)<=1){
+          const dmg=roll(2,6);
+          ftextAbove(h,'−'+dmg,'#7fd0a0');
+          log('Волна бездны бьёт '+h.name+': '+dmg+' некротического урона.','g-enemy');
           damageUnit(h,dmg,u);
         }
         await sleep(500);continue;
