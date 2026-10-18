@@ -22,7 +22,7 @@ import { gainGold } from '../interact/quests';
 import { d } from '../rng';
 import { buildFigure } from '../entities/figure';
 import { makeHaldir } from '../entities/roster';
-import { arenaStart, arenaEndless, WAVES } from './arena';
+import { arenaStart, arenaEndless, showRecords, WAVES } from './arena';
 import type { Unit } from '../types';
 
 /* v1.9: место Хальдира у знамён (внешняя сторона ворот) */
@@ -151,6 +151,9 @@ export function buildCitadelScenery(){
   if(S.campaignDone){
     buildHaldirScene();
     const [kx,kz]=CITADEL.KEEP;
+    /* v2.1: стела рекордов у портала — журнал завершённых/сорванных заходов арены */
+    addInteract(12,2,2.2,'Стела рекордов (арена)',()=>showRecords(),null,
+      'Стела рекордов','Чёрный камень у изумрудного портала. Глубина волн капитанов Дозора выбита на граните.');
     /* v2.0: испытание пройдено (рекорд ≥5) — портал ведёт в БЕСКОНЕЧНОЕ испытание */
     if(S.arenaBest>=WAVES){
       addInteract(kx,kz,2.6,'Бесконечное испытание (арена)',()=>arenaEndless(),null,

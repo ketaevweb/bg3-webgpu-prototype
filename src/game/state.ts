@@ -21,7 +21,7 @@ export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false
   swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
   giantsDone:false,giantsChest:false,giantsGroup:[],bag:[],
   citadelDone:false,campaignDone:false,citadelChest:false,citadelGroup:[],
-  haldirJoined:false,arenaBest:0,haldirMesh:null};/* v0.8+v1.1+v1.2+v1.5+v1.6+v1.8+v1.9 */
+  haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null};/* v0.8+v1.1+v1.2+v1.5+v1.6+v1.8+v1.9+v2.1 */
 
 /* ---- runtime-контекст (G) ---- */
 export const G:{
@@ -34,6 +34,7 @@ export const G:{
   TREES:number[][];ROCKS:number[][];TENTS:number[][];FIREPIT:[number,number]|null;BARREL_POS:number[][];
   order:Unit[];
   arenaWave:number;/* v1.9: номер волны арены (0 — выключена) */
+  arenaRun:number;/* v2.1: счётчик заходов — старые таймеры волн умирают при новом заходе */
   bloomOn:boolean;fpsLimit:number;frameAcc:number;
 }={
   busy:false,busyCount:0,combatOn:false,phase:'idle',targeting:null,
@@ -44,6 +45,7 @@ export const G:{
   TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],
   order:[],
   arenaWave:0,
+  arenaRun:0,
   bloomOn:true,fpsLimit:0,frameAcc:0,
 };
 export type GameCtx=typeof G;
@@ -117,12 +119,12 @@ export function resetState(){
     swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
     giantsDone:false,giantsChest:false,giantsGroup:[],bag:[],
     citadelDone:false,campaignDone:false,citadelChest:false,citadelGroup:[],
-    haldirJoined:false,arenaBest:0,haldirMesh:null});
+    haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null});
   Object.assign(G,{busy:false,busyCount:0,combatOn:false,phase:'idle' as Phase,targeting:null,
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,
     mapId:'forest' as MapId,
-    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0});
+    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0,arenaRun:0});
   units.length=0;barrels.length=0;fires.clear();
   pick.tile=null;pick.ent=null;pick.inter=null;
   solid.clear();grass.clear();

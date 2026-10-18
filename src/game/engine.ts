@@ -17,7 +17,7 @@ import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
 import { buildHeroes, spawnEnemies } from './entities/roster';
-import { doAttack } from './systems/combat';
+import { doAttack, damageUnit, champAura } from './systems/combat';
 import { LOOT, rollLoot } from './systems/loot';
 import { startCombat } from './systems/turns';
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
@@ -325,6 +325,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   joinHaldir:(x,z)=>joinHaldir(x,z),/* v1.9: паладин для E2E */
   arenaStart:()=>arenaStart(),arenaWipe:()=>arenaWipe(),/* v1.9: арена для E2E */
   arenaEndless:()=>arenaEndless(),/* v2.0: бесконечное испытание для E2E */
+  hurt:(u,dmg)=>damageUnit(u,dmg,null),/* v2.1: E2E-урон (триггерит «Бездна зовёт») */
+  aura:(u)=>champAura(u),/* v2.1: E2E-инспектор ауры бездны */
   arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };

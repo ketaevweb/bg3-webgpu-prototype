@@ -62,6 +62,7 @@ export interface Unit{
   slots:number;slotsMax:number;potions:number;oil?:number;relic?:string|null;
   /* флаги роли/ИИ */
   keepDist:boolean;elite?:boolean;caster?:boolean;healer?:boolean;
+  champ?:boolean;reinforced?:boolean;depth?:number;/* v2.1: чемпион бездны (аура/подкрепление) и глубина волны */
   summoned?:boolean;summoner?:Unit|null;
   bossBrain?:boolean;isBoss?:boolean;mainBoss?:boolean;cryptBoss?:boolean;
   swampBoss?:boolean;/* v1.5: Ульва, Матерь Топей */
@@ -107,6 +108,7 @@ export interface GameState{
   giantsDone:boolean;giantsChest:boolean;/* v1.6 */
   citadelDone:boolean;campaignDone:boolean;citadelChest:boolean;/* v1.8: финал кампании */
   haldirJoined:boolean;arenaBest:number;/* v1.9: постгейм — паладин и рекорд арены */
+  arenaLog:{w:number;when:number}[];/* v2.1: журнал рекордов арены — завершённые/сорванные заходы */
   patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];citadelGroup:Unit[];/* v1.8: +гарнизон цитадели */
   /* v1.6: сумка отряда — ненадетые предметы снаряжения (id GEAR) */
   bag:string[];
@@ -140,6 +142,8 @@ export interface SaveFlags{
   citadelDone?:boolean;campaignDone?:boolean;citadelChest?:boolean;
   /* v1.9: постгейм — паладин Хальдир и рекорд «Испытания Глубин» */
   haldirJoined?:boolean;arenaBest?:number;
+  /* v2.1: журнал рекордов арены — опционально, сейв v2 совместим */
+  arenaLog?:{w:number;when:number}[];
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -264,6 +268,8 @@ export interface Bg3Debug{
   arenaStart:()=>void;
   arenaWipe:()=>void;/* мгновенно убить живых врагов волны и свести конец боя */
   arenaEndless:()=>void;/* v2.0: старт бесконечного испытания (E2E) */
+  hurt:(u:Unit,dmg:number)=>void;/* v2.1: E2E-урон через damageUnit (триггерит подкрепление чемпиона) */
+  aura:(u:Unit)=>number;/* v2.1: E2E-инспектор ауры бездны */
   arenaState:()=>{wave:number;best:number;endless:boolean};
   mm:()=>unknown;/* снимок миникарты (E2E) */
 }

@@ -140,6 +140,9 @@ export function endTurn(){
 export function joinCombat(u:Unit){/* v0.8: подкрепление встаёт в очередь инициативы */
   u.init=d(20)+mod(u.dex);
   G.order.push(u);
+  /* v2.1: синхронизация S.combatGroup — иначе checkEnd объявит победу,
+    пока подкрепление живо (латентный баг summon'ов v0.8/v1.8) */
+  if(G.combatOn&&!S.combatGroup.includes(u))S.combatGroup.push(u);
   log(u.name+' вступает в бой (инициатива '+u.init+').','g-enemy');
   bus.refreshInit.call();
 }

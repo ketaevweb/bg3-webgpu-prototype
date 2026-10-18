@@ -31,6 +31,14 @@ export function avgDamage(u:Unit, w:Weapon){
   return w.dice[0]*(w.dice[1]/2+0.5)+mod(u[w.abil]);
 }
 
+/* v2.1: АУРА БЕЗДНЫ — враги рядом с живым чемпионом бьют сильнее (+2 урона).
+   Чистая функция (для E2E-инспектора __bg3.aura): атакующие герои не бустятся. */
+export function champAura(att:Unit):number{
+  if(att.side==='hero')return 0;
+  for(const c of units)if(c.alive&&c.champ&&c!==att&&cheb(att,c)<=2)return 2;
+  return 0;
+}
+
 
 /* ================= БОЕВОЕ ЯДРО (Фазы 4–5 рефакторинга) =================
    doAttack/damageUnit/die — перенесено дословно из engine.ts (4d).
@@ -38,7 +46,7 @@ export function avgDamage(u:Unit, w:Weapon){
    взрыв бочки — прямой импорт combat→abilities замыкал цикл);
    healUnit переехал в vitals.ts (progression→combat замыкал цикл);
    UI-refresh — через bus. Импорты теперь однонаправленные. */
-import { key, clamp, mod } from '../utils';
+import { key, clamp, mod, cheb } from '../utils';
 import { W } from '../constants';
 import { lunge, faceTo, tween, boomFX, shake } from '../fx/tweens';
 import { roll } from '../rng';
@@ -74,6 +82,11 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
   }else{
     const n=w.dice[0]*(crit?2:1);
     let dmg=roll(n,w.dice[1])+mod(att[w.abil]);
+    const aura=champAura(att);/* v2.1: аура бездны чемпиона */
+    if(aura){
+      dmg+=aura;
+      log('Аура бездны усиливает удар: +'+aura+' урона!','g-enemy');
+    }
     if(opts.sneakBonus){/* v1.2: подлый удар Илвы */
       dmg+=opts.sneakBonus;
       log('Подлый удар добавляет '+opts.sneakBonus+' урона!','g-hero');
@@ -103,6 +116,11 @@ export function damageUnit(t:Unit,dmg:number,src:Unit|null){
   t.hp-=dmg;
   playHit(t);/* v1.7: реакция на урон (короткий клип; до проверки смерти) */
   bus.refreshBossBar.call();/* v0.8: боссбар живёт в реальном времени */
+  /* v2.1: «БЕЗДНА ЗОВЁТ» — чемпион на полсмерти раз за бой зовёт утопленников (через bus — без цикла) */
+  if(t.champ&&!t.reinforced&&t.alive&&t.hp>0&&t.hp<=t.maxhp*0.5){
+    t.reinforced=true;
+    bus.champCall.call(t);
+  }
   if(t.hp<=0)die(t,src);
 }
 

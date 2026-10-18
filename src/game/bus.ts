@@ -37,4 +37,11 @@ export const bus={
      progression зовёт слот после победы в волне — разрыв цикла
      progression→arena: arena импортирует turns→progression) */
   arenaNext:new Slot<[]>(),
+  /* v2.1: «БЕЗДНА ЗОВЁТ» — чемпион бездны на полсмерти зовёт подкрепление
+     (реализация — interact/arena.ts; combat зовёт слот из damageUnit —
+     прямой импорт combat→arena замкнул бы цикл) */
+  champCall:new Slot<[Unit]>(),
+  /* v2.1: разбор мира срывает заход арены (реализация — interact/arena.ts;
+     maps.ts зовёт слот в teardownWorld — запись в журнал без цикла maps→arena) */
+  arenaBreak:new Slot<[]>(),
 };

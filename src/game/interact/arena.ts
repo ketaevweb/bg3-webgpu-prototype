@@ -16,7 +16,7 @@ import { G, S, GW, interactables } from '../state';
 import { bus } from '../bus';
 import { sfx } from '../audio';
 import { bigBanner, log } from '../ui/overlays';
-import { startCombat } from '../systems/turns';
+import { startCombat, joinCombat } from '../systems/turns';
 import { die } from '../systems/combat';
 import { checkEnd } from '../systems/progression';
 import { healUnit } from '../systems/vitals';
@@ -59,6 +59,7 @@ export function arenaStart(){
   if(G.combatOn){log('Испытание ждёт конца текущего боя.','g-sys');return;}
   if(!S.campaignDone){log('Портал молчит: песня Глубинного ещё не умолкла.','g-sys');return;}
   if(G.mapId!=='citadel')return;
+  G.arenaRun++;/* v2.1: новый заход — старые таймеры волн умирают молча */
   G.arenaWave=1;
   sfx.stinger('wave');
   bigBanner('ИСПЫТАНИЕ ГЛУБИН');
@@ -70,22 +71,26 @@ export function arenaEndless(){
   if(G.combatOn){log('Испытание ждёт конца текущего боя.','g-sys');return;}
   if(!S.campaignDone){log('Портал молчит: песня Глубинного ещё не умолкла.','g-sys');return;}
   if(G.mapId!=='citadel')return;
+  G.arenaRun++;/* v2.1: новый заход — старые таймеры волн умирают молча */
   G.arenaWave=WAVES+1;
   sfx.stinger('wave');
   bigBanner('БЕСКОНЕЧНОЕ ИСПЫТАНИЕ');
   log('Портал ревёт в полный голос: глубины признали победителя — и требуют нового. Волны не иссякнут, пока стоит отряд.','g-sys');
   spawnWave();
 }
-/* глубина k=w−5: hp ×(1+0.12k), кость урона +⌊k/2⌋, имя «Глубинный».
+/* глубина k=w−5 (балансовая таблица v2.1):
+   hp ×(1+0.12k) · кость урона +⌊k/2⌋ · КД +min(⌊k/4⌋,2) · имя «Глубинный».
    weapon клонируем: шаблоны ростера разделяют объект (makeUnit не копирует). */
 function endlessBoost(u:Unit,w:number){
   const k=w-WAVES;
   u.weapon={...u.weapon,dice:[...u.weapon.dice]};
   u.weapon.dice[1]+=Math.floor(k/2);
+  u.ac+=Math.min(Math.floor(k/4),2);/* v2.1: КД растёт медленнее hp — пробитие остаётся */
   const mult=1+0.12*k;
   u.maxhp=Math.round(u.maxhp*mult);
   u.hp=u.maxhp;
   u.name='Глубинный '+u.name;
+  u.depth=k;
   return u;
 }
 /* состав глубинных волн: цикл рецептов по (w−6)%5, каждый 5-й глубинной — чемпион */
@@ -104,6 +109,7 @@ function endlessGroup(w:number):Unit[]{
   if((w-WAVES)%5===0){/* чемпион бездны ведёт волну */
     const c=out[0];
     applyElite(c);
+    c.champ=true;/* v2.1: аура бездны + подкрепление на полсмерти */
     c.name='Чемпион бездны: '+c.name;c.short='Чемпион';
     log('Среди теней шагает чемпион бездны!','g-enemy');
   }
@@ -135,8 +141,14 @@ export function arenaNext(){
   for(const h of aliveHeroes())healUnit(h,8+2*w,'перевязка после волны');
   if(w===WAVES){arenaComplete();return;}/* ровно 5-я волна закрывает испытание; глубже — бесконечный режим */
   G.arenaWave=w+1;
+  const run=G.arenaRun;/* v2.1: заход на момент планирования — новый заход убивает таймер */
   setTimeout(()=>{
-    if(G.mapId!=='citadel'||G.combatOn){G.arenaWave=0;return;}/* ушли с карты — испытание сорвано */
+    if(run!==G.arenaRun||G.phase==='transition')return;/* новый заход/переход карты — таймер устарел (журнал пишет arenaBreak) */
+    if(G.mapId!=='citadel'){/* фолбэк: срыв без teardown — конец захода */
+      arenaBreakImpl();
+      return;
+    }
+    if(G.combatOn){G.arenaWave=0;return;}/* ушли в бой мимо таймера — испытание сорвано */
     sfx.stinger('wave');
     spawnWave();
   },1700);
@@ -150,9 +162,49 @@ function arenaComplete(){
   log('Пять волн легли у стены. Из портала выступает призрак коменданта и отдаёт вам '+bonus+' золота казны.','g-heal');
   log('Рекорд испытания: волна '+S.arenaBest+' из '+WAVES+'. Портал можно пройти вновь — тени не знают усталости.','g-sys');
   sfx.stinger('victory');
-  /* v2.0: портал меняет лик — следующий шаг в него ведёт в бесконечные волны */
+  /* v2.1: портал меняет лик — следующий шаг в него ведёт в бесконечные волны */
   const it=interactables.find(i=>i.label==='Испытание Глубин (арена)');
   if(it){it.label='Бесконечное испытание (арена)';it.fn=arenaEndless;}
+  recordRun(WAVES);/* v2.1: завершённый заход — в журнал рекордов */
+}
+
+/* ---- v2.1: журнал рекордов — завершённые/сорванные заходы (последние 8 в сейве) ---- */
+function recordRun(w:number){
+  if(w<1)return;
+  S.arenaLog=(S.arenaLog||[]).slice(-7);
+  S.arenaLog.push({w,when:Date.now()});
+}
+export function showRecords(){/* стела у портала — читает журнал */
+  bigBanner('СТЕЛА РЕКОРДОВ');
+  const lg=S.arenaLog||[];
+  log('Лучший заход: волна '+(S.arenaBest||0)+'.','g-sys');
+  if(!lg.length){log('Стела пока пуста — ни один заход не завершён.','g-sys');return;}
+  const last=lg.slice(-5).reverse();
+  for(const r of last){
+    const dt=new Date(r.when).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    log('Волна '+r.w+' — '+dt,'g-sys');
+  }
+  if(lg.length>5)log('…и ещё '+(lg.length-5)+' более ранних заходов.','g-sys');
+}
+
+/* ---- v2.1: разбор мира сорвал заход (уход с карты/загрузка сейва) — запись в журнал ---- */
+function arenaBreakImpl(){
+  if(G.arenaWave>=1)recordRun(G.arenaWave-1);/* последняя отбитая волна */
+  G.arenaWave=0;
+}
+
+/* ---- v2.1: «БЕЗДНА ЗОВЁТ» — чемпион на полсмерти зовёт двух утопленников
+   (combat зовёт через bus.champCall — прямой импорт combat→arena замкнул бы цикл) ---- */
+function champCallImpl(c:Unit){
+  bigBanner('БЕЗДНА ЗОВЁТ');
+  sfx.stinger('wave');
+  log(c.name+' хрипит — и из-под плит двора поднимаются утопленники!','g-enemy');
+  for(let i=0;i<2;i++){
+    const p=freeSpotNear(GW,{x:c.x,z:c.z},2);
+    if(!p)continue;
+    joinCombat(endlessBoost(makeDrowned(p.x,p.z),Math.max(G.arenaWave,WAVES+1)));
+  }
+  bus.refreshParty.call();
 }
 
 /* ---- E2E: мгновенно положить живых врагов волны и свести конец боя ---- */
@@ -162,5 +214,7 @@ export function arenaWipe(){
 }
 export function arenaState(){return {wave:G.arenaWave,best:S.arenaBest||0,endless:G.arenaWave>WAVES};}
 
-/* ---- регистрация на шине (разрыв цикла progression→arena) ---- */
+/* ---- регистрация на шине (разрыв циклов progression→arena, combat→arena, maps→arena) ---- */
 bus.arenaNext.bind(arenaNext);
+bus.champCall.bind(champCallImpl);
+bus.arenaBreak.bind(arenaBreakImpl);

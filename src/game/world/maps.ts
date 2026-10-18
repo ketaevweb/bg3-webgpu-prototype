@@ -34,7 +34,8 @@ export function teardownWorld(){
   interactables.length=0;
   clearGroup(worldGroup);
   G.groundMesh=null;G.fireLight=null;G.flameMesh=null;
-  G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;G.arenaWave=0;/* v1.9: арена не переживает разбор мира */
+  G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;
+  if(G.arenaWave>=1)bus.arenaBreak.call();else G.arenaWave=0;/* v2.1: срыв захода — запись в журнал рекордов */
   setActionbarVisible(false);
   bus.refreshBossBar.call();
 }
