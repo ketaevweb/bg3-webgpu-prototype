@@ -9,6 +9,7 @@
    __bg3.voice (on/ready/lines/last/hist/dyn) — звуки не проверяются,
    только факты воспроизведения. */
 import { bannerSlug, ttsNormalize } from '../voicecfg';
+import { BASE } from '../utils';/* v2.7: basePath для GitHub Pages */
 
 interface ManLine{v:string;d:number;}
 interface Manifest{ver:number;lines:Record<string,ManLine>;}
@@ -41,7 +42,7 @@ export function setVolume(v:number){
 /* манифест грузится один раз (bootGame после loadGfx); no-throw */
 export async function initVoice():Promise<void>{
   try{
-    const r=await fetch('/voices/manifest.json',{cache:'no-cache'});
+    const r=await fetch(BASE+'/voices/manifest.json',{cache:'no-cache'});
     if(!r.ok){man=null;return;}
     man=await r.json() as Manifest;
   }catch{man=null;}
@@ -75,7 +76,7 @@ async function loadBuf(id:string):Promise<AudioBuffer|null>{
   const hit=bufs.get(id);
   if(hit)return hit;
   try{
-    const r=await fetch('/voices/'+id+'.mp3');
+    const r=await fetch(BASE+'/voices/'+id+'.mp3');
     if(!r.ok)return null;
     const b=await decodeBuf(await r.arrayBuffer());
     if(b)bufs.set(id,b);

@@ -10,7 +10,7 @@ import { LogPanel, PartyCards, QuestTracker, ActionBar } from './panels';
 import { DialogBox, ShopPanel, JournalPanel, ChoicePanel } from './dialogs';
 import { GfxPanel, SavesPanel, EndScreen, SheetModal, BagPanel, RecordsPanel } from './menus';
 
-/* ---- системные кнопки: звук / миникарта / графика / сохранения / снаряжение ---- */
+/* ---- системные кнопки: звук / миникарта / графика / сохранения / снаряжение / полноэкранный режим ---- */
 function SysButtons(){
   const sys=useUi(s=>s.sys);
   return <>
@@ -20,7 +20,18 @@ function SysButtons(){
     <button id="saveBtn" title="Сохранения (K)" onClick={sys.onSaves}>💾</button>
     <button id="bagBtn" title="Снаряжение (I)" onClick={sys.onBag}>🎒</button>
     <button id="recBtn" title="Летопись Глубин (T)" onClick={sys.onRecords}>🏆</button>
+    {/* v2.7: полноэкранный режим — кнопка только там, где API доступен (на iPhone Safari — скрыта) */}
+    {sys.canFs&&<button id="fsBtn" title={sys.fsTitle} onClick={sys.onFs}>⛶</button>}
   </>;
+}
+
+/* ---- v2.7: тач-кнопка «Говорить/Осмотреть» (E) — только на тач-устройствах,
+   вне боя (в бою вместо неё панель действий) — как в BG3 на планшетах ---- */
+function TalkButton(){
+  const sys=useUi(s=>s.sys);
+  const inCombat=useUi(s=>s.actionbar.visible);
+  if(!sys.touch||inCombat)return null;
+  return <button id="talkBtn" title="Говорить/осмотреть (E)" onClick={sys.onTalk}>🗣</button>;
 }
 
 /* ---- верхняя панель: раунд/карта, чей ход, полоса инициативы ---- */
@@ -140,6 +151,7 @@ function Tip(){
 export default function Hud(){
   return <>
     <SysButtons/>
+    <TalkButton/>
     <TopBar/>
     <TutCard/>
     <BossBar/>

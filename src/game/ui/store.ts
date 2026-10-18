@@ -75,6 +75,11 @@ export interface SysView{
   onBag:()=>void;/* v1.6: панель снаряжения */
   onMm:()=>void;/* v1.9: миникарта (M) */
   onRecords:()=>void;/* v2.4: летопись Глубин (T) */
+  onFs:()=>void;/* v2.7: полноэкранный режим (F/⛶) */
+  onTalk:()=>void;/* v2.7: говорить/осмотреть (E) — тач-кнопка */
+  touch:boolean;/* v2.7: тач-устройство (coarse) — мобильная раскладка */
+  canFs:boolean;/* v2.7: Fullscreen API доступен (iPhone — false) */
+  fsTitle:string;/* v2.7: тултип кнопки ⛶ (состояние FS) */
 }
 
 export interface UiState{
@@ -130,6 +135,7 @@ const noop=()=>{};
 const noBinds={
   sys:{
     sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,onMm:noop,onRecords:noop,
+    onFs:noop,onTalk:noop,touch:false,canFs:false,fsTitle:'Полный экран (F)',
   } as SysView,
   shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,bagOnClose:noop,recordsOnClose:noop,
   onImportFile:(()=>{}) as (e:{target:HTMLInputElement})=>void,

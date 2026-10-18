@@ -6,6 +6,11 @@
 /* DOM по селектору (id-реестр UI появится в Фазе 3) */
 export const $=(q:string):HTMLElement=>document.querySelector(q) as HTMLElement;
 
+/* v2.7: базовый путь приложения (GitHub Pages: /bg3-webgpu-prototype).
+   Фиксируется на этапе сборки через NEXT_PUBLIC_BASE_PATH (deploy_ghpages.sh);
+   в обычной сборке/деве — пустая строка, пути не меняются. */
+export const BASE=process.env.NEXT_PUBLIC_BASE_PATH??'';
+
 export const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 
 /* модификатор характеристики D&D: (значение-10)/2 вниз */

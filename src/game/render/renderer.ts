@@ -14,6 +14,7 @@ import { AnimRigs, bindRigs } from '../animation';
 import { UI } from '../hud';
 import { $ } from '../utils';
 import { G } from '../state';
+import { isTouchDevice } from '../ui/mobile';/* v2.7: pixelRatio ниже на таче — батарея/производительность */
 
 export const renderer=new THREE.WebGPURenderer({antialias:true});
 export const scene=new THREE.Scene();
@@ -45,7 +46,9 @@ export async function ensureRendererInit(){
 /* DOM-подключение canvas — вызывается из bootGame() (HUD уже в DOM) */
 export function initRenderer(){
   renderer.setSize(innerWidth,innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  /* v2.7: на тач-устройствах пиксель-рейт capped на 1.5 — телефон не греется,
+     Playwright-эмуляция мобилы тоже с тачем → тот же путь */
+  renderer.setPixelRatio(Math.min(devicePixelRatio,isTouchDevice()?1.5:2));
   renderer.shadowMap.enabled=true;
   $(UI.scene).appendChild(renderer.domElement);
 }

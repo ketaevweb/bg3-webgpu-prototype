@@ -209,3 +209,49 @@
 #records .rhead{font-size:10.5px;color:#a89f86;margin:9px 0 3px;text-transform:uppercase;letter-spacing:.5px}
 #records .rrow{display:flex;justify-content:space-between;gap:6px;font-size:11.5px;color:#cfc9b6;
   padding:2px 4px;border-bottom:1px dashed #2a3324}
+
+/* ==== v2.7 «Дальние земли»: мобильная версия + полный экран ==== */
+#fsBtn{position:fixed;top:12px;left:288px;z-index:30;width:38px;height:38px;font-size:15px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#cfc9b6;cursor:pointer}
+#fsBtn:hover{border-color:var(--gold)}
+/* v2.7 фикс: bagBtn потерял стили (висел static в углу) — теперь в общем ряду */
+#bagBtn{position:fixed;top:12px;left:242px;z-index:30;width:38px;height:38px;font-size:15px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#cfc9b6;cursor:pointer}
+#bagBtn:hover{border-color:var(--gold)}
+/* тач-кнопка «Говорить/Осмотреть» (E) — крупный круг справа, вне боя */
+#talkBtn{position:fixed;right:16px;bottom:150px;z-index:31;width:64px;height:64px;font-size:26px;
+  line-height:1;border-radius:50%;padding:0;background:rgba(20,26,18,.92);border:2px solid var(--gold);
+  color:var(--gold);box-shadow:0 4px 18px rgba(0,0,0,.55),0 0 14px rgba(216,180,90,.25)}
+#talkBtn:active{transform:scale(.93);background:var(--gold);color:#1a1408}
+
+/* ---- тач-устройства: крупные таргеты + компактные панели ---- */
+@media (pointer: coarse){
+  button{min-height:38px}
+  #sndBtn,#mmBtn,#gfxBtn,#saveBtn,#bagBtn,#recBtn,#fsBtn{width:42px;height:42px;left:auto}
+  #sndBtn{left:8px}#mmBtn{left:54px}#gfxBtn{left:100px}#saveBtn{left:146px}
+  #bagBtn{left:192px}#recBtn{left:238px}#fsBtn{left:284px}
+  #topbar{top:60px;max-width:96vw;padding:5px 8px}
+  #initRow{max-width:86vw;gap:3px}
+  #log{top:60px;right:8px;width:186px;max-height:24vh}
+  #logbody p{font-size:11px}
+  #qtrack{bottom:8px;right:8px;width:168px;padding:6px 8px}
+  #qtrack .q{font-size:11px}
+  .pcard{width:150px}
+  #party{bottom:8px;left:8px}
+  #actionbar{bottom:8px;max-width:96vw;padding:6px 8px}
+  #pips{gap:8px;font-size:11px}
+  #btns button{padding:10px 12px;font-size:13px}
+  #hint{bottom:auto;top:112px}
+  #dlgBox{bottom:12px}
+  #dlgOpts button{padding:11px 12px;font-size:13.5px;line-height:1.35}
+  #bossbar{width:min(430px,94vw);top:112px}
+  #mm{right:8px;bottom:180px}
+  #gfx{width:min(312px,92vw)}
+  /* ландшафт телефона: карты отряда в ряд, нижние панели не наслаиваются */
+  @media (max-height: 520px){
+    .pcard{width:112px}
+    #party{flex-direction:row;right:8px;flex-wrap:wrap;max-width:52vw}
+    #talkBtn{bottom:auto;top:60px;width:52px;height:52px;font-size:21px}
+    #log{max-height:30vh;width:170px}
+  }
+}

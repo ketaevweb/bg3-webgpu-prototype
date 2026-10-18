@@ -289,6 +289,8 @@ export interface Bg3Debug{
   barkProbe:(kind:'start'|'crit'|'kill'|'hurt'|'down'|'won',hero?:string)=>{ok:boolean;id:string};
   barkKinds:()=>{cd:number;heroes:string[]};
   heroPass:()=>void;/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
+  fs:()=>{touch:boolean;can:boolean;on:boolean};fsToggle:()=>Promise<void>;/* v2.7: полный экран */
+  touch:()=>{touch:boolean;dlg:boolean};/* v2.7: инспектор тача */
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
   tutSteps:()=>{id:string;title:string;text:string}[];
   openDlg:(npc:string)=>void;

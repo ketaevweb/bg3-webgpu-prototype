@@ -43,6 +43,7 @@ import { toggleBag, equipItem, unequipSlot, addToBag, GEAR } from './systems/gea
 import { initTutorial, tutState, TUT_STEPS } from './ui/tutorial';/* v1.4: наставник; v2.5: шаги для генератора озвучки */
 import { initVoice, voiceState } from './ui/voice';/* v2.5: голоса Глубин */
 import { barkProbe, barkHeroes, barks } from './ui/barks';/* v2.6: эхо битвы */
+import { initMobile, toggleFullscreen, fsState } from './ui/mobile';/* v2.7: мобильная версия + полный экран */
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
 import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
 import { cloudPull, serverPull } from './save/slots';
@@ -60,6 +61,11 @@ export function bootGame(){
 
 
 
+
+/* v2.7: говорить/осмотреть — общий код для клавиши E и тач-кнопки 🗣 */
+function talkNearest(){
+  if(G.phase==='explore'&&!G.busy){const it=nearestInteract();if(it)it.fn();}
+}
 
 function onLeftClick(){
   if(G.phase==='explore'){
@@ -97,7 +103,7 @@ setInterval(checkTriggers,700);
 
 /* ================= ВВОД ================= */
 const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
-let downPos:{x:number;y:number;b:number}|null=null;
+let downPos:{x:number;y:number;b:number;t:string}|null=null;
 function castRay(e:PointerEvent){
   ptr.x=(e.clientX/innerWidth)*2-1;
   ptr.y=-(e.clientY/innerHeight)*2+1;
@@ -105,6 +111,8 @@ function castRay(e:PointerEvent){
 }
 function updatePick(e:PointerEvent){
   pick.tile=null;pick.ent=null;pick.inter=null;
+  /* v2.7: на таче нет hover — тултипы не мешают жестам камеры */
+  if(e.pointerType==='touch'&&e.type==='pointermove'){showTipFor(null,e);return;}
   if(G.busy||(G.phase!=='player'&&G.phase!=='explore')){showTipFor(null,e);return;}
   castRay(e);
   const ents=[...units.filter(u=>u.alive),...barrels.filter(b=>b.alive)];
@@ -157,13 +165,14 @@ function updateHoverFX(e:PointerEvent){
 }
 function bindInput(){
   const el=renderer.domElement;
-  el.addEventListener('pointerdown',e=>{sfx.unlock();downPos={x:e.clientX,y:e.clientY,b:e.button};});
+  el.addEventListener('pointerdown',e=>{sfx.unlock();downPos={x:e.clientX,y:e.clientY,b:e.button,t:e.pointerType};});
   el.addEventListener('pointerup',e=>{
     if(!downPos)return;
     const dx=e.clientX-downPos.x,dy=e.clientY-downPos.y;
-    const btn=downPos.b;downPos=null;
+    const btn=downPos.b,touch=downPos.t==='touch';downPos=null;
     if(btn===2){cancelTargeting();return;}
-    if(btn===0&&dx*dx+dy*dy<49){updatePick(e);onLeftClick();}
+    /* v2.7: на таче порог «тапа» шире — палец неточен (14px вместо 7px) */
+    if(btn===0&&dx*dx+dy*dy<(touch?196:49)){updatePick(e);onLeftClick();}
   });
   el.addEventListener('pointermove',updatePick);
   el.addEventListener('contextmenu',e=>e.preventDefault());
@@ -179,6 +188,7 @@ function bindInput(){
     if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){toggleBag();}/* v1.6: снаряжение */
     if(e.key==='m'||e.key==='M'||e.key==='ь'||e.key==='Ь'){toggleMinimap();}/* v1.9: миникарта */
     if(e.key==='t'||e.key==='T'||e.key==='е'||e.key==='Е'){toggleRecords();}/* v2.4: летопись Глубин */
+    if(e.key==='f'||e.key==='F'||e.key==='а'||e.key==='А'){void toggleFullscreen();}/* v2.7: полный экран */
   };
   addEventListener('keydown',onKey);
   const onResize=()=>{
@@ -276,6 +286,9 @@ let disposed=false;
   bus.openExploreUI.call();
   /* v1.1: настройки графики + меню сохранений (view-модели стора); v1.4: наставник; v2.5: голоса */
   loadGfx();applyGfx();renderGfx();renderSaves();
+  const disposeMobile=initMobile();/* v2.7: тач-флаги + полноэкранный режим (биндинги стора) */
+  disposers.push(disposeMobile);
+  uiSet(s=>({sys:{...s.sys,onTalk:talkNearest}}));/* v2.7: тач-кнопка «Говорить» (E) */
   await initVoice();/* v2.5: манифест ДО наставника — первый шаг озвучен */
   initTutorial();
   /* v0.7: звук — биндинг в стор (React-кнопка #sndBtn, Фаза 6) */
@@ -285,7 +298,7 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
-  log('BG3 Web-прототип v2.5 «Голоса Глубины»: озвучка как в большой BG3 — у каждого НПС свой голос (темп/высота/эхо по характеру), рассказчик ведёт баннеры, наставника и задания; настройка «Голоса» — в панели G.','g-sys');
+  log('BG3 Web-прототип v2.7 «Дальние земли»: мобильная адаптация (тач-управление, кнопка «Говорить»), полноэкранный режим (F или ⛶) — играйте с телефона как в большой BG3.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
@@ -293,7 +306,7 @@ let disposed=false;
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v2.5 boot complete');
+  console.log('[bg3] v2.7 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -326,7 +339,7 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   gearKeys:()=>Object.keys(GEAR),
   animStats,/* v1.7: E2E-гейт анимации */
   turn:()=>({phase:G.phase,combatOn:G.combatOn,hero:!!G.current&&G.current.side==='hero',
-    action:G.current?G.current.action:0,round:G.round,mapId:G.mapId}),/* v1.8: инспектор хода */
+    action:G.current?G.current.action:0,round:G.round,mapId:G.mapId,busy:G.busy}),/* v1.8: инспектор хода; v2.7: +busy */
   solidAt:(x,z)=>GW.solid.has(key(x,z)),/* v1.8: проверка стены цитадели */
   inters:()=>interactables.map(i=>i.label),/* v1.8: список интерактов */
   callInter:(label)=>{const it=interactables.find(i=>i.label===label);if(it)it.fn();},/* v1.8: вызов интеракта */
@@ -350,6 +363,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
   voice:()=>voiceState(),/* v2.5: инспектор озвучки (on/ready/last/hist/dyn/vol) */
   barkProbe:(kind,hero)=>barkProbe(kind,hero),/* v2.6: проба боевых реплик (E2E) */
+  fs:()=>fsState(),fsToggle:()=>toggleFullscreen(),/* v2.7: полный экран (E2E) */
+  touch:()=>({touch:fsState().touch,dlg:!!useUi.getState().dlg}),/* v2.7: инспектор тача (E2E) */
   barkKinds:()=>({cd:barks.BARK_CD,heroes:barkHeroes()}),/* v2.6: каталог барьков (E2E) */
   heroPass:()=>{if(G.combatOn&&G.current&&G.current.side==='hero'&&G.phase==='player')endTurn();},/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;

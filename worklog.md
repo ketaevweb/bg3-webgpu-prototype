@@ -596,3 +596,30 @@ Stage Summary:
 - v2.6 «Эхо битвы» готова: отряд выкрикивает боевые реплики своими голосами (36 новых, манифест 190, ~10.2 мин), гандикап 4 c как в BG3, падение перебивает всё; громкость голосов — в панели G
 - Локально: коммит 619186b + тег v2.6; ПУШ НЕ ВЫПОЛНЕН — токена нет (env/.git/config/worklog пусты; старый ghp_ светился только в чате и подлежит отзыву) — нужен свежий токен от пользователя
 - Следующий релизный пункт — v2.7 (идеи в README-роадмапе)
+
+---
+Task ID: 24
+Agent: main (Z.ai)
+Task: v2.7 «Дальние земли» — мобильная адаптация + полноэкранный режим + деплой на GitHub Pages
+
+Work Log:
+- Проверил репо: HEAD 00023b5 (v2.6 + worklog, впереди origin на 2 коммита — пуш ждал токен), теги до v2.6
+- Инспекция: ввод — pointerdown/up (тап<7px = клик), клавиши E/J/K/G/I/M/T; рендер — three/webgpu WebGPURenderer (авто-WebGL2 фоллбек — на мобиле уже стартует, подтверждено скрином пользователя); HUD — React (Hud.tsx + store); API-клиенты уже no-throw (server/leaderboard/voice catch→false)
+- src/game/ui/mobile.ts (новый, лист, 103): isTouchDevice (pointer:coarse/ontouchstart/maxTouchPoints), canFullscreen (requestFullscreen/webkit), toggleFullscreen (no-throw), syncFsState (fsTitle в стор), initMobile→disposer, fsState (E2E)
+- store.ts: SysView + onFs/onTalk/touch/canFs/fsTitle (+ noBinds defaults); resetUi переживает (sys не сбрасывается)
+- Hud.tsx: SysButtons + fsBtn ⛶ (рендер только при canFs — на iPhone скрыта) + TalkButton 🗣 «Говорить/Осмотреть» (только touch && !actionbar.visible — прячется в бою)
+- engine.ts: talkNearest() (общий код E и 🗣), sys.onTalk биндинг; клавиша F/а/А — fullscreen; тач-порог тапа 14px (pointerType touch, downPos.t); updatePick — без тултипов на touch-move; initMobile в boot + disposer; turn() +busy (E2E); логи v2.7; __bg3.fs/fsToggle/touch
+- renderer.ts: pixelRatio min(dpr, touch?1.5:2); voice.ts: fetch(BASE+'/voices/…') — basePath для Pages (BASE из utils: NEXT_PUBLIC_BASE_PATH)
+- game.css: #fsBtn (288px), фикс бага #bagBtn (потерял CSS, висел static в углу → fixed 242px), #talkBtn (круг 64px, справа), @media (pointer:coarse): кнопки 42px, topbar/log под рядом, dlg-кнопки ≥44px, ландшафт (max-height:520px) — карты отряда в ряд
+- layout.tsx: viewport (maximumScale=1, userScalable=false, viewportFit=cover, themeColor) — пинч не ломает камеру; title v2.7
+- next.config.ts: GH_PAGES=1 → output:'export' + basePath /bg3-webgpu-prototype + images.unoptimized; scripts/deploy_ghpages.sh (mv api → build → restore trap, out/.nojekyll, orphan gh-pages push, Pages API)
+- Гейты: tsc 0 (после фиксов downPos.t и Bg3Debug.fs/touch), ESLint src 0/0, NO CYCLES, модули ≤400 (mobile 103)
+- E2E pw_v27 7 гейтов GREEN ×2: G1 десктоп (fsBtn есть, talkBtn нет, bagBtn fixed), G2 fullscreen клик/F/«а», G3 мобила 390×844 (touch:true, talkBtn виден, canvas жив), G4 тап двигает отряд (13,24→14,23), G5 тап 🗣 открывает диалог (ближайший интеракт — как в игре), G6 панели тапом (gfx/mm/FS), G7 чистая консоль (soldier.glb/favicon — известный шум, отфильтрован как в pw_v26)
+- Регрессии: pw_v20–v23 GREEN; pw_v24 G8 пал — serverный топ-10 засорён записями 10–16 от прошлых прогонов (best 9 не входит в топ) — почистил Score/Tablet (prisma db execute), после — GREEN; pw_v25 11 GREEN; pw_v26 9 GREEN (1 флак swiftshader → реран GREEN)
+- README: шапка v2.7 + «Предыдущая v2.6» + v2.5 восстановлен (Edit-склейка), Запуск+GitHub Pages, Управление (F/⛶ + тач-строка), Структура (ui/mobile.ts, voice/barks перенесены в ui/), Роадмап (v2.7 выполнено, идеи v2.8)
+- Пуш main+теги (v2.6, v2.7) и деплой gh-pages — токеном из окружения (в файлах/логи не пишется)
+
+Stage Summary:
+- v2.7 «Дальние земли» готов: тач-управление, 🗣-кнопка, fullscreen (F/⛶), мобильная раскладка, фикс bagBtn, basePath-озвучка
+- pw_v27 7/7 GREEN ×2, регрессии v20–v26 GREEN; tsc/ESLint/cycles/≤400 чисты
+- Урок: прогонные тесты с серверным топом (pw_v24 G8) требуют чистой таблицы Score — добавлять очистку в харнес при будущем переиспользовании
