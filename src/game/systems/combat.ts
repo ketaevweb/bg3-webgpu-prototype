@@ -44,7 +44,7 @@ import { lunge, faceTo, tween, boomFX, shake } from '../fx/tweens';
 import { roll } from '../rng';
 import { sfx } from '../audio';
 import { slowmo } from '../slowmo';
-import { playAttack } from '../animation';/* v1.6: атак-анимация (клип/процедура) */
+import { playAttack, playHit, playDeath } from '../animation';/* v1.6/v1.7: атак-анимация + реакция на урон + смерть */
 import { fx, glows } from '../render/renderer';
 import { ftextAbove, log, refreshIcons } from '../ui/overlays';
 import { S, units, barrels, grass, fires, busyOn, busyOff } from '../state';
@@ -101,6 +101,7 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
 export function damageUnit(t:Unit,dmg:number,src:Unit|null){
   if(!t||!t.alive)return;
   t.hp-=dmg;
+  playHit(t);/* v1.7: реакция на урон (короткий клип; до проверки смерти) */
   bus.refreshBossBar.call();/* v0.8: боссбар живёт в реальном времени */
   if(t.hp<=0)die(t,src);
 }
@@ -115,7 +116,8 @@ export function die(t:Unit,_src:Unit|null){
   sfx.death();
   fx.burstAtMesh(t,{count:22,color:0x7a2f2f,speed:2.4,size:0.12,life:0.7});
   const m=t.mesh;
-  tween(0.5,k=>{m.rotation.z=1.35*k*k;m.position.y=-0.12*k;});
+  if(!playDeath(t))/* v1.7: клип смерти на скелетном риге; без рига — процедурное падение */
+    tween(0.5,k=>{m.rotation.z=1.35*k*k;m.position.y=-0.12*k;});
   refreshIcons(t);bus.refreshInit.call();bus.refreshParty.call();
   if(t.side==='goblin'&&t.xp)awardXP(t.xp);
   if(t.side==='goblin')rollLoot(t);/* v1.3: лут-таблицы вместо фиксированных 3-9 золота */

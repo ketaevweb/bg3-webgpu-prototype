@@ -26,6 +26,9 @@ export function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза
   u.mesh.add(rig);
   u.rig=rig;u.phase=srand()*6.28;
   rigs.register(u);
+  /* v1.7: риги ставит boot-оркестратор (engine.ts, герои+боссы — путь v1.6);
+     авто-риг из makeUnit убран: апгрейд скиннинг-мешей посреди пересборки
+     карты гонится с пересборкой пайплайна WebGPU-нод (меш «ложится»). */
   scene.add(u.mesh);
   units.push(u);
   return u;

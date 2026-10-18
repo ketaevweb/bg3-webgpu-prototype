@@ -240,6 +240,11 @@ export interface Bg3Debug{
   serverPut:(i:number,sv:SaveData)=>Promise<boolean>;
   serverPull:(i:number)=>Promise<void>;
   aim:(t:string)=>void;
+  cam:()=>unknown;ctl:()=>unknown;
+  loopStop:()=>void;loopStart:()=>void;/* v1.7: пауза рендера для E2E-снимков */
+  scn:()=>unknown;rnd:()=>unknown;/* v1.7: рендерер/сцена для E2E-снимка */
+  step:(x:number,z:number)=>void;/* v1.7: боевое перемещение для E2E */
   fire:(x:number,z:number)=>Promise<void>;
+  animStats:()=>unknown;/* v1.7: сводка анимационной системы (motion+rigs) */
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

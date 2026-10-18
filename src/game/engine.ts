@@ -5,14 +5,14 @@
 import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
-import { upgradeUnitRig, loadAttackClip } from './animation';
+import { upgradeUnitRig, animOptsFor, animStats } from './animation';/* v1.7: риги + сводка анимации */
 import { clamp, cheb } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
 import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
 import { bus } from './bus';
 import { uiSet } from './ui/store';
-import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';
+import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';/* scene — для __bg3.scn (E2E-снимки) */
 import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
@@ -243,15 +243,15 @@ let disposed=false;
     glows.campfire(W(G.FIREPIT[0]),W(G.FIREPIT[1]));
     fx.addEmber('campfire',W(G.FIREPIT[0]),W(G.FIREPIT[1]),{rate:9,color:0xffa040,up:1.7,spread:0.3,size:0.12,life:1.5});
   }
-  /* v0.7.x: GLTF-риг (Mixamo-стайл) для героев и боссов; гоблины — капсулы.
-    v1.6: перед ригами грузим опциональный Mixamo-клип атаки (attack.glb) */
+  /* v0.7→v1.7: скелетные риги героев и боссов — путь v1.6 (после сборки,
+     одним проходом). v1.7: перед ригами грузим библиотеку движений Unity
+     (motion.ts, офлайн-ретаргет на mixamorig — scripts/bake_motions.mjs). */
   void (async()=>{
-    await loadAttackClip();
+    await import('./motion').then(m=>m.loadMotions());
     const targets=units.filter(u=>u.side==='hero'||u.isBoss);
     let ok=0;
     for(const u of targets){
-      const tint=u.isBoss?0xb03424:(u.cls==='fighter'?0x5a7fb0:0x9a6ab8);
-      const done=await upgradeUnitRig(u,{tint,tintStrength:0.4,scale:u.isBoss?1.24:1.0,yaw:Math.PI});
+      const done=await upgradeUnitRig(u,animOptsFor(u));
       if(done)ok++;
     }
     console.log('[bg3] GLTF rigs:',ok+'/'+targets.length);
@@ -270,14 +270,14 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.6 «Перевал великанов»: четвёртая карта, снаряжение с эффектами и атак-анимации.','g-sys');
+  log('BG3 Web-прототип v1.7 «Хореография битвы»: полная анимационная система на клипах Unity (Blink RPG Animations + DoubleL) — локомоция, атаки по классу, реакции на урон и смерть на скелетном риге.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, а на перевале (северо-запад) камни грызёт великан Гаррум. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), а за болотами — тропа на перевал (северо-запад).','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.6 boot complete');
+  console.log('[bg3] v1.7 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -293,6 +293,10 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   cloudGet,cloudPut,cloudPull,/* v1.4 */
   serverGet,serverPut,serverPull,/* v1.5: серверные скрижали для E2E */
   aim:(t)=>enterTarget(t as Parameters<typeof enterTarget>[0]),/* v1.5: E2E-прицеливание */
+  cam:()=>camera,ctl:()=>controls,/* v1.7: E2E-скриншоты */
+  loopStop:()=>renderer.setAnimationLoop(null),loopStart:()=>renderer.setAnimationLoop(loop),/* v1.7: пауза рендера для снимков */
+  scn:()=>scene,rnd:()=>renderer,/* v1.7: E2E-снимок: sync render + toDataURL в одном таске */
+  step:(x:number,z:number)=>{const h=G.current;if(h&&h.side==='hero'&&G.combatOn)tryMove(h,{x,z});},/* v1.7: боевое перемещение для E2E */
   fire:async(x,z)=>{/* v1.5: E2E-выстрел — подложить pick и применить */
     pick.tile={x,z};
     pick.ent=units.find(u=>u.alive&&!u.isBarrel&&u.x===x&&u.z===z)||null;
@@ -304,6 +308,7 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   unequipGear:(cls,slot)=>{const h=units.find(u=>u.cls===cls&&u.side==='hero');if(h)unequipSlot(h,slot);},
   openBag:()=>toggleBag(),
   gearKeys:()=>Object.keys(GEAR),
+  animStats,/* v1.7: E2E-гейт анимации */
 };
 return function dispose(){
   disposed=true;

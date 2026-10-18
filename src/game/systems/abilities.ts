@@ -16,10 +16,12 @@ import { bus } from '../bus';
 import { damageUnit, explode } from './combat';
 import { addStatus } from './statuses';
 import { showReach } from '../ui/markers';
+import { playAttack } from '../animation';/* v1.7: каст-анимация (клип SpellCast) */
 import type { Unit } from '../types';
 
 export async function castFireball(h:Unit,tx:number,tz:number):Promise<void>{
   log(h.name+' сотворяет ОГНЕННЫЙ ШАР!','g-fire');
+  playAttack(h);/* v1.7: каст-клип */
   sfx.fireCast();
   projMesh.visible=true;
   const from=h.mesh.position.clone().add(new THREE.Vector3(0,1.3,0));
@@ -32,6 +34,7 @@ export async function castFireball(h:Unit,tx:number,tz:number):Promise<void>{
   explode(tx,tz,{dice:[3,6],radius:2.5});
 }
 export async function radiantNova(h:Unit):Promise<void>{/* v1.2: гнев рассвета Кая */
+  playAttack(h);/* v1.7: каст-клип */
   h.action--;h.dawnUsed=true;
   log(h.name+' призывает ГНЕВ РАССВЕТА!','g-hero');
   sfx.nova();
@@ -50,6 +53,7 @@ export async function radiantNova(h:Unit):Promise<void>{/* v1.2: гнев рас
   bus.refreshUI.call();showReach(h);
 }
 export async function castSpores(h:Unit,tx:number,tz:number):Promise<void>{/* v1.5: облако спор Ольхи */
+  playAttack(h);/* v1.7: каст-клип */
   log(h.name+' выпускает ОБЛАКО СПОР!','g-hero');
   sfx.poison();
   const from=h.mesh.position.clone().add(new THREE.Vector3(0,1.2,0));

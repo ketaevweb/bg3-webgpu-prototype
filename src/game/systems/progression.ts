@@ -21,9 +21,10 @@ import type { Unit } from '../types';
 /* ================= ВОЛНЫ / ОПЫТ / УРОВНИ ================= */
 export function checkEnd(){
   if(!G.combatOn)return;
-  if(!aliveHeroes().length){G.combatOn=false;G.phase='over';sfx.stinger('defeat');showEnd(false);return;}
+  if(!aliveHeroes().length){G.combatOn=false;for(const u of units)u.inCombat=false;G.phase='over';sfx.stinger('defeat');showEnd(false);return;}
   if(S.combatGroup.some(g=>g.alive))return;
-  G.combatOn=false;G.phase='explore';
+  G.combatOn=false;for(const u of units)u.inCombat=false;/* v1.7: выходим из боевой стойки */
+  G.phase='explore';
   victorySequence();
 }
 export function victorySequence(){

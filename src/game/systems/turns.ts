@@ -65,7 +65,7 @@ export function startCombat(group:Unit[]){
     if(h.cls==='cleric')h.dawnUsed=false;/* v1.2 */
   }
   const list=[...aliveHeroes(),...group.filter(g=>g.alive)];
-  for(const u of list)u.init=d(20)+mod(u.dex);
+  for(const u of list){u.init=d(20)+mod(u.dex);u.inCombat=true;}/* v1.7: боевая стойка idleCombat */
   G.order=list.sort((a,b)=>(b.init||0)-(a.init||0));/* init задан строкой выше */
   G.turnIdx=-1;G.round=1;
   setRound('Раунд 1');
