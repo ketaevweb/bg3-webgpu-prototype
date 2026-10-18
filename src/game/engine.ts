@@ -25,7 +25,7 @@ import { openDlg } from './interact/dialog';
 import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
 import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
-import { arenaStart, arenaWipe, arenaState } from './interact/arena';/* v1.9: испытание Глубин */
+import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
 import { toggleMinimap, refreshMinimap } from './ui/minimap';/* v1.9: миникарта */
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
 import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/markers';
@@ -324,6 +324,7 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   callInter:(label)=>{const it=interactables.find(i=>i.label===label);if(it)it.fn();},/* v1.8: вызов интеракта */
   joinHaldir:(x,z)=>joinHaldir(x,z),/* v1.9: паладин для E2E */
   arenaStart:()=>arenaStart(),arenaWipe:()=>arenaWipe(),/* v1.9: арена для E2E */
+  arenaEndless:()=>arenaEndless(),/* v2.0: бесконечное испытание для E2E */
   arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };

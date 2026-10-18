@@ -22,7 +22,7 @@ import { gainGold } from '../interact/quests';
 import { d } from '../rng';
 import { buildFigure } from '../entities/figure';
 import { makeHaldir } from '../entities/roster';
-import { arenaStart } from './arena';
+import { arenaStart, arenaEndless, WAVES } from './arena';
 import type { Unit } from '../types';
 
 /* v1.9: место Хальдира у знамён (внешняя сторона ворот) */
@@ -151,8 +151,14 @@ export function buildCitadelScenery(){
   if(S.campaignDone){
     buildHaldirScene();
     const [kx,kz]=CITADEL.KEEP;
-    addInteract(kx,kz,2.6,'Испытание Глубин (арена)',()=>arenaStart(),null,
-      'Испытание Глубин','Изумрудный портал за спиной коменданта. Тени павших ждут вызвавших — пять волн, награда и слава.');
+    /* v2.0: испытание пройдено (рекорд ≥5) — портал ведёт в БЕСКОНЕЧНОЕ испытание */
+    if(S.arenaBest>=WAVES){
+      addInteract(kx,kz,2.6,'Бесконечное испытание (арена)',()=>arenaEndless(),null,
+        'Бесконечное испытание','Изумрудный портал за спиной коменданта. Испытание пройдено — теперь волны не иссякнут, пока стоит отряд.');
+    }else{
+      addInteract(kx,kz,2.6,'Испытание Глубин (арена)',()=>arenaStart(),null,
+        'Испытание Глубин','Изумрудный портал за спиной коменданта. Тени павших ждут вызвавших — пять волн, награда и слава.');
+    }
   }
 }
 /* ---- сундук со Знаменем Дозора ---- */

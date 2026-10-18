@@ -263,7 +263,8 @@ export interface Bg3Debug{
   joinHaldir:(x?:number,z?:number)=>unknown;
   arenaStart:()=>void;
   arenaWipe:()=>void;/* мгновенно убить живых врагов волны и свести конец боя */
-  arenaState:()=>{wave:number;best:number};
+  arenaEndless:()=>void;/* v2.0: старт бесконечного испытания (E2E) */
+  arenaState:()=>{wave:number;best:number;endless:boolean};
   mm:()=>unknown;/* снимок миникарты (E2E) */
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}
