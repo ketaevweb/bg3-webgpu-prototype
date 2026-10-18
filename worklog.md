@@ -477,3 +477,16 @@ Stage Summary:
 - Сейв v2 без изменения формата (опциональное relicUp); API /api/scores + модель Score
 - E2E: pw_v23 11/11 GREEN ×2; регрессии v20/v21/v22 GREEN; статические гейты зелёные
 - Далее: коммит + tag v2.3 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена
+
+---
+Task ID: 19 (push)
+Agent: main (Z.ai)
+Task: пуш v2.3 на GitHub
+
+Work Log:
+- Коммит a09ff02 (devsrv.log убран из индекса + .gitignore) + tag v2.3 → origin: main 6cd75a2..a09ff02, тег v2.3 создан (подтверждено выводом push)
+- remote URL очищен от токена (rg ghp_ .git/config — пусто)
+
+Stage Summary:
+- v2.3 «Тень отряда» на GitHub (main + tag); рабочее дерево чистое
+- Напоминание пользователю: отозвать токен ghp_… на GitHub (Settings → Developer settings → Tokens) — токен давно светился в чате
