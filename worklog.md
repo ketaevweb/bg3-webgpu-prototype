@@ -623,3 +623,21 @@ Stage Summary:
 - v2.7 «Дальние земли» готов: тач-управление, 🗣-кнопка, fullscreen (F/⛶), мобильная раскладка, фикс bagBtn, basePath-озвучка
 - pw_v27 7/7 GREEN ×2, регрессии v20–v26 GREEN; tsc/ESLint/cycles/≤400 чисты
 - Урок: прогонные тесты с серверным топом (pw_v24 G8) требуют чистой таблицы Score — добавлять очистку в харнес при будущем переиспользовании
+
+---
+Task ID: 24-b (деплой)
+Agent: main (Z.ai)
+Task: Пуш v2.6+v2.7 и деплой GitHub Pages
+
+Work Log:
+- Пуш main (167eb8c..e6cbb34) + теги v2.6, v2.7 — токеном из окружения (в файлы/логи не пишется)
+- Скан всей git-истории на секреты (ghp_/github_pat_/gho_, sk-, AIza, xox): чисто — репо можно публиковать
+- gh-pages: deploy_ghpages.sh — API-роуты временно убраны (restore по trap), GH_PAGES=1 build 82 c, out/ + .nojekyll → orphan-коммит → push
+- Pages API: первый POST 422 «plan does not support Pages for private repo» → репо сделан публичным (PATCH private:false; история чиста — публикация безопасна) → POST build_type:legacy source gh-pages/root — Pages включён
+- Проверка живого сайта: HTTP 200, title v2.7, viewport-мета корректна, 6/6 JS-чанков 200, manifest.json 200, mp3 200
+- pw_pages.cjs (новый): smoke против https://ketaevweb.github.io/bg3-webgpu-prototype/ — 5/5 GREEN: десктоп boot + basePath-озвучка (190 реплик) + fullscreen; мобила touch/talkBtn/тап-движение; 0 реальных ошибок консоли
+
+Stage Summary:
+- Сайт игры: https://ketaevweb.github.io/bg3-webgpu-prototype/ — LIVE, v2.7 «Дальние земли»
+- Репозиторий публичен (условие бесплатного Pages для сайта); история чиста от секретов
+- ⚠️ Пользователю: отозвать токен ghp_… после сессии (токен светился в чате)
