@@ -569,3 +569,30 @@ Stage Summary:
 - v2.5 «Голоса Глубин» готова: игра говорит — 12 голосов НПС + рассказчик, офлайн-манифест 154 реплик (6.8 МБ) + серверная динамика, перебивание как в BG3, выключатель в панели G
 - Сейв v2 без изменения формата (voice — настройка gfx, не сейв); статические гейты и E2E (v25 ×2 + регрессии v20–v24) зелёные
 - Далее: коммит + tag v2.5 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена
+- Сейв v2 без изменения формата (voice — настройка gfx, не сейв); статические гейты и E2E (v25 ×2 + регрессии v20–v24) зелёные
+- Далее: коммит + tag v2.5 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена
+
+---
+Task ID: 23
+Agent: main (Z.ai)
+Task: v2.6 «Эхо битвы» — боевые реплики героев (barks) своими голосами + громкость голосов
+
+Work Log:
+- Верификация: HEAD 167eb8c (v2.5), main синхронизирован с origin (0/0), дерево чистое; тег v2.5 на HEAD
+- Разведка: roster.ts (6 героев: Торик/Мирелла/Илва/Кая/Ольха/Хальдир), turns.startCombat, combat.doAttack/damageUnit/die (src игнорировался), progression.victorySequence, arena.arenaWipe (die(e,null)), settings/gfx, bus-циклы
+- voicecfg.ts (лист, 134): + голос mirella (irina len 0.98 pitch 0.5), HERO_VOICE (6 героев по Unit.short), BARKS (6×6 текстов), BARK_KINDS; ключи файлов — транслит bannerSlug (bark.torik.start.mp3) — кириллица не идёт в имена файлов
+- ui/barks.ts (новый, 86): bark(kind,hero?,force?) — выбор героя (задан → чужой игнор; иначе случайный живой из каталога), кулдаун BARK_CD=4000 мс (гандикап как в BG3), force только для down, no-throw; barkHeroes() фильтрует summoned/мёртвых; barkProbe(kind,hero) — честная проба для E2E (down — force, как в бою)
+- ui/voice.ts (156): setVolume(0..1) → GainNode 0.9×vol (живая правка + при unlock), vol в voiceState()
+- Громкость в панели G: gfx.vol ('60'|'80'|'100') → applyGfx → voice.setVolume; GFX_PRESETS громкость не трогают; bg3w_gfx_v1 — сейв v2 не менялся
+- Хуки: turns.startCombat → bark('start') после стингера; combat.doAttack — crit&&hero → bark('crit',att) внутри крит-эффектов; combat.damageUnit — hp≤0&&hero → bark('down',t,true), иначе ≤35%&&!barkHurt → bark('hurt',t) (раз за бой); combat.die — _src→src, side==='goblin'&&src hero → bark('kill',src); progression.victorySequence — bark('won') при !G.arenaWave; arena.arenaWipe — die(e,aliveHeroes()[0]||null) — kill-bark проверяем в E2E
+- engine.ts (375): __bg3 += barkProbe/barkKinds/heroPass (пропуск хода героя: без него волна стоит в phase='player' — AI не получает ходов, латентное открытие харнеса); types.ts: Unit.barkHurt, Bg3Debug barkProbe/barkKinds/heroPass, voice().vol
+- Синтез: venv потерял piper между сессиями (pip install piper-tts 1.8.0 через uv), модели denis/dmitri/irina пере-скачаны с HuggingFace (63 МБ каждая, в .gitignore); voicesynth.ts + barks-фаза (BARKS→jobs, голос по HERO_VOICE, транслит-ключи) — 36 новых mp3, идемпотентно, манифест 190 реплик ~10.2 мин
+- Уроки: (1) barkProbe изначально без force у down — probe расходился с боем (down перебивает кулдаун); (2) addInitScript перезаписывает localStorage на КАЖДОЙ навигации — persist-гейты громкости проверять согласованным значением в ините; (3) histSnap снимать ДО старта боя — start-барк успевает в history до waitCombat; (4) ходы героя в пошаговике никто не «нажимает» в E2E — нужен heroPass
+- E2E pw_v26 9 гейтов GREEN ×2: G1 манифест 190+целостность+36 bark-файлов+каталог (2 героя, cd 4000, vol 0.8); G2 probe (кулдаун/force-down/неизвестный герой/после-кулдауна); G3 громкость 80↔100; G4 арена волна 6 — start-барк живого героя; G5 kill при вайпе (источник — герой); G6 hurt/down под ударами волны 7 (heroPass-цикл); G7 остановка цепочки (best 6); G8 сейв/лоад; G9 чистый reload (vol 0.8 persist, 0 ошибок, 0 bad404)
+- Регрессии pw_v20–v25 GREEN (6 прогонов); статические гейты: tsc 0, ESLint 0/0, NO CYCLES (madge 60 файлов), 0 any, модули ≤400
+- README: шапка v2.6 + «Предыдущая v2.5» + структура (barks.ts) + роадмап v2.7 (глубинные благословения, сезонные составы, итог сезона, боевые реплики врагов); layout.tsx метаданные v2.6
+
+Stage Summary:
+- v2.6 «Эхо битвы» готова: отряд выкрикивает боевые реплики своими голосами (36 новых, манифест 190, ~10.2 мин), гандикап 4 c как в BG3, падение перебивает всё; громкость голосов — в панели G
+- Локально: коммит 619186b + тег v2.6; ПУШ НЕ ВЫПОЛНЕН — токена нет (env/.git/config/worklog пусты; старый ghp_ светился только в чате и подлежит отзыву) — нужен свежий токен от пользователя
+- Следующий релизный пункт — v2.7 (идеи в README-роадмапе)
