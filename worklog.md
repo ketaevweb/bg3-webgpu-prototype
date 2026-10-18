@@ -490,3 +490,40 @@ Work Log:
 Stage Summary:
 - v2.3 «Тень отряда» на GitHub (main + tag); рабочее дерево чистое
 - Напоминание пользователю: отозвать токен ghp_… на GitHub (Settings → Developer settings → Tokens) — токен давно светился в чате
+
+---
+Task ID: 20
+Agent: main (Z.ai)
+Task: v2.4 «Сезоны глубины» — еженедельный ротационный аффикс бесконечной арены, косметика тени (сезонный облик), панель «Летопись Глубин» (T/🏆) (идеи roadmap v2.4 из README)
+
+Work Log:
+- Верификация состояния: теги v2.1–v2.3 в репо (HEAD 6ffcc9f worklog Task 19), дерево чистое; roadmap предписывает v2.4: сезонные модификаторы / косметика тени / таблица рекордов в HUD
+- Новый модуль src/game/interact/season.ts (94 строки): SEASONS — 5 сезонов {name,desc,tint}: «Кровавый прилив» (+1 кость врагам: dice[0]+=1, тинт 0x8a2a2a), «Костяная стужа» (КД +2, 0x7a9ac0), «Мора глубин» (hp ×1.25 сверх глубинного, 0x5a7a42), «Ярость толпы» (лишний враг в каждой глубинной волне, 0x9a5a30), «Дань глубин» (награда глубинной волны ×1.5, 0xb09040); WEEK_MS=604800000, seasonIndex()=G.seasonForced??Math.floor(Date.now()/WEEK_MS)%5 (детерминизм по реальной неделе); forceSeason(i|null) — форс E2E, −1 = «вне сезона» (нейтральный режим); seasonBoost(u) — модификаторы + перекраска тела фигурки (u.rig.children[0] — капсула; кольцо фракции/голова не трогаются); announceSeason(); toggleRecords/closeRecords — HUD-панель: сезон+рекорд+журнал+S.arenaLog.slice(-8)+async topScores()→серверный топ-10 (no-throw); биндинг sys.onRecords/recordsOnClose в стор (владелец — season.ts)
+- Состояние: G.seasonForced:number|null (state.ts: тип+init+resetState); СЕЙВ v2 НЕ МЕНЯЛСЯ — сезон детерминирован неделей, ничего не хранится
+- arena.ts (272→286): endlessBoost — seasonBoost(u) в конце (Мора множит уже глубинно усиленную жизнь; тень отряда тоже красится — трансмогрификация двойников); endlessGroup — seasonExtraEnemy() добавляет утопленника ДО буста; arenaEndless — announceSeason(); arenaNext — награда глубинной волны ×seasonRewardMult() (w>WAVES только); showRecords — строка сезона
+- HUD: store.ts — SeasonView/RecordsView + recordsOpen/records/recordsOnClose + sys.onRecords (resetUi сохраняет биндинги); menus.tsx — RecordsPanel (сезон/лучший/журнал/сервер, innerText h3 uppercase — учтено в E2E); Hud.tsx — кнопка #recBtn 🏆 + <RecordsPanel/>; game.css — #recBtn (left:196) + #records (центр, rseason/rhead/rrow)
+- engine.ts (359→363): клавиша T/t/е/Е → toggleRecords, Escape → closeRecords, uiSet sys.onRecords, __bg3 += season/forceSeason/records; boot-лог v2.4; types.ts Bg3Debug синхронно
+- E2E pw_v24.cjs 11 гейтов GREEN ×2: G1 boot; G2 ротация (реальная неделя = floor(Date.now()/604800000)%5, форс −1 → «вне сезона», null → назад); G3 постгейм; G4 сезон 0 волна 6 (k=1): утопленники [2,6] hp 16/ac 12, скелет-рыцарь [2,8] hp 25/ac 15, тинт 0x8a2a2a у всех, «Глубинный» префикс; G5 сезон 1 волна 7 (k=2): культисты [1,7] hp 12/ac 14, ученик [1,9] hp 17/ac 15, тинт 0x7a9ac0; G6 сезон 3 волна 8: рецепт 3 + лишний = 4 врага, тинт 0x9a5a30; G7 сезон 4 волна 9: тинт 0xb09040, награды по шпиону S.gold: round(190×1.5)=285 (волна 8) и round(215×1.5)=323 (волна 9) — по ОДНОМУ разу, best 9; G8 панель (клик #recBtn): сезон «Дань глубин», best 9, сервер {Торик Кремень,9} в топе, закрытие кнопкой; G9 стела: сезон + лучший + летопись сервера; G10 сейв/лоад 1:1 (gold/best, сезон после reload = реальная неделя — G.seasonForced обнулился, стела/портал/паладин); G11 чистый reload (1 canvas, 0 ошибок)
+- Регрессии: pw_v20/pw_v21/pw_v22/pw_v23 GREEN — в каждый добавлен forceSeason(-1) после G1 (нейтральный сезон: старые ассерты статов не зависят от недели — иначе «Костяная стужа»/«Мора»/«Ярость толпы» ломали бы их в другие недели)
+- Уроки: (1) mesh.children=[ring,rig] после makeUnit — тело это u.rig.children[0], а НЕ mesh.children[0] (кольцо фракции; E2E-тинт поймал перекраску кольца 0xA04A3A/0xD8B45A); (2) delta золота глубинных волн недетерминирован: awardXP v2.2 конвертирует избыток опыта в золото НАПРЯМУЮ (S.gold+=⌈n×героев/10⌉) + лут элиты ×2 + конверсия реликвий +25 — ассерты наград только через шпиона S.gold (Object.defineProperty, точные опы 285/323); (3) вайп волны N arm-ит таймер N+1 — после последней волны гасить цепочку arenaSetWave(0), иначе волна N+2 спавнится во время DOM-гейтов и doSave отказывает («идёт бой»); (4) innerText панов отдаёт h3 ВЕРХНИМ регистром (CSS text-transform) — сравнивать в lowercase; (5) recordsOnClose без биндинга владельца — кнопка «Закрыть» мёртвая (noop из noBinds) — биндинг в season.ts
+- Гейты статические: tsc 0; ESLint 0/0; NO CYCLES; 0 any в коде; модули ≤400 (engine 363, arena 286, menus 200, season 94, store 166)
+- README: шапка v2.4 + зачёркнутая строка v2.4 + идеи v2.5 (глубинные благословения, сезонные составы, итог сезона) + T в «Управление» + season.ts в структуре; layout.tsx метаданные v2.4
+- Скриншоты: upload/e2e/v24_season_blood_w6.jpg, v24_records_panel.jpg
+
+Stage Summary:
+- v2.4 «Сезоны глубины» готова: арена живёт неделю за неделей — пять ротационных аффиксов меняют баланс глубин, тени принимают облик сезона, вся летопись (сезон/рекорд/журнал/серверный топ) — в HUD-панели по T
+- Сейв v2 без изменения формата; статические гейты и E2E (v24 ×2 + регрессии v20–v23) зелёные
+- Далее: коммит + tag v2.4 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена
+
+---
+Task ID: 20 (push)
+Agent: main (Z.ai)
+Task: пуш v2.4 на GitHub
+
+Work Log:
+- Коммит f1ce375 + tag v2.4 → origin: main 6ffcc9f..f1ce375, тег v2.4 создан (подтверждено выводом push)
+- remote URL очищен от токена (rg ghp_ .git/config — пусто)
+
+Stage Summary:
+- v2.4 «Сезоны глубины» на GitHub (main + tag); рабочее дерево чистое
+- Напоминание пользователю: отозвать токен ghp_… на GitHub (Settings → Developer settings → Tokens) — токен давно светился в чате
