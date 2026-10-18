@@ -451,3 +451,29 @@ Work Log:
 Stage Summary:
 - v2.2 «Печать глубин» на GitHub (main + tag); рабочее дерево чистое
 - Напоминание пользователю: отозвать токен ghp_… на GitHub (Settings → Developer settings → Tokens) — токен давно светился в чате
+
+---
+Task ID: 19
+Agent: main (Z.ai)
+Task: v2.3 «Тень отряда» — зеркальная волна-босс арены, апгрейд реликвий у призрака, серверный лидерборд глубины (идеи roadmap v2.3 из README)
+
+Work Log:
+- Верификация состояния: теги v2.0–v2.2 в репо (сводка прошлой сессии была устаревшей — v2.1/v2.2 уже выпущены), дерево чистое; roadmap предписывает v2.3: тень отряда / апгрейд реликвий / серверный лидерборд
+- Prisma: модель Score (id/name/best/when BigInt/updatedAt) + db push + generate; API src/app/api/scores/route.ts — GET топ-10 (best desc, when asc), POST {name≤24, best 1..999} с валидацией (плохой payload → 400)
+- Клиент: src/game/save/leaderboard.ts (postScore/topScores, no-throw, импортирует только типы — циклов нет)
+- Арена (interact/arena.ts 223→272): mirrorGroup(w) — зеркальные копии живых героев (КД/оружие/характеристики/экипировочные бонусы уже в полях героя, тёмный тинт 0x23232e, keepDist по оружию, xp 150, features «Отражение из глубин»); endlessBoost(u,w,noPrefix) — тени без приставки «Глубинный»; spawnWave маршрутизирует k%10===0 → ТЕНЬ ОТРЯДА (banner+log+mirrorGroup), else обычный рецепт; чемпион — гвард (w−WAVES)%10!==0 && %5===0 (на k%10 вместо него зеркало); recordBest(w) — S.arenaBest при улучшении + void postScore(captainName(), w); showRecords — журнал + async topScores → «Летопись Глубин (сервер)» топ-5 (no-throw)
+- Апгрейд реликвий: S.relicUp:string[] (state.ts init + resetState), GameState/SaveFlags.relicUp? (types.ts), snapshot пишет/читает (пустой не пишем); gear.ts — RELIC_BASE/RELIC_BOOST + relicBoost(id), eq/uneq трёх реликвий читают уровень (Сердце +10→+18 HP, Осколок +1→+2 атака, Печать +2→+3 КД); dialog.ts — RELIC_UP {p,nd}, relicUpgraded/upgradeRelic (покупка → только из сумки → не усилена → золото; GEAR.d мутируется на усиленное описание), ghost-диалог: 3 опции [Улучшение] show=owned&&!upgraded
+- engine.ts: __bg3 += arenaSetWave (прыжок глубины для E2E), upgradeRelic; import upgradeRelic; types.ts Bg3Debug синхронно; citadel.ts — talkDesc стелы упоминает летопись
+- E2E pw_v23.cjs 11 гейтов: G1 boot; G2 постгейм (стела/призрак/3 героя); G3a прыжок arenaSetWave(14) — k=9 без зеркала/чемпиона; G3b волна 15 = ТЕНЬ ОТРЯДА: 3 тени «Тень: <имя>», hp=round(maxhp×2.2) (66/44/68), ac=hero+2 (19/14/18), кость+5, xp 330, чемпиона нет; G4 добито → волна 16 обычная, best 15, GET /api/scores содержит {Торик Кремень,15}; G5/G6 покупка Сердца → DOM-диалог: [Улучшение] только для купленного, клик по кнопке → gold 1700, relicUp=[abyss_heart]; G7 эффекты: HP +18/снятие 0, КД +3/0, атака 1→2, отказы (уже усилена/надета — золото не списано), gold 700→0, relicUp ×3; G8 API: POST «»/0 → 400, топ отсортирован; G9 стела: «Лучший заход: волна 16» + «Летопись Глубин (сервер)» + строки волны; G10 сейв/лоад 1:1 (relicUp/gold/bag/best 16, надевание Сердца после лоада +18); G11 чистый reload (1 canvas, 0 ошибок после фильтра наших 400)
+- Инфра E2E: dev-сервер в этой среде умирает между вызовами шелла — scripts/devsrv.cjs (spawn detached + process group kill) + scripts/run_pw.cjs (сервер живёт внутри прогона); npm run db:generate требует рестарта dev-сервера (старый PrismaClient без модели Score — TypeError findMany)
+- Уроки: (1) фоновые процессы не переживают вызов Bash — раннер поднимает сервер сам; (2) MultiEdit в этой сборке НЕ атомарен: при failed old_str предыдущие правки уже применены — после падения сверять файл; (3) вайп волны N запускает таймер волны N+1 (1700мс): диалоги/обмены делать после ухода с карты (срыв в журнал — recordRun(N)); (4) giveGear внутри гейта меняет сумку (замена талисмана возвращает старый) — снапшотить состояние до действия; (5) негативные API-тесты оставляют 400 в консоли — фильтровать в гейте чистого reload
+- Регрессии: pw_v20 GREEN, pw_v21 GREEN, pw_v22 GREEN (диалог призрака легитимно показывает [Улучшение] — .some()-ассерты проходят); pw_v23 GREEN ×2 (фиксы: чтение relicUp вместо случайного вызова upgradeRelic в G5; уход с карты перед обменом; pre-снап сумки в G10)
+- Гейты статические: tsc 0; ESLint 0/0; NO CYCLES; 2 совпадения \bany\b — только старые комментарии-заголовки; модули ≤400 (engine 359, dialog 339, arena 272, gear 168, leaderboard 25, scores 36)
+- README: шапка v2.3 + зачёркнута строка v2.3 + идеи v2.4 (сезонные модификаторы глубины, косметика тени, таблица рекордов в HUD); Технологии + /api/scores; layout.tsx title/description/keywords v2.3
+- Скриншоты: upload/e2e/v23_mirror_w15.jpg, v23_ghost_upgrade.jpg
+
+Stage Summary:
+- v2.3 «Тень отряда» готова: зеркальный волна-босс (состав = отряд, честное отражение экипировки), апгрейд реликвий замыкает экономию глубины на призраке, летопись Глубин выводит рекорды на сервер
+- Сейв v2 без изменения формата (опциональное relicUp); API /api/scores + модель Score
+- E2E: pw_v23 11/11 GREEN ×2; регрессии v20/v21/v22 GREEN; статические гейты зелёные
+- Далее: коммит + tag v2.3 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена

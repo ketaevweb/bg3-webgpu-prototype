@@ -9,6 +9,10 @@
    приводит Чемпиона бездны (элита). Рекорд волн (S.arenaBest)
    попадает в сейв (опциональное поле v2) и открывает бесконечный
    режим сразу при заходе на карту (citadel.ts читает S.arenaBest).
+   v2.3: каждая 10-я глубинная волна (k%10===0) — ТЕНЬ ОТРЯДА: глубины
+   соткают зеркальные копии живых героев (КД/оружие/характеристики оригинала,
+   тёмный тинт, усиление глубины). Рекорд (S.arenaBest) при каждом улучшении
+   уходит в серверную летопись Глубин (/api/scores), стела читает топ-10.
    Циклы: прогресс зовёт нас через bus.arenaNext (arena→turns→progression),
    прямых обратных импортов из systems в interact/arena нет. */
 import { d } from '../rng';
@@ -23,7 +27,8 @@ import { healUnit } from '../systems/vitals';
 import { gainGold } from './quests';
 import { freeSpotNear } from '../world/grid';
 import { makeDrowned, makeSkeleton, makeSkeletonKnight, makeCultist, makeKnight, makeAdept, makeOgre, applyElite } from '../entities/roster';
-import { aliveHeroes } from '../entities/units';
+import { makeUnit, aliveHeroes } from '../entities/units';
+import { postScore, topScores } from '../save/leaderboard';/* v2.3: серверная летопись глубины */
 import type { Unit } from '../types';
 
 export const WAVES=5;/* волн в испытании; глубже — бесконечный режим */
@@ -81,8 +86,9 @@ export function arenaEndless(){
 /* глубина k=w−5 (балансовая таблица v2.1):
    hp ×(1+0.12k) · кость урона +⌊k/2⌋ · КД +min(⌊k/4⌋,2) · имя «Глубинный».
    v2.2: xp ×(1+0.12k) — глубина оплачивается опытом (сверх предела — золотом).
-   weapon клонируем: шаблоны ростера разделяют объект (makeUnit не копирует). */
-function endlessBoost(u:Unit,w:number){
+   weapon клонируем: шаблоны ростера разделяют объект (makeUnit не копирует).
+   v2.3: noPrefix — тени отряда не получают приставку «Глубинный». */
+function endlessBoost(u:Unit,w:number,noPrefix=false){
   const k=w-WAVES;
   u.weapon={...u.weapon,dice:[...u.weapon.dice]};
   u.weapon.dice[1]+=Math.floor(k/2);
@@ -91,9 +97,30 @@ function endlessBoost(u:Unit,w:number){
   u.maxhp=Math.round(u.maxhp*mult);
   u.hp=u.maxhp;
   u.xp=Math.round((u.xp||0)*mult);/* v2.2: калибровка XP глубинных волн */
-  u.name='Глубинный '+u.name;
+  if(!noPrefix)u.name='Глубинный '+u.name;
   u.depth=k;
   return u;
+}
+/* ---- v2.3: ТЕНЬ ОТРЯДА — зеркальная волна-босс. Состав = живые герои:
+   каждый теневой двойник повторяет характеристики, КД и оружие оригинала
+   (снаряжение уже учтено в полях героя), тёмный тинт, ИИ рядового врага. ---- */
+function mirrorGroup(w:number):Unit[]{
+  const out:Unit[]=[];
+  for(const h of aliveHeroes()){
+    const p=spot(out.length);
+    out.push(makeUnit({
+      name:'Тень: '+h.name,short:'Тень',side:'goblin',
+      cls:h.cls,clsName:'Тень',x:p.x,z:p.z,
+      str:h.str,dex:h.dex,con:h.con,int:h.int,wis:h.wis,cha:h.cha,
+      hp:h.maxhp,maxhp:h.maxhp,ac:h.ac,speed:h.speed,xp:150,
+      color:0x23232e,skin:0x15151d,
+      weapon:{...h.weapon,dice:[...h.weapon.dice]},
+      dagger:h.dagger?{...h.dagger,dice:[...h.dagger.dice]}:null,
+      keepDist:!h.weapon.melee,features:['Отражение из глубин: повторяет снаряжение и закалку оригинала'],
+    }));
+  }
+  for(const u of out)endlessBoost(u,w,true);
+  return out;
 }
 /* состав глубинных волн: цикл рецептов по (w−6)%5, каждый 5-й глубинной — чемпион */
 function endlessGroup(w:number):Unit[]{
@@ -108,7 +135,7 @@ function endlessGroup(w:number):Unit[]{
   else if(r===3){push(makeOgre);push(makeKnight);push(makeAdept);}
   else {push(makeSkeleton);push(makeSkeleton);push(deep);push(makeDrowned);}
   for(const u of out)endlessBoost(u,w);
-  if((w-WAVES)%5===0){/* чемпион бездны ведёт волну */
+  if((w-WAVES)%10!==0&&(w-WAVES)%5===0){/* чемпион бездны ведёт волну (v2.3: на k%10===0 вместо него — Тень отряда, маршрутизирует spawnWave) */
     const c=out[0];
     applyElite(c);
     c.champ=true;/* v2.1: подкрепление на полсмерти */
@@ -126,6 +153,10 @@ function spawnWave(){
     const names=w===1?'утопленники':(w===2?'кости':(w===3?'песнь глубин':(w===4?'стена щитов':'гнев бездны')));
     log('Волна '+w+' ('+names+'): враги поднимаются во внешнем дворе!','g-enemy');
     startCombat(waveGroup(w));
+  }else if((w-WAVES)%10===0){/* v2.3: каждая 10-я глубинная волна — зеркальный босс */
+    bigBanner('ТЕНЬ ОТРЯДА');
+    log('Глубины соткали ваше отражение: ТЕНЬ ОТРЯДА шагает из портала — те же доспехи, то же оружие!','g-enemy');
+    startCombat(mirrorGroup(w));
   }else{
     bigBanner('БЕСКОНЕЧНОЕ ИСПЫТАНИЕ — ВОЛНА '+w);
     log('Волна '+w+' ('+ENDLESS_NAMES[(w-6)%ENDLESS_NAMES.length]+'): глубины выставляют новую волну!','g-enemy');
@@ -137,7 +168,7 @@ function spawnWave(){
 export function arenaNext(){
   const w=G.arenaWave;
   if(w<1)return;
-  S.arenaBest=Math.max(S.arenaBest||0,w);
+  recordBest(w);/* v2.3: рекорд + серверная летопись */
   const g=40+15*w+(w>WAVES?10*(w-WAVES):0);/* v2.0: глубина — прибавка к награде */
   gainGold(g);
   log('Волна '+w+' отбита: +'+g+' золота, отряд перевязывает раны.','g-heal');
@@ -158,7 +189,7 @@ export function arenaNext(){
 }
 function arenaComplete(){
   G.arenaWave=0;
-  S.arenaBest=Math.max(S.arenaBest||0,WAVES);
+  recordBest(WAVES);
   const bonus=250+d(100);
   gainGold(bonus);
   bigBanner('ИСПЫТАНИЕ ПРОЙДЕНО!');
@@ -177,17 +208,35 @@ function recordRun(w:number){
   S.arenaLog=(S.arenaLog||[]).slice(-7);
   S.arenaLog.push({w,when:Date.now()});
 }
-export function showRecords(){/* стела у портала — читает журнал */
+/* ---- v2.3: рекорд + серверная летопись — при каждом улучшении постим в /api/scores ---- */
+function captainName():string{return aliveHeroes()[0]?.name||'Дозор';}
+function recordBest(w:number){
+  const prev=S.arenaBest||0;
+  if(w<=prev){S.arenaBest=prev;return;}
+  S.arenaBest=w;
+  void postScore(captainName(),w);/* no-throw: сервер недоступен — рекорд остаётся локальным */
+}
+export function showRecords(){/* стела у портала — читает журнал и серверную летопись */
   bigBanner('СТЕЛА РЕКОРДОВ');
   const lg=S.arenaLog||[];
   log('Лучший заход: волна '+(S.arenaBest||0)+'.','g-sys');
-  if(!lg.length){log('Стела пока пуста — ни один заход не завершён.','g-sys');return;}
-  const last=lg.slice(-5).reverse();
-  for(const r of last){
-    const dt=new Date(r.when).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-    log('Волна '+r.w+' — '+dt,'g-sys');
+  if(!lg.length){log('Стела пока пуста — ни один заход не завершён.','g-sys');}else{
+    const last=lg.slice(-5).reverse();
+    for(const r of last){
+      const dt=new Date(r.when).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      log('Волна '+r.w+' — '+dt,'g-sys');
+    }
+    if(lg.length>5)log('…и ещё '+(lg.length-5)+' более ранних заходов.','g-sys');
   }
-  if(lg.length>5)log('…и ещё '+(lg.length-5)+' более ранних заходов.','g-sys');
+  /* v2.3: летопись Глубин — топ-10 серверного лидерборда (no-throw) */
+  const me=captainName();
+  void topScores().then(rows=>{
+    if(!rows.length){log('Летопись Глубин молчит: сервер не ответил — или рекордов ещё нет.','g-sys');return;}
+    log('Летопись Глубин (сервер):','g-sys');
+    rows.slice(0,5).forEach((r,i)=>{
+      log((i+1)+'. '+r.name+' — волна '+r.best+(r.name===me?' — это вы!':''),'g-sys');
+    });
+  });
 }
 
 /* ---- v2.1: разбор мира сорвал заход (уход с карты/загрузка сейва) — запись в журнал ---- */

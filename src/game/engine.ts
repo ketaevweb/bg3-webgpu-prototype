@@ -27,7 +27,7 @@ import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
 import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
 import { awardXP } from './systems/progression';/* v2.2: калибровка опыта (E2E) */
-import { buyRelic } from './interact/dialog';/* v2.2: обмен реликвий (E2E) */
+import { buyRelic, upgradeRelic } from './interact/dialog';/* v2.2: обмен реликвий; v2.3: апгрейд (E2E) */
 import { makeMalveh, makeGarrum, makeGrat } from './entities/roster';/* v2.2: пробы аур боссов (E2E) */
 import { toggleMinimap, refreshMinimap } from './ui/minimap';/* v1.9: миникарта */
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
@@ -338,6 +338,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   buyRelic:(id)=>buyRelic(id),/* v2.2: обмен реликвий у стелы (E2E) */
   awardXP:(n)=>awardXP(n),/* v2.2: калибровка опыта (E2E) */
   arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
+  arenaSetWave:(n)=>{G.arenaWave=n;},/* v2.3: прыжок к глубинной волне (E2E) */
+  upgradeRelic:(id)=>upgradeRelic(id),/* v2.3: апгрейд реликвий (E2E) */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };
 return function dispose(){

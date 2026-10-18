@@ -40,3 +40,14 @@ model Tablet {
   when      BigInt
   updatedAt DateTime @updatedAt
 }
+
+/* v2.3 «Тень отряда»: серверный лидерборд глубины — рекорды арены
+   («Бесконечное испытание»). best — волна (глубина) захода;
+   when — Date.now() в миллисекундах (BigInt, как у Tablet). */
+model Score {
+  id        Int      @id @default(autoincrement())
+  name      String
+  best      Int
+  when      BigInt
+  updatedAt DateTime @updatedAt
+}

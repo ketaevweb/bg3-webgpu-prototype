@@ -20,7 +20,7 @@ import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
 import { joinOlkha } from '../interact/swamp';/* v1.5: друид болот (свамп не импортирует dialog — цикла нет) */
 import { joinHaldir } from './citadel';/* v1.9: капитан Дозора (цитадель не импортирует dialog — цикла нет) */
 import { openShop } from '../interact/shop';
-import { addToBag, GEAR } from '../systems/gear';/* v2.2: обмен реликвий у стелы */
+import { addToBag, GEAR } from '../systems/gear';/* v2.2: обмен реликвий у стелы; v2.3: апгрейд */
 import { tween } from '../fx/tweens';
 import type { DlgFn, DlgOpt, Unit } from '../types';
 
@@ -42,6 +42,33 @@ export function buyRelic(id:string):boolean{
   addToBag(id);
   sfx.gold();
   log('Призрак коменданта отдаёт «'+GEAR[id].n+'»: −'+p+' золота (осталось '+S.gold+').','g-heal');
+  return true;
+}
+
+/* ================= v2.3: АПГРЕЙД РЕЛИКВИЙ У ПРИЗРАКА =================
+   Призрак усиливает уже купленную реликвию за золото (по одному разу
+   на игру; состояние — S.relicUp, сейв v2 — опциональное поле).
+   Усиливается только реликвия, лежащая в СУМКЕ: эффект eq/uneq
+   (gear.ts, relicBoost) читает S.relicUp в момент надевания — так
+   бонус применяется симметрично без пересчёта надетого. */
+export const RELIC_UP:Record<string,{p:number;nd:string}>={
+  abyss_heart:{p:500,nd:'Талисман (усилен): +18 к макс. хитам. Сердце бездны бьётся в полный голос — приливы отвечают.'},
+  portal_shard:{p:700,nd:'Талисман (усилен): +2 к броскам атаки. Глубины смотрят в прицел вместе с вами — обоими глазами.'},
+  deep_seal:{p:900,nd:'Талисман (усилен): +3 КД. Печать коменданта признана Глубинами дважды — и это не предел.'},
+};
+export function relicUpgraded(id:string):boolean{return Array.isArray(S.relicUp)&&S.relicUp.includes(id);}
+export function upgradeRelic(id:string):boolean{
+  const up=RELIC_UP[id];
+  if(!up||!GEAR[id])return false;
+  if(!relicOwned(id)){log('Сначала выкупите «'+GEAR[id].n+'» — усиление идёт после покупки.','g-sys');return false;}
+  if(relicUpgraded(id)){log('«'+GEAR[id].n+'» уже усилена — глубже Глубины не предлагают.','g-sys');return false;}
+  if(!S.bag.includes(id)){log('Снимите «'+GEAR[id].n+'» — призрак усиливает реликвию, лежащую в сумке.','g-sys');return false;}
+  if(S.gold<up.p){log('Не хватает золота на усиление: нужно '+up.p+' (в казне '+S.gold+').','g-enemy');return false;}
+  S.gold-=up.p;
+  S.relicUp=[...(S.relicUp||[]),id];
+  GEAR[id].d=up.nd;/* описание в панели снаряжения обновляется следом */
+  sfx.gold();
+  log('Призрак коменданта усиливает «'+GEAR[id].n+'»: −'+up.p+' золота (осталось '+S.gold+').','g-heal');
   return true;
 }
 
@@ -243,13 +270,16 @@ export const DLGS:Record<string,DlgFn>={
       opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinHaldir();}},
         {t:'«Испытание — позже. Держись.»',end:true}]};
   },
-  ghost(id){/* v2.2: призрак коменданта у стелы — обмен реликвий Глубин */
+  ghost(id){/* v2.2: призрак коменданта у стелы — обмен реликвий Глубин; v2.3: апгрейд */
     if(id==='start')return{name:'Призрак коменданта',
       text:'«Казна Дозора против казны Глубин, капитан. У стелы платят золотом — и глубины платят тем же. В твоей казне '+S.gold+' монет; камни портала держат мои реликвии. Бери, пока я не развеялся».',
       opts:[
         {t:'[Реликвия] Сердце бездны — 400 зол. (талисман: +10 макс. HP)',show:()=>!relicOwned('abyss_heart'),fn:()=>{buyRelic('abyss_heart');showNode('start');}},
         {t:'[Реликвия] Осколок портала — 500 зол. (талисман: +1 к атаке)',show:()=>!relicOwned('portal_shard'),fn:()=>{buyRelic('portal_shard');showNode('start');}},
         {t:'[Реликвия] Печать глубин — 600 зол. (талисман: +2 КД)',show:()=>!relicOwned('deep_seal'),fn:()=>{buyRelic('deep_seal');showNode('start');}},
+        {t:'[Улучшение] Сердце бездны — 500 зол. (+10 → +18 макс. HP)',show:()=>relicOwned('abyss_heart')&&!relicUpgraded('abyss_heart'),fn:()=>{upgradeRelic('abyss_heart');showNode('start');}},
+        {t:'[Улучшение] Осколок портала — 700 зол. (+1 → +2 к атаке)',show:()=>relicOwned('portal_shard')&&!relicUpgraded('portal_shard'),fn:()=>{upgradeRelic('portal_shard');showNode('start');}},
+        {t:'[Улучшение] Печать глубин — 900 зол. (+2 → +3 КД)',show:()=>relicOwned('deep_seal')&&!relicUpgraded('deep_seal'),fn:()=>{upgradeRelic('deep_seal');showNode('start');}},
         {t:'[Уйти] Стела ждёт — волны не ждут.',end:true},
       ]};
     return null;

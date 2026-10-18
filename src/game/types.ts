@@ -111,6 +111,7 @@ export interface GameState{
   citadelDone:boolean;campaignDone:boolean;citadelChest:boolean;/* v1.8: финал кампании */
   haldirJoined:boolean;arenaBest:number;/* v1.9: постгейм — паладин и рекорд арены */
   arenaLog:{w:number;when:number}[];/* v2.1: журнал рекордов арены — завершённые/сорванные заходы */
+  relicUp:string[];/* v2.3: улучшенные реликвии (id из GEAR) — эффект eq/uneq читает */
   patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];citadelGroup:Unit[];/* v1.8: +гарнизон цитадели */
   /* v1.6: сумка отряда — ненадетые предметы снаряжения (id GEAR) */
   bag:string[];
@@ -146,6 +147,8 @@ export interface SaveFlags{
   haldirJoined?:boolean;arenaBest?:number;
   /* v2.1: журнал рекордов арены — опционально, сейв v2 совместим */
   arenaLog?:{w:number;when:number}[];
+  /* v2.3: улучшенные реликвии — опционально, сейв v2 совместим */
+  relicUp?:string[];
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -273,6 +276,8 @@ export interface Bg3Debug{
   hurt:(u:Unit,dmg:number)=>void;/* v2.1: E2E-урон через damageUnit (триггерит подкрепление чемпиона) */
   aura:(u:Unit)=>number;/* v2.1: E2E-инспектор ауры бездны */
   arenaState:()=>{wave:number;best:number;endless:boolean};
+  arenaSetWave:(n:number)=>void;/* v2.3: прыжок к глубинной волне (E2E) */
+  upgradeRelic:(id:string)=>boolean;/* v2.3: апгрейд реликвий у призрака (E2E) */
   spawnBoss:(k:'malveh'|'garrum'|'grat',x:number,z:number)=>unknown;/* v2.2: пробы аур боссов (E2E) */
   buyRelic:(id:string)=>boolean;/* v2.2: обмен реликвий у стелы (E2E) */
   awardXP:(n:number)=>void;/* v2.2: калибровка опыта (E2E) */

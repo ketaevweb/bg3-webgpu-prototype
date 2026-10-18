@@ -21,7 +21,7 @@ export const S:GameState={gold:60,discount:false,patrolDone:false,campDone:false
   swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
   giantsDone:false,giantsChest:false,giantsGroup:[],bag:[],
   citadelDone:false,campaignDone:false,citadelChest:false,citadelGroup:[],
-  haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null};/* v0.8+v1.1+v1.2+v1.5+v1.6+v1.8+v1.9+v2.1 */
+  haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null,relicUp:[],};/* v0.8+v1.1+v1.2+v1.5+v1.6+v1.8+v1.9+v2.1+v2.3 */
 
 /* ---- runtime-контекст (G) ---- */
 export const G:{
@@ -119,7 +119,7 @@ export function resetState(){
     swampDone:false,olkhaJoined:false,swampGroup:[],olkhaMesh:null,
     giantsDone:false,giantsChest:false,giantsGroup:[],bag:[],
     citadelDone:false,campaignDone:false,citadelChest:false,citadelGroup:[],
-    haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null});
+    haldirJoined:false,arenaBest:0,arenaLog:[],haldirMesh:null,relicUp:[]});
   Object.assign(G,{busy:false,busyCount:0,combatOn:false,phase:'idle' as Phase,targeting:null,
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,

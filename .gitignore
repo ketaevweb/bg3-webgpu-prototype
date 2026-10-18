@@ -5,6 +5,7 @@ node_modules/
 .next/
 *.tsbuildinfo
 dev.log
+devsrv.log
 db/
 .zscripts/
 tool-results/

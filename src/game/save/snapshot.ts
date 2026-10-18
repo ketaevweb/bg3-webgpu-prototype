@@ -35,6 +35,7 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       citadelDone:!!S.citadelDone,campaignDone:!!S.campaignDone,citadelChest:!!S.citadelChest,/* v1.8 */
       haldirJoined:!!S.haldirJoined,arenaBest:S.arenaBest||0,/* v1.9: опциональные поля — v2 совместим */
       ...(S.arenaLog&&S.arenaLog.length?{arenaLog:S.arenaLog.slice(0,8)}:{}),/* v2.1: журнал рекордов — пустой не пишем */
+      ...(S.relicUp&&S.relicUp.length?{relicUp:[...S.relicUp]}:{}),/* v2.3: улучшенные реликвии — пустой не пишем */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -67,6 +68,7 @@ export function applyGame(sv:SaveData|null){
   S.citadelDone=!!fl.citadelDone;S.campaignDone=!!fl.campaignDone;S.citadelChest=!!fl.citadelChest;/* v1.8 */
   S.haldirJoined=!!fl.haldirJoined;S.arenaBest=typeof fl.arenaBest==='number'?fl.arenaBest:0;/* v1.9: в старых сейвах полей нет — дефолты */
   S.arenaLog=Array.isArray(fl.arenaLog)?fl.arenaLog.filter(r=>r&&typeof r.w==='number'&&typeof r.when==='number').slice(0,8):[];/* v2.1 */
+  S.relicUp=Array.isArray(fl.relicUp)?fl.relicUp.filter((id:unknown)=>typeof id==='string'):[];/* v2.3 */
   S.bag=Array.isArray(sv.bag)?sv.bag.filter((id:unknown)=>typeof id==='string'):[];/* v1.6 */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
