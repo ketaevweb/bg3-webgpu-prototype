@@ -35,6 +35,7 @@ export const G:{
   order:Unit[];
   arenaWave:number;/* v1.9: номер волны арены (0 — выключена) */
   arenaRun:number;/* v2.1: счётчик заходов — старые таймеры волн умирают при новом заходе */
+  seasonForced:number|null;/* v2.4: форс сезона глубины (null — реальная неделя, −1 — вне сезона) */
   bloomOn:boolean;fpsLimit:number;frameAcc:number;
 }={
   busy:false,busyCount:0,combatOn:false,phase:'idle',targeting:null,
@@ -46,6 +47,7 @@ export const G:{
   order:[],
   arenaWave:0,
   arenaRun:0,
+  seasonForced:null,
   bloomOn:true,fpsLimit:0,frameAcc:0,
 };
 export type GameCtx=typeof G;
@@ -124,7 +126,7 @@ export function resetState(){
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,
     mapId:'forest' as MapId,
-    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0,arenaRun:0});
+    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0,arenaRun:0,seasonForced:null});
   units.length=0;barrels.length=0;fires.clear();
   pick.tile=null;pick.ent=null;pick.inter=null;
   solid.clear();grass.clear();

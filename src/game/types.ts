@@ -278,6 +278,9 @@ export interface Bg3Debug{
   arenaState:()=>{wave:number;best:number;endless:boolean};
   arenaSetWave:(n:number)=>void;/* v2.3: прыжок к глубинной волне (E2E) */
   upgradeRelic:(id:string)=>boolean;/* v2.3: апгрейд реликвий у призрака (E2E) */
+  season:()=>{idx:number;name:string;desc:string;tint:number};/* v2.4: текущий сезон глубины */
+  forceSeason:(i:number|null)=>void;/* v2.4: форс сезона (−1 — вне сезона, null — реальная неделя) */
+  records:()=>unknown;/* v2.4: снимок панели «Летопись Глубин» */
   spawnBoss:(k:'malveh'|'garrum'|'grat',x:number,z:number)=>unknown;/* v2.2: пробы аур боссов (E2E) */
   buyRelic:(id:string)=>boolean;/* v2.2: обмен реликвий у стелы (E2E) */
   awardXP:(n:number)=>void;/* v2.2: калибровка опыта (E2E) */

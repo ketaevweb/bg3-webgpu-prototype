@@ -116,6 +116,35 @@ export function BagPanel(){
   );
 }
 
+/* ---- v2.4: панель «Летопись Глубин» (T / 🏆) — сезон, рекорд, журнал, серверный топ ---- */
+export function RecordsPanel(){
+  const open=useUi(s=>s.recordsOpen);
+  const rec=useUi(s=>s.records);
+  const onClose=useUi(s=>s.recordsOnClose);
+  if(!open||!rec)return null;
+  return (
+    <div id="records" className="panel" style={{display:'block'}}>
+      <h3>Летопись Глубин</h3>
+      {rec.season
+        ?<div className="rseason"><div className="rsn">Сезон глубины: «{rec.season.name}»</div><div className="rsd">{rec.season.desc} · смена — на следующей неделе</div></div>
+        :<div className="rseason"><div className="rsd">Портал вне сезонного круга.</div></div>}
+      <div className="rhead">Лучший заход</div>
+      <div className="rrow"><span>Волна {rec.best}</span><span>рекорд отряда</span></div>
+      <div className="rhead">Журнал заходов (последние 8)</div>
+      {rec.journal.length
+        ?rec.journal.map((j,i)=><div key={'j'+i} className="rrow"><span>Волна {j.w}</span><span>{j.when}</span></div>)
+        :<div className="rsd">Журнал пуст — заходы пишутся при завершении испытания или срыве.</div>}
+      <div className="rhead">Летопись Глубин · сервер, топ-10</div>
+      {rec.server===null
+        ?<div className="rsd">…читаю летопись сервера…</div>
+        :(rec.server.length
+          ?rec.server.map((r,i)=><div key={'s'+i} className="rrow"><span>{(i+1)+'. '+r.n}</span><span>волна {r.best}</span></div>)
+          :<div className="rsd">Сервер молчит — или рекордов ещё нет.</div>)}
+      <button style={{marginTop:'6px'}} onClick={onClose}>Закрыть (T)</button>
+    </div>
+  );
+}
+
 /* ---- экран победы/поражения ---- */
 export function EndScreen(){
   const end=useUi(s=>s.end);

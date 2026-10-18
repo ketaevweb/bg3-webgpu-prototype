@@ -53,6 +53,14 @@ export interface TutView{title:string;text:string;i:number;n:number;onSkip:()=>v
 export interface BagItemView{n:string;d:string;slot:string;equip:()=>void}
 /* v1.9: снимок миникарты (рисует React-canvas, данные собирает ui/minimap.ts) */
 export interface MiniMapView{ver:number;grid:number;solid:number[];dots:number[];cur:{x:number;z:number}|null}
+/* v2.4: панель «Летопись Глубин» (T/🏆) — сезон, рекорд, журнал, серверный топ */
+export interface SeasonView{name:string;desc:string;idx:number}
+export interface RecordsView{
+  season:SeasonView|null;
+  best:number;
+  journal:{w:number;when:string}[];
+  server:{n:string;best:number}[]|null;/* null — сервер ещё читается */
+}
 export interface BagSlotView{label:string;item:string|null;remove:()=>void}
 export interface BagHeroView{name:string;clsName:string;slots:BagSlotView[]}
 export interface GfxSegView{name:string;active:boolean;pick:()=>void}
@@ -66,6 +74,7 @@ export interface SysView{
   onSnd:()=>void;onGfx:()=>void;onSaves:()=>void;onLoadFromEnd:()=>void;
   onBag:()=>void;/* v1.6: панель снаряжения */
   onMm:()=>void;/* v1.9: миникарта (M) */
+  onRecords:()=>void;/* v2.4: летопись Глубин (T) */
 }
 
 export interface UiState{
@@ -85,12 +94,14 @@ export interface UiState{
   savesOpen:boolean;savesCur:string;savesSlots:SlotRowView[];
   tut:TutView|null;/* v1.4: видима, пока обучение не пройдено/не пропущено */
   minimapOpen:boolean;minimap:MiniMapView|null;/* v1.9: миникарта (M) */
+  recordsOpen:boolean;records:RecordsView|null;/* v2.4: летопись Глубин (T) */
   importInput:HTMLInputElement|null;/* живой ref скрытого input#importFile (клик из doImport — внутри пользовательского жеста) */
   /* колбэки-биндинги (владельцы — движковые модули) */
   sys:SysView;
   shopOnClose:()=>void;journalOnClose:()=>void;
   gfxOnClose:()=>void;savesOnClose:()=>void;choiceOnClose:()=>void;
   bagOnClose:()=>void;/* v1.6 */
+  recordsOnClose:()=>void;/* v2.4 */
   onImportFile:(e:{target:HTMLInputElement})=>void;
 }
 
@@ -111,15 +122,16 @@ const initial={
   savesOpen:false,savesCur:'',savesSlots:[] as SlotRowView[],
   tut:null as TutView|null,
   minimapOpen:false,minimap:null as MiniMapView|null,
+  recordsOpen:false,records:null as RecordsView|null,
   importInput:null as HTMLInputElement|null,
 };
 
 const noop=()=>{};
 const noBinds={
   sys:{
-    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,onMm:noop,
+    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,onMm:noop,onRecords:noop,
   } as SysView,
-  shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,bagOnClose:noop,
+  shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,bagOnClose:noop,recordsOnClose:noop,
   onImportFile:(()=>{}) as (e:{target:HTMLInputElement})=>void,
 };
 
@@ -149,6 +161,6 @@ export function resetUi(){
   uiSet({...initial,
     sys:b.sys,shopOnClose:b.shopOnClose,journalOnClose:b.journalOnClose,
     gfxOnClose:b.gfxOnClose,savesOnClose:b.savesOnClose,choiceOnClose:b.choiceOnClose,
-    bagOnClose:b.bagOnClose,
+    bagOnClose:b.bagOnClose,recordsOnClose:b.recordsOnClose,
     onImportFile:b.onImportFile});
 }

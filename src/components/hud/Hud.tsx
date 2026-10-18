@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 import { useUi } from '@/game/ui/store';
 import { LogPanel, PartyCards, QuestTracker, ActionBar } from './panels';
 import { DialogBox, ShopPanel, JournalPanel, ChoicePanel } from './dialogs';
-import { GfxPanel, SavesPanel, EndScreen, SheetModal, BagPanel } from './menus';
+import { GfxPanel, SavesPanel, EndScreen, SheetModal, BagPanel, RecordsPanel } from './menus';
 
 /* ---- системные кнопки: звук / миникарта / графика / сохранения / снаряжение ---- */
 function SysButtons(){
@@ -19,6 +19,7 @@ function SysButtons(){
     <button id="gfxBtn" title="Настройки графики (G)" onClick={sys.onGfx}>⚙</button>
     <button id="saveBtn" title="Сохранения (K)" onClick={sys.onSaves}>💾</button>
     <button id="bagBtn" title="Снаряжение (I)" onClick={sys.onBag}>🎒</button>
+    <button id="recBtn" title="Летопись Глубин (T)" onClick={sys.onRecords}>🏆</button>
   </>;
 }
 
@@ -157,6 +158,7 @@ export default function Hud(){
     <GfxPanel/>
     <SavesPanel/>
     <BagPanel/>
+    <RecordsPanel/>
     <EndScreen/>
     <SheetModal/>
   </>;

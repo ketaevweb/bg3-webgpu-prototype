@@ -43,6 +43,7 @@ const fail = (msg) => { console.log('FAIL: ' + msg); process.exit(1); };
   }));
   console.log('G1 BOOT:', g1);
   if (!g1.includes('"heroes":2') || !g1.includes('forest')) fail('G1 boot wrong');
+  await page.evaluate(() => window.__bg3.forceSeason(-1));/* v2.4: нейтральный сезон — старые ассерты не зависят от недели */
 
   /* G2: постгейм — цитадель, Хальдир; стела + ПРИЗРАК (обмен) + портал */
   await page.evaluate(() => { window.__bg3.S.citadelDone = true; window.__bg3.S.campaignDone = true; window.__bg3.questDone('giants'); });

@@ -38,6 +38,7 @@ const waitCombat = (page) => page.waitForFunction(() => window.__bg3 && window._
     heroes: window.__bg3.units.filter(u => u.side === 'hero').length,
     mapId: window.__bg3.turn().mapId,
   })));
+  await page.evaluate(() => window.__bg3.forceSeason(-1));/* v2.4: нейтральный сезон — старые ассерты не зависят от недели */
 
   /* G2: постгейм — цитадель, Хальдир; стела + портал (испытание, best=0) */
   await page.evaluate(() => { window.__bg3.S.citadelDone = true; window.__bg3.S.campaignDone = true; window.__bg3.questDone('giants'); });

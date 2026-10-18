@@ -26,6 +26,7 @@ import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract,
 import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
 import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
+import { seasonState, forceSeason, toggleRecords, closeRecords } from './interact/season';/* v2.4: сезоны глубины + летопись (T) */
 import { awardXP } from './systems/progression';/* v2.2: калибровка опыта (E2E) */
 import { buyRelic, upgradeRelic } from './interact/dialog';/* v2.2: обмен реликвий; v2.3: апгрейд (E2E) */
 import { makeMalveh, makeGarrum, makeGrat } from './entities/roster';/* v2.2: пробы аур боссов (E2E) */
@@ -166,7 +167,7 @@ function bindInput(){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   const onKey=(e:KeyboardEvent)=>{
     sfx.unlock();
-    if(e.key==='Escape'){cancelTargeting();uiSet({sheet:null});closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();}
+    if(e.key==='Escape'){cancelTargeting();uiSet({sheet:null});closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();closeRecords();}/* v2.4: +летопись */
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
       if(G.phase==='explore'&&!G.busy){const it=nearestInteract();if(it)it.fn();}
     }
@@ -175,6 +176,7 @@ function bindInput(){
     if(e.key==='g'||e.key==='G'||e.key==='п'||e.key==='П'){toggleGfx();}/* v1.1 */
     if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){toggleBag();}/* v1.6: снаряжение */
     if(e.key==='m'||e.key==='M'||e.key==='ь'||e.key==='Ь'){toggleMinimap();}/* v1.9: миникарта */
+    if(e.key==='t'||e.key==='T'||e.key==='е'||e.key==='Е'){toggleRecords();}/* v2.4: летопись Глубин */
   };
   addEventListener('keydown',onKey);
   const onResize=()=>{
@@ -279,16 +281,16 @@ let disposed=false;
     uiSet(s=>({sys:{...s.sys,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
     sfx.ui();
   };
-  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap()}}));
-  log('BG3 Web-прототип v1.9 «Слава Дозора»: постгейм после финала — шестой спутник Хальдир (паладин), арена «Испытание Глубин» (пять волн теней павших), миникарта (M) и мотивы карт.','g-sys');
+  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
+  log('BG3 Web-прототип v2.4 «Сезоны глубины»: бесконечная арена под недельными аффиксами — сезон глубины красит тени и меняет баланс (смена — раз в неделю).','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
-  log('ЛКМ — идти отрядом • E — говорить/осматривать • M — миникарта • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
+  log('ЛКМ — идти отрядом • E — говорить/осматривать • M — миникарта • I — снаряжение • T — летопись Глубин • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
-  log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней.','g-sys');
+  log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.9 boot complete');
+  console.log('[bg3] v2.4 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -340,6 +342,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
   arenaSetWave:(n)=>{G.arenaWave=n;},/* v2.3: прыжок к глубинной волне (E2E) */
   upgradeRelic:(id)=>upgradeRelic(id),/* v2.3: апгрейд реликвий (E2E) */
+  season:()=>seasonState(),forceSeason:(i)=>forceSeason(i),/* v2.4: сезон глубины (E2E) */
+  records:()=>({open:useUi.getState().recordsOpen,data:useUi.getState().records}),/* v2.4: летопись (E2E) */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };
 return function dispose(){

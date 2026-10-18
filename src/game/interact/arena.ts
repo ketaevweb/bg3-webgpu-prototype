@@ -13,6 +13,9 @@
    соткают зеркальные копии живых героев (КД/оружие/характеристики оригинала,
    тёмный тинт, усиление глубины). Рекорд (S.arenaBest) при каждом улучшении
    уходит в серверную летопись Глубин (/api/scores), стела читает топ-10.
+   v2.4: СЕЗОНЫ ГЛУБИНЫ — еженедельный ротационный аффикс (interact/season.ts)
+   меняет баланс глубинных волн и красит тени (косметика тени); панель
+   «Летопись Глубин» (T) собирает сезон, рекорд, журнал и серверный топ.
    Циклы: прогресс зовёт нас через bus.arenaNext (arena→turns→progression),
    прямых обратных импортов из systems в interact/arena нет. */
 import { d } from '../rng';
@@ -29,6 +32,7 @@ import { freeSpotNear } from '../world/grid';
 import { makeDrowned, makeSkeleton, makeSkeletonKnight, makeCultist, makeKnight, makeAdept, makeOgre, applyElite } from '../entities/roster';
 import { makeUnit, aliveHeroes } from '../entities/units';
 import { postScore, topScores } from '../save/leaderboard';/* v2.3: серверная летопись глубины */
+import { seasonBoost, seasonExtraEnemy, seasonRewardMult, announceSeason, seasonDef } from './season';/* v2.4: сезоны глубины */
 import type { Unit } from '../types';
 
 export const WAVES=5;/* волн в испытании; глубже — бесконечный режим */
@@ -81,13 +85,16 @@ export function arenaEndless(){
   sfx.stinger('wave');
   bigBanner('БЕСКОНЕЧНОЕ ИСПЫТАНИЕ');
   log('Портал ревёт в полный голос: глубины признали победителя — и требуют нового. Волны не иссякнут, пока стоит отряд.','g-sys');
+  announceSeason();/* v2.4: сезон недели — аффикс и облик тени */
   spawnWave();
 }
 /* глубина k=w−5 (балансовая таблица v2.1):
    hp ×(1+0.12k) · кость урона +⌊k/2⌋ · КД +min(⌊k/4⌋,2) · имя «Глубинный».
    v2.2: xp ×(1+0.12k) — глубина оплачивается опытом (сверх предела — золотом).
    weapon клонируем: шаблоны ростера разделяют объект (makeUnit не копирует).
-   v2.3: noPrefix — тени отряда не получают приставку «Глубинный». */
+   v2.3: noPrefix — тени отряда не получают приставку «Глубинный».
+   v2.4: сезонный аффикс недели применяется после глубинного усиления
+   (Мора множит уже усиленную жизнь; тинт — облик сезона). */
 function endlessBoost(u:Unit,w:number,noPrefix=false){
   const k=w-WAVES;
   u.weapon={...u.weapon,dice:[...u.weapon.dice]};
@@ -99,6 +106,7 @@ function endlessBoost(u:Unit,w:number,noPrefix=false){
   u.xp=Math.round((u.xp||0)*mult);/* v2.2: калибровка XP глубинных волн */
   if(!noPrefix)u.name='Глубинный '+u.name;
   u.depth=k;
+  seasonBoost(u);/* v2.4: сезон недели — модификаторы + перекраска */
   return u;
 }
 /* ---- v2.3: ТЕНЬ ОТРЯДА — зеркальная волна-босс. Состав = живые герои:
@@ -134,6 +142,9 @@ function endlessGroup(w:number):Unit[]{
   else if(r===2){push(makeKnight);push(makeKnight);push(makeSkeleton);}
   else if(r===3){push(makeOgre);push(makeKnight);push(makeAdept);}
   else {push(makeSkeleton);push(makeSkeleton);push(deep);push(makeDrowned);}
+  if(seasonExtraEnemy()){/* v2.4 «Ярость толпы»: глубины выставляют лишнего */
+    const p=spot(out.length);out.push(makeDrowned(p.x,p.z));
+  }
   for(const u of out)endlessBoost(u,w);
   if((w-WAVES)%10!==0&&(w-WAVES)%5===0){/* чемпион бездны ведёт волну (v2.3: на k%10===0 вместо него — Тень отряда, маршрутизирует spawnWave) */
     const c=out[0];
@@ -169,7 +180,8 @@ export function arenaNext(){
   const w=G.arenaWave;
   if(w<1)return;
   recordBest(w);/* v2.3: рекорд + серверная летопись */
-  const g=40+15*w+(w>WAVES?10*(w-WAVES):0);/* v2.0: глубина — прибавка к награде */
+  const base=40+15*w+(w>WAVES?10*(w-WAVES):0);/* v2.0: глубина — прибавка к награде */
+  const g=w>WAVES?Math.round(base*seasonRewardMult()):base;/* v2.4: «Дань глубин» — награда глубины ×1.5 */
   gainGold(g);
   log('Волна '+w+' отбита: +'+g+' золота, отряд перевязывает раны.','g-heal');
   for(const h of aliveHeroes())healUnit(h,8+2*w,'перевязка после волны');
@@ -220,6 +232,8 @@ export function showRecords(){/* стела у портала — читает �
   bigBanner('СТЕЛА РЕКОРДОВ');
   const lg=S.arenaLog||[];
   log('Лучший заход: волна '+(S.arenaBest||0)+'.','g-sys');
+  const sd=seasonDef();/* v2.4: текущий сезон глубины */
+  if(sd)log('Сезон глубины: «'+sd.name+'» — '+sd.desc+'.','g-sys');
   if(!lg.length){log('Стела пока пуста — ни один заход не завершён.','g-sys');}else{
     const last=lg.slice(-5).reverse();
     for(const r of last){

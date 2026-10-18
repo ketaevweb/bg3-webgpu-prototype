@@ -196,3 +196,16 @@
 #mmBtn{position:fixed;top:12px;left:150px;z-index:30;width:38px;height:38px;font-size:15px;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#cfc9b6;cursor:pointer}
 #mmBtn:hover{border-color:var(--gold)}
+
+/* v2.4: кнопка и панель «Летопись Глубин» (T) */
+#recBtn{position:fixed;top:12px;left:196px;z-index:30;width:38px;height:38px;font-size:15px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#cfc9b6;cursor:pointer}
+#recBtn:hover{border-color:var(--gold)}
+#records{display:none;left:50%;top:50%;transform:translate(-50%,-50%);width:470px;max-width:94vw;
+  max-height:84vh;overflow-y:auto;z-index:63}
+#records .rseason{border:1px solid #3a4530;border-radius:8px;padding:7px 10px;margin:6px 0;background:#10160f}
+#records .rsn{font-size:12.5px;color:var(--gold);font-weight:600}
+#records .rsd{font-size:11px;color:#a89f86}
+#records .rhead{font-size:10.5px;color:#a89f86;margin:9px 0 3px;text-transform:uppercase;letter-spacing:.5px}
+#records .rrow{display:flex;justify-content:space-between;gap:6px;font-size:11.5px;color:#cfc9b6;
+  padding:2px 4px;border-bottom:1px dashed #2a3324}
