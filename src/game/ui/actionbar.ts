@@ -37,6 +37,12 @@ export const ACTIONS:ActionDef[]=[
   /* v1.5: умения друида Ольхи */
   {label:'Разряд молнии',sub:'Действие · ячейка',cls:'wiz',only:h=>h.cls==='druid',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('spark')},
   {label:'Облако спор',sub:'Действие · ячейка',cls:'wiz',only:h=>h.cls==='druid',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('spore')},
+  /* v1.9: умения паладина Хальдира */
+  {label:'Карающий удар',sub:'Действие · ячейка',cls:'cle',only:h=>h.cls==='paladin',enabled:h=>h.action>0&&h.slots>0,run:_h=>enterTarget('smite')},
+  {label:'Аура дозора',sub:'Бонус · ячейка · КД +2',cls:'cle',only:h=>h.cls==='paladin',enabled:h=>h.bonus>0&&h.slots>0,
+    run:h=>{h.bonus--;h.slots--;addStatus(h,'faith',3);log(h.name+' воздевает знамя — аура дозора держит строй!','g-hero');renderUI();showReach(h);}},
+  {label:'Наложение рук',sub:'Бонус · 1/бой',cls:'cle',only:h=>h.cls==='paladin',enabled:h=>h.bonus>0&&!h.dawnUsed,
+    run:h=>{h.bonus--;h.dawnUsed=true;healUnit(h,roll(1,8)+2,'наложение рук');renderUI();showReach(h);}},
   {label:'Второе дыхание',sub:'Бонус · 1/бой',enabled:h=>h.bonus>0&&!h.swUsed,only:h=>h.cls==='fighter',
     run:h=>{h.bonus--;h.swUsed=true;healUnit(h,roll(1,10)+1,'второе дыхание');renderUI();showReach(h);}},
   {label:'Доп. действие',sub:'1/бой',enabled:h=>(h.surge||0)>0,only:h=>h.cls==='fighter'&&h.level>=2,

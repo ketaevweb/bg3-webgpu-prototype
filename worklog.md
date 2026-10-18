@@ -306,3 +306,27 @@ Stage Summary:
 - Сейв v2 сохранён совместимым (новые флаги опциональные); E2E 9/9 + кадры финала
 - Далее: коммит + tag v1.8 + push (token-процесс) — см. следующую запись
 - ПУШ: коммит 015495f + tag v1.8 → origin (main и tag на GitHub подтверждены ls-remote); remote URL очищен от токена (rg ghp_ .git/config — пусто). Напоминание пользователю: отозвать токен ghp_… на GitHub (Settings → Developer settings → Tokens)
+
+---
+Task ID: 15
+Agent: main (Z.ai)
+Task: v1.9 «Слава Дозора» — постгейм после финала: шестой спутник паладин Хальдир, арена «Испытание Глубин» (5 волн), миникарта (M), мотивы карт
+
+Work Log:
+- Старт: конвейер p0–p6 закрыт, v1.4–v1.8 на GitHub (015495f); незапушен только worklog-коммит d13fd9d (UUID-строка — шум). Дорожная карта README определяла v1.9: постгейм, шестой класс/спутник, звуковые стаеры, миникарта
+- АУДИО: audio.ts + sceneMotif(mapId) — по 2–3 ноты на локацию (лес-мажор, крипта-секунда, болота-спуск, перевал-квинта, цитадель-тритон) + stinger('wave') для арены; вызов в buildMap (world/maps.ts) после setRound; type-only импорт MapId — лист не нарушен
+- МИНИКАРТА: ui/minimap.ts (НОВЫЙ, 47) — refreshMinimap() собирает плоский снимок из GW.solid (парс key 'x_z')/units/fires/interactables + cur (текущий герой) → uiSet; toggleMinimap(); store: minimapOpen/minimap (MiniMapView{ver,grid,solid[],dots[тройки x,z,kind],cur}); Hud.tsx — MiniMap (canvas 224, 8px/клетка, useEffect по ver, легенда, рамка текущего героя) + кнопка 🗺 (mmBtn, left:150 — правее saveBtn); game.css #mm bottom:12px right:272px (левее #qtrack); движок: клавиша m/M/ь/Ь + троттлинг 0.5с в loop() (useUi.getState().minimapOpen) — данные живые без хуков на каждую мутацию
+- ПАЛАДИН ХАЛЬДИР (шестой класс): roster.makeHaldir (молот Дозора 1d10+СИЛ, пластинчатый доспех КД 16, 2 ячейки, fearImmune); HERO_TINT.paladin=0x9a5a5a; animation CFG paladin (heavy 2H, scale 1.06); actionbar: Карающий удар (smite, действие+ячейка), Аура дозора (faith+2 КД, бонус+ячейка), Наложение рук (1d8+2, бонус, 1/бой — dawnUsed; сброс в startCombat turns.ts); progression.levelUp ветка paladin (как воин: +8HP, L2 СИЛ+1, L3 ячейка); сцена у знамён citadel.ts (buildFigure npc + glow + interact) только при campaignDone && !haldirJoined; DLGS.haldir (2 узла, joinHaldir с дефолтом позиции); ensureHaldir() в applyGame (по образцу ensureOlkha)
+- АРЕНА «ИСПЫТАНИЕ ГЛУБИН»: interact/arena.ts (НОВЫЙ, 105) — интеракт у портала KEEP вешается из buildCitadelScenery при campaignDone; arenaStart → G.arenaWave=1 → spawnWave → startCombat; волны: 1) 2 утопленника, 2) 3 скелета+рыцарь-элита, 3) культисты Глубин+ученик, 4) 2 рыцаря-отступника, 5) рыцарь+адепт+огр; спавн через freeSpotNear вокруг якорей внешнего двора; награды за волну (40+15·w золото, перевязка 8+2·w), финал — 250+d(100) золота и banner «ИСПЫТАНИЕ ПРОЙДЕНО!»; рекорд S.arenaBest=max(best,wave); ГРАФ ЦИКЛОВ: progression.victorySequence зовёт bus.arenaNext.call() (слот; арена привязывает реализацию) — прямой импорт progression→arena дал бы цикл (arena→turns→progression); защита от сорванного испытания: таймер волны проверяет mapId==='citadel'&&!combatOn, teardownWorld сбрасывает arenaWave, checkEnd-поражение сбрасывает
+- СЕЙВ v2: SaveFlags + haldirJoined?:boolean, arenaBest?:number (опциональные — совместимость не тронута); snapshot пишет, applyGame читает с дефолтами; S/G: haldirJoined/arenaBest/haldirMesh/arenaWave + resetState
+- E2E-инструментарий: __bg3 + joinHaldir/arenaStart/arenaWipe (die+checkEnd — мгновенный добив волны)/arenaState/mm
+- E2E playwright (scripts/pw_v19.cjs, 10/10): boot v1.9; миникарта M-клавишей (canvas painted 9704 px, solid 143, dots 15) и кнопкой 🗺; постгейм-цитадель (гарнизон 0, сцена Хальдира + портал арены в inters); joinHaldir → paladin в отряде (3 героя); арена волна 1 (2 утопленника, combat on); 5 волн (best 1→5, gold 310→1216, отряд жив); повторный заход до конца (best 5, wave 0); сейв слот 2: flags haldirJoined/arenaBest=5, heroes [fighter,wizard,paladin]; reload → doLoad 1:1 (паладин на месте, сцена Хальдира отсутствует, портал есть, золото 1:1); чистый reload (1 canvas); DOM-скриншоты: minimap на лесу (стены/враги/точки/отряд+легенда) и цитадель с Хальдиром в отряде (миникарта показывает стену с разрывом ворот!) — upload/e2e/v19_*.jpg|png
+- Уроки E2E: page.screenshot (DOM) обязателен для HUD-фич — loopStop+toDataURL снимает только 3D-canvas; смену карты в бою в E2E не делать (неигровой путь — E-интеракты блокированы в бою; busy-счётчик может зависнуть на прерванном твине) — replay арены доигрывать wipe'ами
+- 404 /models/rig/soldier.glb ×3 — штатный v1.7-паттерн (локальный файл отсутствует → фолбэк CDN Soldier), шум, не регресс
+- Гейты статические: tsc 0; ESLint src/game+components/hud 0/0; NO CYCLES; 0 any; модули ≤400 (новые: arena 105, minimap 47; max engine 344)
+- README: шапка v1.9 (постгейм), структура (+arena.ts/minimap.ts, citadel.ts дополнен), дорожная карта (v1.9 зачёркнут; идеи v2.0: бесконечная арена, баланс, @types/three); layout.tsx метаданные v1.9 (шесть героев, арена, постгейм)
+
+Stage Summary:
+- v1.9 «Слава Дозора» готова: постгейм-контент после финала — паладин Хальдир (6-й класс), арена из 5 волн с рекордом в сейве, миникарта (M/🗺), мотивы карт; сейв v2 обратно совместим (опциональные haldirJoined/arenaBest)
+- E2E 10/10 + 2 DOM-скриншота; все статические гейты зелёные
+- Далее: коммит + tag v1.9 + push (token-процесс) — см. следующую запись; пользователю — напоминание об отзыве токена

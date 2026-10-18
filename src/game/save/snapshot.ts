@@ -17,6 +17,7 @@ import { cancelTargeting } from '../ui/targeting';
 import { teardownWorld, buildMap } from '../world/maps';
 import { ensureCompanions, refreshHintExplore } from '../interact/explore';
 import { ensureOlkha } from '../interact/swamp';/* v1.5: восстановление друида по флагу сейва */
+import { ensureHaldir } from '../interact/citadel';/* v1.9: восстановление капитана по флагу сейва */
 import { bigBanner, log } from '../ui/overlays';
 import type { SaveData } from '../types';
 
@@ -32,6 +33,7 @@ export function gameSnapshot():SaveData{/* Фаза 3: формат v2 замо�
       swampDone:!!S.swampDone,olkhaJoined:!!S.olkhaJoined,/* v1.5: опциональные поля — v2 совместим */
       giantsDone:!!S.giantsDone,giantsChest:!!S.giantsChest,/* v1.6 */
       citadelDone:!!S.citadelDone,campaignDone:!!S.campaignDone,citadelChest:!!S.citadelChest,/* v1.8 */
+      haldirJoined:!!S.haldirJoined,arenaBest:S.arenaBest||0,/* v1.9: опциональные поля — v2 совместим */
     },
     barrelsUsed:[...S.barrelsUsed],
     quests:Object.fromEntries(Object.entries(QUESTS).map(([id,q])=>[id,{state:q.state,objs:q.objs.map(o=>!!o.done)}])),
@@ -62,6 +64,7 @@ export function applyGame(sv:SaveData|null){
   S.swampDone=!!fl.swampDone;S.olkhaJoined=!!fl.olkhaJoined;/* v1.5: в старых сейвах полей нет — дефолт false */
   S.giantsDone=!!fl.giantsDone;S.giantsChest=!!fl.giantsChest;/* v1.6 */
   S.citadelDone=!!fl.citadelDone;S.campaignDone=!!fl.campaignDone;S.citadelChest=!!fl.citadelChest;/* v1.8 */
+  S.haldirJoined=!!fl.haldirJoined;S.arenaBest=typeof fl.arenaBest==='number'?fl.arenaBest:0;/* v1.9: в старых сейвах полей нет — дефолты */
   S.bag=Array.isArray(sv.bag)?sv.bag.filter((id:unknown)=>typeof id==='string'):[];/* v1.6 */
   S.barrelsUsed=new Set(sv.barrelsUsed||[]);
   for(const id in QUESTS){
@@ -76,6 +79,7 @@ export function applyGame(sv:SaveData|null){
   buildMap(sv.mapId==='swamp'?'swamp':(sv.mapId==='giants'?'giants':(sv.mapId==='citadel'?'citadel':(sv.mapId==='crypt'?'crypt':'forest'))),null);/* v1.5: +болота; v1.6: +перевал; v1.8: +цитадель */
   ensureCompanions();/* v1.2: восстановить Илву и Каю по флагам сейва */
   ensureOlkha();/* v1.5: восстановить Ольху по флагу сейва */
+  ensureHaldir();/* v1.9: восстановить Хальдира по флагу сейва */
   for(const hd of sv.heroes){
     const h=units.find(u=>u.side==='hero'&&u.cls===hd.cls);
     if(!h)continue;

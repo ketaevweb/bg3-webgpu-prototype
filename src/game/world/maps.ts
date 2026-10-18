@@ -34,7 +34,7 @@ export function teardownWorld(){
   interactables.length=0;
   clearGroup(worldGroup);
   G.groundMesh=null;G.fireLight=null;G.flameMesh=null;
-  G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;
+  G.combatOn=false;G.order=[];G.turnIdx=-1;G.current=null;G.arenaWave=0;/* v1.9: арена не переживает разбор мира */
   setActionbarVisible(false);
   bus.refreshBossBar.call();
 }
@@ -91,6 +91,7 @@ export function buildMap(id:MapId,spots:number[][]|null){
   initOverlays();
   G.phase='explore';
   setRound(MAP_NAME[G.mapId]);
+  sfx.sceneMotif(id);/* v1.9: короткий мотив прибытия на карту */
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
 export async function switchMap(id:MapId):Promise<void>{

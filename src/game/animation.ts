@@ -85,6 +85,7 @@ const CFG: Record<string, { set: AnimSet; tint: number; scale?: number }> = {
   swampboss: { set: 'spell', tint: 0x4a6a8a, scale: 1.1 },
   knight: { set: 'blade', tint: 0x6a7a8a, scale: 1.05 },  // v1.8: рыцарь-отступник
   lord: { set: 'heavy', tint: 0x3f6a5a, scale: 1.18 },    // v1.8: лорд-комендант Малвех
+  paladin: { set: 'heavy', tint: 0x9a5a5a, scale: 1.06 }, // v1.9: паладин Хальдир
 };
 export type RigOpts = {
   tint?: number;        // цвет-подкраска текстуры (класс/фракция)

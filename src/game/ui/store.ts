@@ -51,6 +51,8 @@ export interface SlotRowView{
 export interface TutView{title:string;text:string;i:number;n:number;onSkip:()=>void}
 /* v1.6: панель снаряжения — предметы в сумке + слоты героев */
 export interface BagItemView{n:string;d:string;slot:string;equip:()=>void}
+/* v1.9: снимок миникарты (рисует React-canvas, данные собирает ui/minimap.ts) */
+export interface MiniMapView{ver:number;grid:number;solid:number[];dots:number[];cur:{x:number;z:number}|null}
 export interface BagSlotView{label:string;item:string|null;remove:()=>void}
 export interface BagHeroView{name:string;clsName:string;slots:BagSlotView[]}
 export interface GfxSegView{name:string;active:boolean;pick:()=>void}
@@ -63,6 +65,7 @@ export interface SysView{
   sndIcon:string;
   onSnd:()=>void;onGfx:()=>void;onSaves:()=>void;onLoadFromEnd:()=>void;
   onBag:()=>void;/* v1.6: панель снаряжения */
+  onMm:()=>void;/* v1.9: миникарта (M) */
 }
 
 export interface UiState{
@@ -81,6 +84,7 @@ export interface UiState{
   gfxOpen:boolean;gfxPresets:GfxPresetView[];gfxRows:GfxRowView[];
   savesOpen:boolean;savesCur:string;savesSlots:SlotRowView[];
   tut:TutView|null;/* v1.4: видима, пока обучение не пройдено/не пропущено */
+  minimapOpen:boolean;minimap:MiniMapView|null;/* v1.9: миникарта (M) */
   importInput:HTMLInputElement|null;/* живой ref скрытого input#importFile (клик из doImport — внутри пользовательского жеста) */
   /* колбэки-биндинги (владельцы — движковые модули) */
   sys:SysView;
@@ -106,13 +110,14 @@ const initial={
   gfxOpen:false,gfxPresets:[] as GfxPresetView[],gfxRows:[] as GfxRowView[],
   savesOpen:false,savesCur:'',savesSlots:[] as SlotRowView[],
   tut:null as TutView|null,
+  minimapOpen:false,minimap:null as MiniMapView|null,
   importInput:null as HTMLInputElement|null,
 };
 
 const noop=()=>{};
 const noBinds={
   sys:{
-    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,
+    sndIcon:'🔊',onSnd:noop,onGfx:noop,onSaves:noop,onLoadFromEnd:noop,onBag:noop,onMm:noop,
   } as SysView,
   shopOnClose:noop,journalOnClose:noop,gfxOnClose:noop,savesOnClose:noop,choiceOnClose:noop,bagOnClose:noop,
   onImportFile:(()=>{}) as (e:{target:HTMLInputElement})=>void,

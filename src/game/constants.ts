@@ -28,8 +28,8 @@ export const STATUS={
   faith:{name:'Щит веры',tag:'Щ',css:'#8fb8ff'},/* v1.2 */
 } as const;
 
-/* оттенки ригов героев (v1.2; v1.5: +друид) */
-export const HERO_TINT={fighter:0x5a7fb0,wizard:0x9a6ab8,rogue:0x3f7a6a,cleric:0xc9a84a,druid:0x6a9a4a} as const;
+/* оттенки ригов героев (v1.2; v1.5: +друид; v1.9: +паладин) */
+export const HERO_TINT={fighter:0x5a7fb0,wizard:0x9a6ab8,rogue:0x3f7a6a,cleric:0xc9a84a,druid:0x6a9a4a,paladin:0x9a5a5a} as const;
 
 /* формат сейва (заморожен, REFACTORING.md §8) и число слотов */
 export const SAVE_VER=2;

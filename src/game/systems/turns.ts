@@ -63,6 +63,7 @@ export function startCombat(group:Unit[]){
     h.swUsed=false;h.slots=h.slotsMax;
     if(h.cls==='fighter'&&h.level>=2)h.surge=h.level>=3?2:1;
     if(h.cls==='cleric')h.dawnUsed=false;/* v1.2 */
+    if(h.cls==='paladin')h.dawnUsed=false;/* v1.9: наложение рук — 1/бой */
   }
   const list=[...aliveHeroes(),...group.filter(g=>g.alive)];
   for(const u of list){u.init=d(20)+mod(u.dex);u.inCombat=true;}/* v1.7: боевая стойка idleCombat */

@@ -18,6 +18,7 @@ import { awardXP } from '../systems/progression';
 import { questStart, questObj, questDone, QUESTS, refreshTracker } from '../interact/quests';
 import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
 import { joinOlkha } from '../interact/swamp';/* v1.5: друид болот (свамп не импортирует dialog — цикла нет) */
+import { joinHaldir } from './citadel';/* v1.9: капитан Дозора (цитадель не импортирует dialog — цикла нет) */
 import { openShop } from '../interact/shop';
 import { tween } from '../fx/tweens';
 import type { DlgFn, DlgOpt, Unit } from '../types';
@@ -206,6 +207,19 @@ export const DLGS:Record<string,DlgFn>={
     if(id==='ulva')return{name:'Ольха (прикована к идолу)',
       text:'Жрица Глубинного. Отравила родники — и топь пошла расти. Хлыст её жжётся ядом, а на полсмерти она поднимает утопленников. Возьмите в отряд того, кто бьёт громом: молния ей вреднее огня.',
       opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinOlkha(SWAMP.OLKHA[0],SWAMP.OLKHA[1]);}}]};
+  },
+  haldir(id){/* v1.9: капитан Дозора у знамён (постгейм после финала) */
+    if(id==='start')return{name:'Хальдир, Капитан Дозора',
+      text:'Сорок дней я держал внешнюю башню, пока Малвех пел свою песню. Слышал её и я — но клятва оказалась громче. Вы вернули цитадель, командир. Дозор жив — и я с ним, если возьмёте.',
+      opts:[
+        {t:'«Твой молот будет кстати. Идём с нами.»',end:true,fn:()=>{closeDlg();joinHaldir();}},
+        {t:'«Что ты помнишь о Глубинном?»',fn:()=>gotoNode('haldeep')},
+        {t:'«Держи башню. Мы вернёмся.»',end:true},
+      ]};
+    if(id==='haldeep')return{name:'Хальдир, Капитан Дозора',
+      text:'Он пришёл снизу — из-под камня, из-под воды. Не враг, а голод: песня съедает волю, и тело остаётся служить. Мы сжигали знамёна, чтобы не слушать. Портал за его спиной всё ещё открыт — тени там не переводятся. Хотите славы — испытайте себя.',
+      opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinHaldir();}},
+        {t:'«Испытание — позже. Держись.»',end:true}]};
   },
   giantboss(id){/* v1.6: вожак великанов */
     if(id==='start')return{name:'Гаррум Камнегрыз',

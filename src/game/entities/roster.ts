@@ -285,6 +285,24 @@ export function makeMalveh(){
       'Печать сундука держится, пока он «жив»'],
   });
 }
+/* ================= v1.9: ПОСТГЕЙМ — ПАЛАДИН ХАЛЬДИР =================
+   Шестой спутник: капитан Дозора, державший внешнюю башню, пока над
+   цитаделью пела песня Глубинного. Присоединяется после финала
+   (campaignDone) — интерактив у знамён цитадели, interact/citadel.ts. */
+export function makeHaldir(x:number,z:number){
+  return makeUnit({
+    name:'Хальдир, Капитан Дозора',short:'Хальдир',cls:'paladin',clsName:'Паладин',side:'hero',
+    str:16,dex:11,con:15,int:9,wis:12,cha:14,hp:15,maxhp:15,ac:16,speed:5,
+    weapon:{name:'Молот Дозора',dice:[1,10],abil:'str',melee:true,range:1},
+    dagger:null,armor:'Пластинчатый доспех',potions:2,slots:2,slotsMax:2,
+    fearImmune:true,x,z,color:0x9a5a5a,
+    features:['Карающий удар — действие + ячейка: 2d6+МДР излучения, дальность 6 кл.',
+      'Аура дозора — бонус + ячейка: +2 КД на 3 хода',
+      'Наложение рук — бонус: лечение 1d8+2 (1/бой)',
+      'Клятва держит страх — запугать его нельзя',
+      'Со 2 уровня: +8 HP, СИЛ +1; с 3 уровня — +8 HP, ячейка заклинаний'],
+  });
+}
 export function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(G.mapId==='forest'){

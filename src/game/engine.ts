@@ -11,7 +11,7 @@ import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
 import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
 import { bus } from './bus';
-import { uiSet } from './ui/store';
+import { uiSet, useUi } from './ui/store';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';/* scene — для __bg3.scn (E2E-снимки) */
 import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
@@ -24,6 +24,9 @@ import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quest
 import { openDlg } from './interact/dialog';
 import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract, moveParty } from './interact/explore';
 import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
+import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
+import { arenaStart, arenaWipe, arenaState } from './interact/arena';/* v1.9: испытание Глубин */
+import { toggleMinimap, refreshMinimap } from './ui/minimap';/* v1.9: миникарта */
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
 import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/markers';
 import { cancelTargeting, enterTarget, resolveTargetClick, showTipFor } from './ui/targeting';
@@ -168,6 +171,7 @@ function bindInput(){
     if(e.key==='k'||e.key==='K'||e.key==='л'||e.key==='Л'){if(G.phase!=='transition')toggleSaveMenu();}/* v1.1 */
     if(e.key==='g'||e.key==='G'||e.key==='п'||e.key==='П'){toggleGfx();}/* v1.1 */
     if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){toggleBag();}/* v1.6: снаряжение */
+    if(e.key==='m'||e.key==='M'||e.key==='ь'||e.key==='Ь'){toggleMinimap();}/* v1.9: миникарта */
   };
   addEventListener('keydown',onKey);
   const onResize=()=>{
@@ -182,12 +186,15 @@ function bindInput(){
 
 /* ================= ЦИКЛ ================= */
 const clock=new THREE.Clock();
+let mmAcc=0;/* v1.9: троттлинг обновления миникарты */
 function loop(){
   const rdt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
   /* v1.1: лимит FPS — пропускаем кадры сверх лимита */
   if(G.fpsLimit>0){G.frameAcc+=rdt;if(G.frameAcc+1e-4<0.98/G.fpsLimit)return;G.frameAcc=0;}
   slowmo.update(rdt);
   const dt=rdt*slowmo.scale;
+  mmAcc+=rdt;
+  if(mmAcc>0.5){mmAcc=0;if(useUi.getState().minimapOpen)refreshMinimap();}/* v1.9 */
   tickTweens(dt);
   controls.update();
   if(G.fireLight)G.fireLight.intensity=22+Math.sin(t*11)*4+Math.sin(t*23.7)*2.5;
@@ -269,15 +276,16 @@ let disposed=false;
     uiSet(s=>({sys:{...s.sys,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
     sfx.ui();
   };
-  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
-  log('BG3 Web-прототип v1.8 «Цитадель Долгого Дозора»: финал кампании — пятая карта (крепостная стена, ворота, дворы цитадели), гарнизон Глубинного (рыцари-отступники, адепт, лорд-комендант Малвех) и экран финала «ДОЛГОЙ ДОЗОР!».','g-sys');
+  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap()}}));
+  log('BG3 Web-прототип v1.9 «Слава Дозора»: постгейм после финала — шестой спутник Хальдир (паладин), арена «Испытание Глубин» (пять волн теней павших), миникарта (M) и мотивы карт.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
-  log('ЛКМ — идти отрядом • E — говорить/осматривать • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
+  log('ЛКМ — идти отрядом • E — говорить/осматривать • M — миникарта • I — снаряжение • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
+  log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v1.8 boot complete');
+  console.log('[bg3] v1.9 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -314,6 +322,10 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   solidAt:(x,z)=>GW.solid.has(key(x,z)),/* v1.8: проверка стены цитадели */
   inters:()=>interactables.map(i=>i.label),/* v1.8: список интерактов */
   callInter:(label)=>{const it=interactables.find(i=>i.label===label);if(it)it.fn();},/* v1.8: вызов интеракта */
+  joinHaldir:(x,z)=>joinHaldir(x,z),/* v1.9: паладин для E2E */
+  arenaStart:()=>arenaStart(),arenaWipe:()=>arenaWipe(),/* v1.9: арена для E2E */
+  arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
+  mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };
 return function dispose(){
   disposed=true;

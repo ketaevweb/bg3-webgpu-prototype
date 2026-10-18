@@ -9,16 +9,24 @@ import * as THREE from 'three/webgpu';
 import { key } from '../utils';
 import { W } from '../constants';
 import { sfx } from '../audio';
-import { S, solid, units, interactables, CITADEL } from '../state';
+import { S, solid, units, interactables, CITADEL, GW } from '../state';
 import { bus } from '../bus';
 import { worldGroup, fx, glows } from '../render/renderer';
 import { placeNature, placeNatureSync } from '../world/nature';
-import { addInteract, refreshHintExplore } from './explore';
+import { freeSpotNear } from '../world/grid';
+import { addInteract, refreshHintExplore, rigHero } from './explore';
 import { bigBanner, log, setHint } from '../ui/overlays';
 import { QUESTS, questStart, questObj } from '../interact/quests';
 import { addToBag } from '../systems/gear';
 import { gainGold } from '../interact/quests';
 import { d } from '../rng';
+import { buildFigure } from '../entities/figure';
+import { makeHaldir } from '../entities/roster';
+import { arenaStart } from './arena';
+import type { Unit } from '../types';
+
+/* v1.9: место Хальдира у знамён (внешняя сторона ворот) */
+const HALDIR=[16,12];
 
 /* ---- тракт к цитадели: северо-восток перевала, за мостом (гейт: Гаррум) ---- */
 export function buildCitadelTrail(){
@@ -139,6 +147,13 @@ export function buildCitadelScenery(){
   worldGroup.add(out);
   addInteract(ex[0],ex[1],2.2,'Спуститься на перевал',()=>{void bus.switchMap.call('giants');},out,
     'Спуск с цитадели','Тракт ведёт обратно, к огрскому перевалу.');
+  /* v1.9: постгейм после финала — Хальдир у знамён и испытание Глубин у портала */
+  if(S.campaignDone){
+    buildHaldirScene();
+    const [kx,kz]=CITADEL.KEEP;
+    addInteract(kx,kz,2.6,'Испытание Глубин (арена)',()=>arenaStart(),null,
+      'Испытание Глубин','Изумрудный портал за спиной коменданта. Тени павших ждут вызвавших — пять волн, награда и слава.');
+  }
 }
 /* ---- сундук со Знаменем Дозора ---- */
 export function openCitadelChest(){
@@ -163,4 +178,47 @@ export function openCitadelChest(){
 export function startCitadelQuest(){
   if(QUESTS.citadel.state==='hidden')questStart('citadel');
   questObj('citadel','enter');
+}
+/* ================= v1.9: ПОСТГЕЙМ — ХАЛЬДИР У ЗНАМЁН =================
+   Капитан Дозора приходит к воротам после падения Малвеха. Диалог →
+   присоединение (шестой спутник, cls 'paladin'); ensureHaldir()
+   восстанавливает его при загрузке сейва (по флагу haldirJoined). */
+export function buildHaldirScene(){
+  if(S.haldirJoined)return;
+  const [hx,hz]=HALDIR;
+  const fig=buildFigure({color:0x9a5a5a,side:'npc'});
+  fig.scale.setScalar(1.04);
+  fig.position.set(W(hx),0,W(hz));
+  worldGroup.add(fig);
+  solid.add(key(hx,hz));
+  glows.attach('haldir',W(hx),W(hz),0.8,0xd8b45a);
+  addInteract(hx,hz,2.4,'Поговорить с капитаном Дозора',()=>bus.openDlg.call('haldir'),fig,
+    'Хальдир','Капитан Дозора. Держал внешнюю башню, пока над цитаделью пела песня Глубинного.');
+  S.haldirMesh=fig;
+}
+export function dismissHaldirScene(){
+  if(S.haldirMesh){S.haldirMesh.removeFromParent();S.haldirMesh=null;}
+  const it=interactables.find(i=>i.label==='Поговорить с капитаном Дозора');
+  if(it)interactables.splice(interactables.indexOf(it),1);
+  solid.delete(key(HALDIR[0],HALDIR[1]));
+  glows.detach('haldir');
+}
+export function joinHaldir(x:number=HALDIR[0],z:number=HALDIR[1]):Unit|null{
+  if(units.some(u=>u.cls==='paladin'))return null;
+  S.haldirJoined=true;
+  dismissHaldirScene();
+  const u=makeHaldir(x,z);
+  bigBanner('ХАЛЬДИР ПРИСОЕДИНИЛСЯ');
+  log('Хальдир: «Башня пала, но Дозор — жив. Раз Малвех свободен, мой молот бьётся за вас.»','g-hero');
+  fx.burstAtMesh(u,{count:26,color:0xd8b45a,speed:2.6,size:0.12,life:0.9,gravity:-1});
+  sfx.bless();void rigHero(u);
+  bus.refreshParty.call();bus.refreshInit.call();refreshHintExplore();
+  return u;
+}
+export function ensureHaldir(){/* восстановление капитана по флагу сейва */
+  if(!S.haldirJoined||units.some(u=>u.cls==='paladin'))return;
+  const lead=units.find(u=>u.side==='hero');
+  if(!lead)return;
+  const p=freeSpotNear(GW,lead,3)||{x:lead.x,z:lead.z};
+  joinHaldir(p.x,p.z);
 }

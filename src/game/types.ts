@@ -106,12 +106,14 @@ export interface GameState{
   swampDone:boolean;olkhaJoined:boolean;/* v1.5 */
   giantsDone:boolean;giantsChest:boolean;/* v1.6 */
   citadelDone:boolean;campaignDone:boolean;citadelChest:boolean;/* v1.8: финал кампании */
+  haldirJoined:boolean;arenaBest:number;/* v1.9: постгейм — паладин и рекорд арены */
   patrolGroup:Unit[];campGroup:Unit[];combatGroup:Unit[];cryptGroup:Unit[];swampGroup:Unit[];giantsGroup:Unit[];citadelGroup:Unit[];/* v1.8: +гарнизон цитадели */
   /* v1.6: сумка отряда — ненадетые предметы снаряжения (id GEAR) */
   bag:string[];
   dlgNpc:string|null;
   cageMesh:THREE.Object3D|null;ilvaMesh:THREE.Object3D|null;crateMesh:THREE.Object3D|null;
   kayaMesh:THREE.Object3D|null;olkhaMesh:THREE.Object3D|null;/* v1.5 */
+  haldirMesh:THREE.Object3D|null;/* v1.9: капитан Дозора у знамён */
   barrelsUsed:Set<string>;
 }
 
@@ -136,6 +138,8 @@ export interface SaveFlags{
   giantsDone?:boolean;giantsChest?:boolean;
   /* v1.8: финал кампании — цитадель и сундук со знаменем */
   citadelDone?:boolean;campaignDone?:boolean;citadelChest?:boolean;
+  /* v1.9: постгейм — паладин Хальдир и рекорд «Испытания Глубин» */
+  haldirJoined?:boolean;arenaBest?:number;
 }
 export interface SaveQuest{state:QuestState;objs:boolean[];}
 export interface SaveData{
@@ -255,5 +259,11 @@ export interface Bg3Debug{
   solidAt:(x:number,z:number)=>boolean;
   inters:()=>string[];
   callInter:(label:string)=>void;
+  /* v1.9: постгейм для E2E */
+  joinHaldir:(x?:number,z?:number)=>unknown;
+  arenaStart:()=>void;
+  arenaWipe:()=>void;/* мгновенно убить живых врагов волны и свести конец боя */
+  arenaState:()=>{wave:number;best:number};
+  mm:()=>unknown;/* снимок миникарты (E2E) */
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

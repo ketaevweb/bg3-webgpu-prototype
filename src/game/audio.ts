@@ -5,8 +5,10 @@
  * (autoplay policy). Каждый вызов защищён try/catch.
  * ============================================================ */
 
+import type { MapId } from './types';/* v1.9: сцены-мотивы (type-only — лист не нарушен) */
+
 type WeaponLike = { range?: number; melee?: boolean; fire?: boolean };
-type StingerKind = 'combat' | 'victory' | 'defeat';
+type StingerKind = 'combat' | 'victory' | 'defeat' | 'wave';
 
 class Bg3Audio {
   private ctx: AudioContext | null = null;
@@ -232,7 +234,43 @@ class Bg3Audio {
     this.tone({ type: 'square', f0: 900, dur: 0.035, gain: 0.045 });
   }
 
+  /* v1.9: короткий мотив прибытия на карту — по 2–3 ноты на локацию,
+     играется после сборки мира (buildMap). Тихий, фактурный стаер. */
+  sceneMotif(id: MapId) {
+    if (id === 'forest') {
+      /* тракт: пасторальный мажор */
+      this.tone({ type: 'triangle', f0: 392, dur: 0.3, gain: 0.07 });
+      this.tone({ type: 'triangle', f0: 494, dur: 0.34, gain: 0.07, delay: 0.16 });
+      this.tone({ type: 'sine', f0: 587, dur: 0.5, gain: 0.06, delay: 0.32 });
+    } else if (id === 'crypt') {
+      /* крипта: низкая секунда и стрёкот костей */
+      this.tone({ type: 'sawtooth', f0: 98, dur: 0.7, gain: 0.1, attack: 0.06 });
+      this.tone({ type: 'sawtooth', f0: 104, f1: 92, dur: 0.6, gain: 0.08, delay: 0.3, attack: 0.06 });
+      this.noise({ dur: 0.24, f0: 2300, f1: 800, gain: 0.06, q: 3, delay: 0.15 });
+    } else if (id === 'swamp') {
+      /* болота: чавкающий спуск и гулкий бурдон */
+      this.tone({ type: 'sine', f0: 160, f1: 78, dur: 0.6, gain: 0.1 });
+      this.noise({ dur: 0.34, f0: 420, f1: 140, gain: 0.07, q: 2.4, delay: 0.1 });
+      this.tone({ type: 'sine', f0: 65, dur: 0.8, gain: 0.08, delay: 0.36, attack: 0.08 });
+    } else if (id === 'giants') {
+      /* перевал: рог в квинту */
+      this.tone({ type: 'sawtooth', f0: 147, dur: 0.5, gain: 0.09, attack: 0.05 });
+      this.tone({ type: 'sawtooth', f0: 220, dur: 0.62, gain: 0.09, delay: 0.24, attack: 0.05 });
+      this.noise({ dur: 0.5, f0: 500, f1: 120, gain: 0.05, q: 0.8, type: 'lowpass' });
+    } else {
+      /* цитадель: изумрудный мотив — тритон вниз, хор глубин */
+      this.tone({ type: 'sine', f0: 233, dur: 0.55, gain: 0.09, attack: 0.05 });
+      this.tone({ type: 'sine', f0: 165, dur: 0.7, gain: 0.09, delay: 0.28, attack: 0.05 });
+      this.tone({ type: 'triangle', f0: 330, f1: 155, dur: 0.8, gain: 0.05, delay: 0.5 });
+    }
+  }
+
   stinger(kind: StingerKind) {
+    if (kind === 'wave') {/* v1.9: арена — короткий рог волны */
+      this.tone({ type: 'sawtooth', f0: 174, dur: 0.4, gain: 0.12, attack: 0.03 });
+      this.tone({ type: 'sawtooth', f0: 261, dur: 0.5, gain: 0.1, delay: 0.18, attack: 0.03 });
+      return;
+    }
     if (kind === 'combat') {
       this.tone({ type: 'sawtooth', f0: 110, dur: 0.7, gain: 0.14, attack: 0.05 });
       this.tone({ type: 'sawtooth', f0: 165, dur: 0.7, gain: 0.1, attack: 0.05 });

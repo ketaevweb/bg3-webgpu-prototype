@@ -33,4 +33,8 @@ export const bus={
   /* v1.4: обучение (реализация — ui/tutorial.ts; события реальных действий
      игрока шлют explore/dialog/turns/combat/targeting/slots) */
   tutEvent:new Slot<[string]>(),
+  /* v1.9: арена «Испытание Глубин» (реализация — interact/arena.ts;
+     progression зовёт слот после победы в волне — разрыв цикла
+     progression→arena: arena импортирует turns→progression) */
+  arenaNext:new Slot<[]>(),
 };

@@ -21,7 +21,7 @@ import type { Unit } from '../types';
 /* ================= ВОЛНЫ / ОПЫТ / УРОВНИ ================= */
 export function checkEnd(){
   if(!G.combatOn)return;
-  if(!aliveHeroes().length){G.combatOn=false;for(const u of units)u.inCombat=false;G.phase='over';sfx.stinger('defeat');showEnd(false);return;}
+  if(!aliveHeroes().length){G.combatOn=false;for(const u of units)u.inCombat=false;G.phase='over';G.arenaWave=0;/* v1.9: арена обрывается поражением */sfx.stinger('defeat');showEnd(false);return;}
   if(S.combatGroup.some(g=>g.alive))return;
   G.combatOn=false;for(const u of units)u.inCombat=false;/* v1.7: выходим из боевой стойки */
   G.phase='explore';
@@ -43,6 +43,10 @@ export function victorySequence(){
   }
   bus.openExploreUI.call();
   bus.refreshBossBar.call();
+  if(G.arenaWave>0){/* v1.9: арена — своя петля волн вместо концовки */
+    bus.arenaNext.call();
+    return;
+  }
   if(S.combatGroup.some(g=>g.isBoss))setTimeout(()=>showEnd(true),2000);
   else bus.checkTriggers.call();
 }
@@ -81,6 +85,12 @@ export function levelUp(h:Unit){
       log(h.name+' — УРОВЕНЬ 2! +6 HP, МДР +1, ячеек заклинаний теперь 3.','g-sys');}
     else{h.slotsMax=4;h.slots=4;
       log(h.name+' — УРОВЕНЬ 3! +6 HP, ячеек заклинаний теперь 4.','g-sys');}
+  }else if(h.cls==='paladin'){/* v1.9: паладин растёт как воин */
+    h.maxhp+=8;h.hp+=8;
+    if(h.level===2){h.str+=1;
+      log(h.name+' — УРОВЕНЬ 2! +8 HP, СИЛ +1.','g-sys');}
+    else{h.slotsMax=3;h.slots=3;
+      log(h.name+' — УРОВЕНЬ 3! +8 HP, ячеек заклинаний теперь 3.','g-sys');}
   }else{
     h.maxhp+=5;h.hp+=5;
     if(h.level===2){h.int+=1;h.slotsMax=4;h.slots=4;
