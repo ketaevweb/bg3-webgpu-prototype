@@ -80,6 +80,7 @@ export function arenaEndless(){
 }
 /* глубина k=w−5 (балансовая таблица v2.1):
    hp ×(1+0.12k) · кость урона +⌊k/2⌋ · КД +min(⌊k/4⌋,2) · имя «Глубинный».
+   v2.2: xp ×(1+0.12k) — глубина оплачивается опытом (сверх предела — золотом).
    weapon клонируем: шаблоны ростера разделяют объект (makeUnit не копирует). */
 function endlessBoost(u:Unit,w:number){
   const k=w-WAVES;
@@ -89,6 +90,7 @@ function endlessBoost(u:Unit,w:number){
   const mult=1+0.12*k;
   u.maxhp=Math.round(u.maxhp*mult);
   u.hp=u.maxhp;
+  u.xp=Math.round((u.xp||0)*mult);/* v2.2: калибровка XP глубинных волн */
   u.name='Глубинный '+u.name;
   u.depth=k;
   return u;
@@ -109,7 +111,8 @@ function endlessGroup(w:number):Unit[]{
   if((w-WAVES)%5===0){/* чемпион бездны ведёт волну */
     const c=out[0];
     applyElite(c);
-    c.champ=true;/* v2.1: аура бездны + подкрепление на полсмерти */
+    c.champ=true;/* v2.1: подкрепление на полсмерти */
+    c.aura=2;/* v2.2: аура чемпиона — единый механизм с аурами боссов кампании */
     c.name='Чемпион бездны: '+c.name;c.short='Чемпион';
     log('Среди теней шагает чемпион бездны!','g-enemy');
   }

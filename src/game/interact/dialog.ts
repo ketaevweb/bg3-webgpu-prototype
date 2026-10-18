@@ -7,7 +7,7 @@
 import { mod } from '../utils';
 import { d } from '../rng';
 import { sfx } from '../audio';
-import { G, S, KAYA_SPOT, SWAMP, busyOn, busyOff } from '../state';
+import { G, S, units, KAYA_SPOT, SWAMP, busyOn, busyOff } from '../state';
 import { bus } from '../bus';
 import { uiSet } from '../ui/store';
 import { setHint, log } from '../ui/overlays';
@@ -20,8 +20,30 @@ import { freeIlva, joinKaya, refreshHintExplore } from '../interact/explore';
 import { joinOlkha } from '../interact/swamp';/* v1.5: друид болот (свамп не импортирует dialog — цикла нет) */
 import { joinHaldir } from './citadel';/* v1.9: капитан Дозора (цитадель не импортирует dialog — цикла нет) */
 import { openShop } from '../interact/shop';
+import { addToBag, GEAR } from '../systems/gear';/* v2.2: обмен реликвий у стелы */
 import { tween } from '../fx/tweens';
 import type { DlgFn, DlgOpt, Unit } from '../types';
+
+/* ================= v2.2: ОБМЕН РЕЛИКВИЙ У СТЕЛЫ =================
+   Призрак коменданта торгует реликвиями Глубин за золото (постгейм,
+   цитадель — интеракт в citadel.ts). Каждая реликвия — одна на игру:
+   «уже куплена» = в сумке ИЛИ надета кому-то из отряда. Сейф v2 не
+   меняется — сумка/надетое и так пишутся (bag/heroes[].gear). */
+export const RELIC_PRICE:Record<string,number>={abyss_heart:400,portal_shard:500,deep_seal:600};
+export function relicOwned(id:string):boolean{
+  return S.bag.includes(id)||units.some(u=>u.gear&&u.gear.trinket===id);
+}
+export function buyRelic(id:string):boolean{
+  const p=RELIC_PRICE[id];
+  if(!p||!GEAR[id])return false;
+  if(relicOwned(id)){log('«'+GEAR[id].n+'» уже у отряда — вторую Глубины не отдадут.','g-sys');return false;}
+  if(S.gold<p){log('Не хватает золота: «'+GEAR[id].n+'» стоит '+p+' (в казне '+S.gold+').','g-enemy');return false;}
+  S.gold-=p;
+  addToBag(id);
+  sfx.gold();
+  log('Призрак коменданта отдаёт «'+GEAR[id].n+'»: −'+p+' золота (осталось '+S.gold+').','g-heal');
+  return true;
+}
 
 /* ---- диалоги ---- */
 export function openDlg(npc:string){
@@ -220,6 +242,17 @@ export const DLGS:Record<string,DlgFn>={
       text:'Он пришёл снизу — из-под камня, из-под воды. Не враг, а голод: песня съедает волю, и тело остаётся служить. Мы сжигали знамёна, чтобы не слушать. Портал за его спиной всё ещё открыт — тени там не переводятся. Хотите славы — испытайте себя.',
       opts:[{t:'«Идём с нами.»',end:true,fn:()=>{closeDlg();joinHaldir();}},
         {t:'«Испытание — позже. Держись.»',end:true}]};
+  },
+  ghost(id){/* v2.2: призрак коменданта у стелы — обмен реликвий Глубин */
+    if(id==='start')return{name:'Призрак коменданта',
+      text:'«Казна Дозора против казны Глубин, капитан. У стелы платят золотом — и глубины платят тем же. В твоей казне '+S.gold+' монет; камни портала держат мои реликвии. Бери, пока я не развеялся».',
+      opts:[
+        {t:'[Реликвия] Сердце бездны — 400 зол. (талисман: +10 макс. HP)',show:()=>!relicOwned('abyss_heart'),fn:()=>{buyRelic('abyss_heart');showNode('start');}},
+        {t:'[Реликвия] Осколок портала — 500 зол. (талисман: +1 к атаке)',show:()=>!relicOwned('portal_shard'),fn:()=>{buyRelic('portal_shard');showNode('start');}},
+        {t:'[Реликвия] Печать глубин — 600 зол. (талисман: +2 КД)',show:()=>!relicOwned('deep_seal'),fn:()=>{buyRelic('deep_seal');showNode('start');}},
+        {t:'[Уйти] Стела ждёт — волны не ждут.',end:true},
+      ]};
+    return null;
   },
   giantboss(id){/* v1.6: вожак великанов */
     if(id==='start')return{name:'Гаррум Камнегрыз',

@@ -148,15 +148,16 @@ const waitCombat = (page) => page.waitForFunction(() => window.__bg3 && window._
   console.log('G9 REINFORCE:', JSON.stringify(g9), '(ожидание after=before+2, reinforced, hp утопленников 22=round(14×1.6), КД 13=12+1, depth 5)');
   await shot(page, 'v21_reinforce_w10.jpg');
 
-  /* G10: добиваем волну 10 → best=10; уход с карты → запись в журнал (w=10) */
+  /* G10: добиваем волну 10 → best=10; уход с карты → запись в журнал (w=10).
+     v2.2: switchMap с ретраями — после shot() (loopStop/loopStart среди хода)
+     busy может ещё держаться: switchMap при busy молча отказывает (урок v1.9). */
   await page.evaluate(() => window.__bg3.arenaWipe());
   await page.waitForFunction(() => !window.__bg3.turn().combatOn, null, { timeout: 15000 });
-  await page.waitForTimeout(300);
-  console.log('G10 PRE-SWITCH:', await page.evaluate(() => JSON.stringify({
-    busy: window.__bg3.turn(), wave: window.__bg3.arenaState(),
-    heroesAlive: window.__bg3.units.filter(u => u.side === 'hero' && u.alive).length,
-  })));
-  await page.evaluate(() => window.__bg3.switchMap('forest'));
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(() => window.__bg3.switchMap('forest'));
+    await page.waitForTimeout(1500);
+    if (await page.evaluate(() => window.__bg3.turn().mapId === 'forest')) break;
+  }
   await page.waitForFunction(() => window.__bg3.turn().mapId === 'forest', null, { timeout: 30000 });
   await page.waitForTimeout(3000);
   const g10 = await page.evaluate(() => ({

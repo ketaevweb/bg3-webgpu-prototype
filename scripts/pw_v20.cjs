@@ -183,7 +183,7 @@ const waitCombat = (page) => page.waitForFunction(() => window.__bg3 && window._
     && g3.includes('"best":5')
     && g4.endlessLabel && !g4.trialLabel
     && g5.n === 3 && g5.drownedHp === 16 && g5.names.every(n => n.includes('Глубинный'))
-    && g6.best === 6 && g6.delta >= 140 && g6.delta <= 170/* 140 награда + лут волны [9..27] */
+    && g6.best === 6 && g6.delta >= 140 && g6.delta <= 300/* v2.2: 140 награда + лут волны + конверсия XP у капнутых героев (волна 6: ≤90 зол) + элитный лут рыцаря */
     && g7.best === 10
     && g8.wave === 0 && g8.best === 10
     && g9.endlessLabel && g9.wave === 0

@@ -17,7 +17,7 @@ import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
 import { buildHeroes, spawnEnemies } from './entities/roster';
-import { doAttack, damageUnit, champAura } from './systems/combat';
+import { doAttack, damageUnit, bossAura } from './systems/combat';
 import { LOOT, rollLoot } from './systems/loot';
 import { startCombat } from './systems/turns';
 import { QUESTS, questDone, closeJournal, toggleJournal } from './interact/quests';
@@ -26,6 +26,9 @@ import { buildForestScenery, freeIlva, joinKaya, checkTriggers, nearestInteract,
 import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
 import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
+import { awardXP } from './systems/progression';/* v2.2: калибровка опыта (E2E) */
+import { buyRelic } from './interact/dialog';/* v2.2: обмен реликвий (E2E) */
+import { makeMalveh, makeGarrum, makeGrat } from './entities/roster';/* v2.2: пробы аур боссов (E2E) */
 import { toggleMinimap, refreshMinimap } from './ui/minimap';/* v1.9: миникарта */
 import { log, initOverlays, setHint, updateOverlays } from './ui/overlays';
 import { initMarkers, clearMarkers, clearDots, showReach, addDot } from './ui/markers';
@@ -326,7 +329,14 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   arenaStart:()=>arenaStart(),arenaWipe:()=>arenaWipe(),/* v1.9: арена для E2E */
   arenaEndless:()=>arenaEndless(),/* v2.0: бесконечное испытание для E2E */
   hurt:(u,dmg)=>damageUnit(u,dmg,null),/* v2.1: E2E-урон (триггерит «Бездна зовёт») */
-  aura:(u)=>champAura(u),/* v2.1: E2E-инспектор ауры бездны */
+  aura:(u)=>{const a=bossAura(u);return a?a.v:0;},/* v2.1→v2.2: инспектор ауры властителя */
+  spawnBoss:(k,x,z)=>{/* v2.2: проба аур боссов кампании (E2E) — юнит вне боя, mesh ставит makeUnit */
+    const u=k==='malveh'?makeMalveh():(k==='garrum'?makeGarrum():makeGrat(x,z));
+    u.x=x;u.z=z;u.mesh.position.set(W(x),0,W(z));
+    units.push(u);return u;
+  },
+  buyRelic:(id)=>buyRelic(id),/* v2.2: обмен реликвий у стелы (E2E) */
+  awardXP:(n)=>awardXP(n),/* v2.2: калибровка опыта (E2E) */
   arenaState:()=>arenaState(),/* v1.9: волна/рекорд */
   mm:()=>useUi.getState().minimap,/* v1.9: снимок миникарты */
 };

@@ -6,9 +6,10 @@
 
 import { d } from '../rng';
 
-/* модификатор атаки: характеристика оружия + мастерство; яд/страх штрафуют */
+/* модификатор атаки: характеристика оружия + мастерство; яд/страх штрафуют;
+   v2.2: Осколок портала добавляет atkBonus */
 export function attackMod(u:Unit, w:Weapon){
-  let m=mod(u[w.abil])+(u.prof||0);
+  let m=mod(u[w.abil])+(u.prof||0)+(u.atkBonus||0);
   if(u.statuses.some(s=>s.type==='poison'))m-=2;
   if(u.statuses.some(s=>s.type==='fear'))m-=2;
   return m;
@@ -31,12 +32,16 @@ export function avgDamage(u:Unit, w:Weapon){
   return w.dice[0]*(w.dice[1]/2+0.5)+mod(u[w.abil]);
 }
 
-/* v2.1: АУРА БЕЗДНЫ — враги рядом с живым чемпионом бьют сильнее (+2 урона).
-   Чистая функция (для E2E-инспектора __bg3.aura): атакующие герои не бустятся. */
-export function champAura(att:Unit):number{
-  if(att.side==='hero')return 0;
-  for(const c of units)if(c.alive&&c.champ&&c!==att&&cheb(att,c)<=2)return 2;
-  return 0;
+/* v2.1→v2.2: АУРА ВЛАСТЫТЕЛЯ — враги рядом с живым носителем ауры бьют сильнее.
+   Чемпион бездны (аура 2) и боссы кампании (Грат/Костепёр/Ульва 1, Гаррум/Малвех 2,
+   после «Гласа глубин» 3). Чистая функция (для E2E-инспектора __bg3.aura):
+   атакующие герои не бустятся; из всех источников рядом берётся сильнейший. */
+export function bossAura(att:Unit):{v:number;src:Unit}|null{
+  if(att.side==='hero')return null;
+  let best:{v:number;src:Unit}|null=null;
+  for(const c of units)if(c.alive&&c.side!=='hero'&&c.aura&&c!==att&&cheb(att,c)<=2)
+    if(!best||c.aura>best.v)best={v:c.aura,src:c};
+  return best;
 }
 
 
@@ -82,10 +87,10 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
   }else{
     const n=w.dice[0]*(crit?2:1);
     let dmg=roll(n,w.dice[1])+mod(att[w.abil]);
-    const aura=champAura(att);/* v2.1: аура бездны чемпиона */
-    if(aura){
-      dmg+=aura;
-      log('Аура бездны усиливает удар: +'+aura+' урона!','g-enemy');
+    const ba=bossAura(att);/* v2.2: аура властителя (чемпион/боссы кампании) */
+    if(ba){
+      dmg+=ba.v;
+      log('Аура «'+ba.src.short+'» усиливает удар: +'+ba.v+' урона!','g-enemy');
     }
     if(opts.sneakBonus){/* v1.2: подлый удар Илвы */
       dmg+=opts.sneakBonus;

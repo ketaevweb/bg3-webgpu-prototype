@@ -154,6 +154,15 @@ export function buildCitadelScenery(){
     /* v2.1: стела рекордов у портала — журнал завершённых/сорванных заходов арены */
     addInteract(12,2,2.2,'Стела рекордов (арена)',()=>showRecords(),null,
       'Стела рекордов','Чёрный камень у изумрудного портала. Глубина волн капитанов Дозора выбита на граните.');
+    /* v2.2: призрак коменданта у стелы — обмен реликвий Глубин (диалог ghost) */
+    const gfig=buildFigure({color:0x6fd3a0,side:'npc'});
+    gfig.scale.setScalar(0.96);
+    gfig.position.set(W(16),0,W(2));
+    worldGroup.add(gfig);
+    glows.attach('ghost',W(16),W(2),0.9,0x6fd3a0);
+    fx.addEmber('ghost',W(16),W(2),{rate:2.2,color:0x8fd3b0,up:0.9,spread:0.35,size:0.05,life:1.1});
+    addInteract(16,2,2.3,'Призрак коменданта (обмен реликвий)',()=>bus.openDlg.call('ghost'),gfig,
+      'Призрак коменданта','Полупрозрачный силуэт у стелы. «Казна Дозора против казны Глубин» — реликвии за золото, пока призрак не развеялся.');
     /* v2.0: испытание пройдено (рекорд ≥5) — портал ведёт в БЕСКОНЕЧНОЕ испытание */
     if(S.arenaBest>=WAVES){
       addInteract(kx,kz,2.6,'Бесконечное испытание (арена)',()=>arenaEndless(),null,

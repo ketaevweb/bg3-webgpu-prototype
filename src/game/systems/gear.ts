@@ -66,6 +66,25 @@ export const GEAR:Record<string,GearItem>={
     eq:h=>{h.ac+=2;return h.short+': КД +2 ('+h.ac+').';},
     uneq:h=>{h.ac-=2;},
   },
+  /* v2.2: реликвии Глубин — обмен у стелы (призрак коменданта, цитадель) */
+  abyss_heart:{
+    id:'abyss_heart',n:'Сердце бездны',slot:'trinket',
+    d:'Талисман: +10 к макс. хитам. Окаменевшее сердце утопленника — всё ещё бьётся в такт приливам.',
+    eq:h=>{h.maxhp+=10;h.hp+=10;return h.short+': макс. HP +10 ('+h.maxhp+').';},
+    uneq:h=>{h.maxhp=Math.max(1,h.maxhp-10);h.hp=Math.min(h.hp,h.maxhp);},
+  },
+  portal_shard:{
+    id:'portal_shard',n:'Осколок портала',slot:'trinket',
+    d:'Талисман: +1 к броскам атаки. Изумрудная крошка с арки портала — глубины смотрят в прицел вместе с вами.',
+    eq:h=>{h.atkBonus=(h.atkBonus||0)+1;return h.short+': атака +1.';},
+    uneq:h=>{h.atkBonus=Math.max(0,(h.atkBonus||0)-1);},
+  },
+  deep_seal:{
+    id:'deep_seal',n:'Печать глубин',slot:'trinket',
+    d:'Талисман: +2 КД. Печать коменданта цитадели — Глубины признали носителя своим.',
+    eq:h=>{h.ac+=2;return h.short+': КД +2 ('+h.ac+').';},
+    uneq:h=>{h.ac-=2;},
+  },
 };
 const SLOT_LABEL:Record<GearSlot,string>={weapon:'Оружие',armor:'Доспех',trinket:'Талисман'};
 

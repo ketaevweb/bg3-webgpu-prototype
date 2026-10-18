@@ -63,6 +63,8 @@ export interface Unit{
   /* флаги роли/ИИ */
   keepDist:boolean;elite?:boolean;caster?:boolean;healer?:boolean;
   champ?:boolean;reinforced?:boolean;depth?:number;/* v2.1: чемпион бездны (аура/подкрепление) и глубина волны */
+  aura?:number;/* v2.2: аура властителя — враги рядом с носителем бьют +N (чемпионы и боссы кампании) */
+  atkBonus?:number;/* v2.2: бонус к броскам атаки (Осколок портала) */
   summoned?:boolean;summoner?:Unit|null;
   bossBrain?:boolean;isBoss?:boolean;mainBoss?:boolean;cryptBoss?:boolean;
   swampBoss?:boolean;/* v1.5: Ульва, Матерь Топей */
@@ -271,6 +273,9 @@ export interface Bg3Debug{
   hurt:(u:Unit,dmg:number)=>void;/* v2.1: E2E-урон через damageUnit (триггерит подкрепление чемпиона) */
   aura:(u:Unit)=>number;/* v2.1: E2E-инспектор ауры бездны */
   arenaState:()=>{wave:number;best:number;endless:boolean};
+  spawnBoss:(k:'malveh'|'garrum'|'grat',x:number,z:number)=>unknown;/* v2.2: пробы аур боссов (E2E) */
+  buyRelic:(id:string)=>boolean;/* v2.2: обмен реликвий у стелы (E2E) */
+  awardXP:(n:number)=>void;/* v2.2: калибровка опыта (E2E) */
   mm:()=>unknown;/* снимок миникарты (E2E) */
 }
 declare global{interface Window{__bg3?:Bg3Debug;}}

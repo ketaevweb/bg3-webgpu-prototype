@@ -51,12 +51,19 @@ export function victorySequence(){
   else bus.checkTriggers.call();
 }
 export function awardXP(n:number){
+  let conv=0;
   for(const h of aliveHeroes()){
+    if(h.level>=3){conv+=n;continue;}/* v2.2: опыт сверх предела — в золото казны */
     h.xp+=n;
     while(h.xp>=XP_NEED(h.level)&&h.level<3)levelUp(h);
   }
   log('Отряд получает '+n+' XP.','g-sys');
   sfx.xp();
+  if(conv){/* v2.2: калибровка XP — ветераны (уровень 3) обращают опыт в золото */
+    const g=Math.ceil(conv/10);
+    S.gold+=g;sfx.gold();
+    log('Опыт сверх предела обращён в золото: +'+g+' (казна Дозора платит за синяки ветеранов).','g-heal');
+  }
   bus.refreshParty.call();bus.refreshTracker.call();
 }
 export function levelUp(h:Unit){

@@ -103,11 +103,12 @@ export function makeNecro(){
     name:'Вхорил Костепёр',short:'Костепёр',cls:'necro',clsName:'Некромант',side:'goblin',
     str:10,dex:12,con:14,int:16,wis:14,cha:14,
     hp:46,maxhp:46,ac:15,speed:5,xp:400,x:14,z:4,color:0x3f2f55,skin:0xcac2ae,staff:true,tipColor:0x7fffc0,
-    keepDist:true,bossBrain:true,isBoss:true,cryptBoss:true,fearImmune:true,phase2:false,
+    keepDist:true,bossBrain:true,isBoss:true,cryptBoss:true,fearImmune:true,phase2:false,aura:1,
     weapon:{name:'Жезл гнили',dice:[1,8],abil:'int',range:6,necro:true,status:{type:'poison',turns:2}},
     dagger:{name:'Костяной клинок',dice:[1,6],abil:'str',melee:true,range:1},
     features:['Костяной шквал — 2d6 некротического всем соседям (1 раз в ход)',
       'На половине хитов призывает скелетов из стен',
+      'v2.2: аура могилы — мертвецы рядом с ним бьют +1',
       'Не ведает страха — запугивание бесполезно',
       'Печать его сундука держится, пока он «жив»'],
   });
@@ -181,11 +182,12 @@ export function makeUlva(){
     str:11,dex:13,con:14,int:14,wis:17,cha:15,
     hp:54,maxhp:54,ac:15,speed:5,xp:450,x:SWAMP.BOSS[0],z:SWAMP.BOSS[1],
     color:0x3f5a45,skin:0x9ab88a,staff:true,tipColor:0x8fe87f,
-    keepDist:true,bossBrain:true,isBoss:true,swampBoss:true,phase2:false,
+    keepDist:true,bossBrain:true,isBoss:true,swampBoss:true,phase2:false,aura:1,
     weapon:{name:'Хлыст трясины',dice:[1,8],abil:'wis',range:6,necro:true,status:{type:'poison',turns:2}},
     dagger:{name:'Ритуальный серп',dice:[1,6],abil:'str',melee:true,range:1},
     features:['Хватка трясины — на половине хитов поднимает утопленников из жижи',
       'Хлыст трясины отравляет на 2 хода',
+      'v2.2: аура трясины — утопленники рядом с ней бьют +1',
       'Споры болот веками копились в её лёгких'],
   });
 }
@@ -226,12 +228,13 @@ export function makeGarrum(){
     str:19,dex:12,con:18,int:8,wis:10,cha:12,
     hp:64,maxhp:64,ac:14,speed:6,xp:500,x:GIANTS.BOSS[0],z:GIANTS.BOSS[1],
     color:0x6a5a4a,skin:0xa89884,
-    keepDist:true,bossBrain:true,isBoss:true,giantBoss:true,fearImmune:true,phase2:false,
+    keepDist:true,bossBrain:true,isBoss:true,giantBoss:true,fearImmune:true,phase2:false,aura:2,
     weapon:{name:'Брошенный валун',dice:[2,6],abil:'str',range:6},
     dagger:{name:'Громовая дубина',dice:[2,6],abil:'str',melee:true,range:1},
     features:['Швыряет валуны на шесть клеток — встречает гостей ещё на подходе',
       'На половине хитов каменеет: КД +3',
       'Оползень — каменный град вокруг него (всем соседям)',
+      'v2.2: аура великана — огры рядом с ним бьют +2',
       'Не ведает страха — запугивание бесполезно'],
   });
 }
@@ -275,12 +278,13 @@ export function makeMalveh(){
     str:18,dex:12,con:16,int:14,wis:14,cha:16,
     hp:72,maxhp:72,ac:16,speed:5,xp:600,x:CITADEL.BOSS[0],z:CITADEL.BOSS[1],
     color:0x2f4f45,skin:0xb8c2ae,staff:false,tipColor:0x6fd3a0,
-    keepDist:false,bossBrain:true,isBoss:true,citadelBoss:true,fearImmune:true,phase2:false,
+    keepDist:false,bossBrain:true,isBoss:true,citadelBoss:true,fearImmune:true,phase2:false,aura:2,
     weapon:{name:'Клеймо коменданта',dice:[2,6],abil:'str',melee:true,range:1},
     dagger:{name:'Копьё бездны',dice:[1,8],abil:'int',range:6,necro:true,status:{type:'poison',turns:2}},
     features:['Клеймо коменданта — двуручный меч Дозора, 2d6+СИЛ в упор',
       'Волна бездны — некротический шквал вокруг него (всем соседям)',
       'На половине хитов: «ГЛАС ГЛУБИН» — зовёт утопленников из-под двора, КД +2',
+      'v2.2: аура коменданта — рыцари рядом бьют +2 (после «Гласа глубин» +3)',
       'Не ведает страха — запугивание бесполезно',
       'Печать сундука держится, пока он «жив»'],
   });
@@ -303,14 +307,20 @@ export function makeHaldir(x:number,z:number){
       'Со 2 уровня: +8 HP, СИЛ +1; с 3 уровня — +8 HP, ячейка заклинаний'],
   });
 }
+/* v2.2: вожак лагеря Костей — фабрика вынесена из spawnEnemies (E2E-пробы аур) */
+export function makeGrat(x:number,z:number){
+  const grat=makeGoblin(GOB.chief,x,z);
+  grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
+  grat.isBoss=true;grat.mainBoss=true;grat.str=14;
+  grat.aura=1;/* v2.2: аура вождя — гоблины рядом бьют +1 */
+  return grat;
+}
 export function spawnEnemies(){/* v0.8: враги зависят от карты и прогресса; v1.2: +1 враг под отряд из 4 */
   for(const k in gobCount)delete gobCount[k];
   if(G.mapId==='forest'){
     S.patrolGroup=S.patrolDone?[]:[makeGoblin(GOB.bruiser,12,13),makeGoblin(GOB.bruiser,14,12)];
     if(S.campDone){S.campGroup=[];return;}
-    const grat=makeGoblin(GOB.chief,21,6);
-    grat.name='Грат Костолом';grat.short='Грат';grat.hp=grat.maxhp=22;grat.xp=200;
-    grat.isBoss=true;grat.mainBoss=true;grat.str=14;
+    const grat=makeGrat(21,6);/* v2.2: фабрика вынесена (E2E-пробы аур) */
     /* v1.3: ветеран — элита лагеря Костей */
     S.campGroup=[grat,makeGoblin(GOB.shaman,19,4),makeGoblin(GOB.bruiser,23,5),makeGoblin(GOB.archer,24,4),makeGoblin(GOB.bruiser,20,7),applyElite(makeGoblin(GOB.veteran,22,8))];
   }else if(G.mapId==='swamp'){/* v1.5: гарнизон болот — жрица, культисты Глубин, утопленники */
