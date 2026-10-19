@@ -22,7 +22,7 @@ export const ENABLE_GLTF = true;
 /** v1.7: модель — CDN Soldier (как в v1.6); клипы — motions.glb (Unity-ретаргет).
  *  Локальный /models/rig/soldier.glb не используем: парс экспорта вешает
  *  SkeletonUtils.clone в браузере (гонка с пересборкой пайплайна рендера). */
-export const RIG_URL = '/models/rig/soldier.glb';
+export const RIG_URL = (process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/soldier.glb';/* v2.9-фикс Pages: basePath */
 const RIG_FALLBACK = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r180/examples/models/gltf/Soldier.glb';
 
 type RigUnit = {

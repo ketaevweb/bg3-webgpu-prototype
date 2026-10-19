@@ -8,12 +8,13 @@
    Лист по зависимостям: three, utils/constants, rng, renderer (сцена). */
 import * as THREE from 'three/webgpu';
 import { key } from '../utils';
+import { BASE } from '../utils';/* v2.9-фикс Pages: FBX без basePath давал 404 (жил с v1.6 на перевале) */
 import { W } from '../constants';
 import { srand } from '../rng';
 import { solid } from '../state';
 import { worldGroup } from '../render/renderer';
 
-const BASE = '/models/nature/';
+const BASE_DIR = (BASE || '') + '/models/nature/';
 const cache = new Map<string, Promise<THREE.Group>>();
 
 /* v2.9: FBX-материалы не несут ссылок на атлас (probe: map NULL) — раньше все
@@ -44,8 +45,8 @@ async function loadNature(name: string): Promise<THREE.Group> {
     p = (async () => {
       const { FBXLoader } = await import('three/addons/loaders/FBXLoader.js');
       const loader = new FBXLoader();
-      loader.setResourcePath(BASE);
-      const obj = await loader.loadAsync(BASE + name + '.fbx');
+      loader.setResourcePath(BASE_DIR);
+      const obj = await loader.loadAsync(BASE_DIR + name + '.fbx');
       /* материал → MeshStandardMaterial с атласом (Phong из FBX не нужен) */
       obj.traverse(o => {
         const m = o as THREE.Mesh;

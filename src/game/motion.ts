@@ -9,7 +9,7 @@
  * ============================================================ */
 import * as THREE from 'three/webgpu';
 
-const MOTIONS_URL = '/models/rig/motions.glb';
+const MOTIONS_URL = (process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/motions.glb';/* v2.9-фикс Pages: basePath */
 
 export type MotionRole =
   | 'idle' | 'idleCombat' | 'walk' | 'run'
