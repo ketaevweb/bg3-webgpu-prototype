@@ -58,6 +58,7 @@ export interface SeasonView{name:string;desc:string;idx:number}
 export interface RecordsView{
   season:SeasonView|null;
   best:number;
+  bless:{name:string;desc:string}[];/* v2.8: активные глубинные благословения (по рекорду) */
   journal:{w:number;when:string}[];
   server:{n:string;best:number}[]|null;/* null — сервер ещё читается */
 }

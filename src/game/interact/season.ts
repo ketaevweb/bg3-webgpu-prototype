@@ -1,4 +1,4 @@
-/* ================= SEASONS OF THE DEPTH (v2.4 «Сезоны глубины») =================
+/* ================= SEASONS OF THE DEPTH (v2.4 «Сезоны глубины» + v2.8 сезонные составы) =================
    Еженедельный ротационный аффикс бесконечной арены: неделя реального мира
    (Date.now()/7 дней % 5) детерминированно выбирает один из пяти сезонов
    Глубин — «Кровавый прилив» (+1 кость врагам), «Костяная стужа» (КД +2),
@@ -16,6 +16,7 @@ import { uiSet, useUi } from '../ui/store';
 import { topScores } from '../save/leaderboard';
 import { log } from '../ui/overlays';
 import { voice } from '../ui/voice';/* v2.5: анонс сезона голосом рассказчика */
+import { blessActive } from './bless';/* v2.8: благословения в панели T */
 import type { Unit } from '../types';
 
 export interface SeasonDef{name:string;desc:string;tint:number;}
@@ -47,6 +48,25 @@ export function seasonState(){
 export function seasonRewardMult():number{return seasonIndex()===4?1.5:1;}
 /* «Ярость толпы»: в каждой глубинной волне на одного врага больше */
 export function seasonExtraEnemy():boolean{return seasonIndex()===3;}
+
+/* ---- v2.8: СЕЗОННЫЕ СОСТАВЫ — аффикс недели меняет рецепты глубинных волн.
+   Карта замены тегов состава (tag→tag): «Кровавый прилив» смывает кости в
+   трясину, «Костяная стужа» поднимает кости вместо культистов, «Мора
+   глубин» выставляет закалённые кости, «Ярость толпы» уже добавляет лишнего
+   врага (состав не трогается), «Дань глубин» платит кастерами. Теги: drowned /
+   skeleton / boneknight / cultist / adept / knight / ogre (каталог RECRUIT в
+   interact/arena.ts). Единый механизм для клиента и E2E. ---- */
+export const SEASON_SWAPS:Array<Record<string,string>|null>=[
+  {skeleton:'drowned',boneknight:'drowned'},/* 0 Кровавый прилив: море смывает кости */
+  {cultist:'skeleton',adept:'boneknight'},/* 1 Костяная стужа: стужа поднимает кости */
+  {skeleton:'boneknight'},/* 2 Мора глубин: мора выставляет закалённые кости */
+  null,/* 3 Ярость толпы: свой лишний враг — состав каноничен */
+  {drowned:'cultist',skeleton:'cultist'},/* 4 Дань глубин: глубины платят кастерами */
+];
+export function seasonSwap(tag:string):string{
+  const map=SEASON_SWAPS[seasonIndex()];
+  return (map&&map[tag])||tag;
+}
 /* сезонные модификаторы + косметика тени: облик сезона — перекраска
    тела фигурки (buildFigure: children[0] — капсула тела; ринг фракции
    и голова не трогаются). Вызывается из endlessBoost после глубинного
@@ -82,6 +102,7 @@ export function toggleRecords(){
   uiSet({recordsOpen:true,records:{
     season:d?{name:d.name,desc:d.desc,idx:seasonIndex()}:null,
     best:me,
+    bless:blessActive().map(b=>({name:b.name,desc:b.desc})),/* v2.8: глубинные благословения рекорда */
     journal:(S.arenaLog||[]).slice(-8).reverse().map(r=>({w:r.w,
       when:new Date(r.when).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})})),
     server:null,

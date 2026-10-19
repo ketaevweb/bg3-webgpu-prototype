@@ -8,6 +8,7 @@ import { scene, rigs } from '../render/renderer';
 import { W } from '../constants';
 import { srand } from '../rng';import { buildFigure } from './figure';
 import { bus } from '../bus';
+import { applyBlessings } from '../interact/bless';/* v2.8: глубинные благословения героям при создании */
 import type { Unit, Weapon } from '../types';
 
 export function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза 3: доменный тип юнита */
@@ -31,6 +32,10 @@ export function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза
      карты гонится с пересборкой пайплайна WebGPU-нод (меш «ложится»). */
   scene.add(u.mesh);
   units.push(u);
+  /* v2.8: героям — активные глубинные благословения (детерминированы
+     рекордом S.arenaBest; сейв не меняется — applyGame перезапишет
+     статы сейвовыми, уже благословёнными тем же рекордом) */
+  if(u.side==='hero')applyBlessings(u);
   return u;
 }
 export function removeUnit(u:Unit){

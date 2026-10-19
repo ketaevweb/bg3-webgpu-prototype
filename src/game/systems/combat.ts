@@ -66,7 +66,7 @@ import { addStatus, igniteTile } from './statuses';
 import { awardXP, checkEnd } from './progression';
 import { rollLoot } from './loot';
 import { questObj, questDone } from '../interact/quests';
-import { bark } from '../ui/barks';/* v2.6: боевые реплики */
+import { bark, enemyBark } from '../ui/barks';/* v2.6: боевые реплики; v2.8: + реплики носителей ауры */
 import type { ExplodeOpts, Unit, Weapon } from '../types';
 export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:number;aoo?:boolean}={}){
   if(!att.alive||!def.alive)return;
@@ -87,10 +87,11 @@ export async function doAttack(att:Unit,def:Unit,w:Weapon,opts:{sneakBonus?:numb
     log(att.name+': '+w.name+' по «'+def.name+'» — '+total+' против КД '+def.ac+' — промах!',cls);
   }else{
     const n=w.dice[0]*(crit?2:1);
-    let dmg=roll(n,w.dice[1])+mod(att[w.abil]);
+    let dmg=roll(n,w.dice[1])+mod(att[w.abil])+(att.dmgBonus||0);/* v2.8: +бонус глубинных благословений */
     const ba=bossAura(att);/* v2.2: аура властителя (чемпион/боссы кампании) */
     if(ba){
       dmg+=ba.v;
+      enemyBark(ba.src);/* v2.8: носитель ауры ревёт один раз за жизнь юнита */
       log('Аура «'+ba.src.short+'» усиливает удар: +'+ba.v+' урона!','g-enemy');
     }
     if(opts.sneakBonus){/* v1.2: подлый удар Илвы */

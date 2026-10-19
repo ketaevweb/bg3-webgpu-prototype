@@ -27,6 +27,8 @@ import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
 import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
 import { seasonState, forceSeason, toggleRecords, closeRecords } from './interact/season';/* v2.4: сезоны глубины + летопись (T) */
+import { blessState, blessForce } from './interact/bless';/* v2.8: глубинные благословения (E2E) */
+import { ebarkProbe, ebarkState } from './ui/barks';/* v2.8: глас бездны (E2E) */
 import { awardXP } from './systems/progression';/* v2.2: калибровка опыта (E2E) */
 import { buyRelic, upgradeRelic } from './interact/dialog';/* v2.2: обмен реликвий; v2.3: апгрейд (E2E) */
 import { makeMalveh, makeGarrum, makeGrat } from './entities/roster';/* v2.2: пробы аур боссов (E2E) */
@@ -298,7 +300,7 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
-  log('BG3 Web-прототип v2.7 «Дальние земли»: мобильная адаптация (тач-управление, кнопка «Говорить»), полноэкранный режим (F или ⛶) — играйте с телефона как в большой BG3.','g-sys');
+  log('BG3 Web-прототип v2.8 «Глубинные благословения»: каждые 2 покорённые глубины усиливают отряд (6 благословений), сезон недели меняет состав волн, носители ауры ревут своим голосом — глубины стали живее.','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
@@ -306,7 +308,7 @@ let disposed=false;
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v2.7 boot complete');
+  console.log('[bg3] v2.8 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -365,6 +367,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   barkProbe:(kind,hero)=>barkProbe(kind,hero),/* v2.6: проба боевых реплик (E2E) */
   fs:()=>fsState(),fsToggle:()=>toggleFullscreen(),/* v2.7: полный экран (E2E) */
   touch:()=>({touch:fsState().touch,dlg:!!useUi.getState().dlg}),/* v2.7: инспектор тача (E2E) */
+  blessState:()=>blessState(),blessForce:(b)=>blessForce(b),/* v2.8: благословения (E2E) */
+  ebarkProbe:(k)=>ebarkProbe(k),ebarkState:()=>ebarkState(),/* v2.8: глас бездны (E2E) */
   barkKinds:()=>({cd:barks.BARK_CD,heroes:barkHeroes()}),/* v2.6: каталог барьков (E2E) */
   heroPass:()=>{if(G.combatOn&&G.current&&G.current.side==='hero'&&G.phase==='player')endTurn();},/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;

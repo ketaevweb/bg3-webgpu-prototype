@@ -32,7 +32,8 @@ import { freeSpotNear } from '../world/grid';
 import { makeDrowned, makeSkeleton, makeSkeletonKnight, makeCultist, makeKnight, makeAdept, makeOgre, applyElite } from '../entities/roster';
 import { makeUnit, aliveHeroes } from '../entities/units';
 import { postScore, topScores } from '../save/leaderboard';/* v2.3: серверная летопись глубины */
-import { seasonBoost, seasonExtraEnemy, seasonRewardMult, announceSeason, seasonDef } from './season';/* v2.4: сезоны глубины */
+import { seasonBoost, seasonExtraEnemy, seasonRewardMult, announceSeason, seasonDef, seasonSwap } from './season';/* v2.4: сезоны; v2.8: + сезонные составы */
+import { blessRefresh } from './bless';/* v2.8: доза благословений при новом рекорде */
 import type { Unit } from '../types';
 
 export const WAVES=5;/* волн в испытании; глубже — бесконечный режим */
@@ -130,18 +131,30 @@ function mirrorGroup(w:number):Unit[]{
   for(const u of out)endlessBoost(u,w,true);
   return out;
 }
-/* состав глубинных волн: цикл рецептов по (w−6)%5, каждый 5-й глубинной — чемпион */
+/* состав глубинных волн: цикл рецептов по (w−6)%5, каждый 5-й глубинной — чемпион.
+   v2.8: рецепты ТЕГИРОВАНЫ (drowned/skeleton/boneknight/cultist/adept/knight/ogre),
+   сезон недели подменяет теги (seasonSwap → SEASON_SWAPS) — аффикс меняет состав. */
+const RECRUIT:Record<string,(x:number,z:number)=>Unit>= {
+  drowned:makeDrowned,skeleton:makeSkeleton,boneknight:makeSkeletonKnight,
+  knight:makeKnight,ogre:makeOgre,adept:makeAdept,
+  cultist:(x,z)=>makeCultist('deep',x,z),
+};
 function endlessGroup(w:number):Unit[]{
   const out:Unit[]=[];
   const r=(w-6)%5;
-  const push=(mk:(x:number,z:number)=>Unit)=>{const p=spot(out.length);out.push(mk(p.x,p.z));};
-  const deep=(x:number,z:number)=>makeCultist('deep',x,z);
-  const ac=(x:number,z:number)=>makeCultist('acolyte',x,z);
-  if(r===0){push(makeDrowned);push(makeDrowned);push(makeSkeletonKnight);}
-  else if(r===1){push(deep);push(deep);push(ac);push(makeDrowned);}
-  else if(r===2){push(makeKnight);push(makeKnight);push(makeSkeleton);}
-  else if(r===3){push(makeOgre);push(makeKnight);push(makeAdept);}
-  else {push(makeSkeleton);push(makeSkeleton);push(deep);push(makeDrowned);}
+  const recipe=r===0?['drowned','drowned','boneknight']
+    :r===1?['cultist','cultist','cultist','drowned']
+    :r===2?['knight','knight','skeleton']
+    :r===3?['ogre','knight','adept']
+    :['skeleton','skeleton','cultist','drowned'];
+  let swapped=false;
+  for(const tag of recipe){
+    const t=seasonSwap(tag);/* v2.8: сезон недели меняет состав */
+    if(t!==tag)swapped=true;
+    const p=spot(out.length);
+    out.push(RECRUIT[t](p.x,p.z));
+  }
+  if(swapped)log('Состав волны подчинён сезону «'+(seasonDef()?.name||'—')+'»: глубины выставляют иные силы.','g-sys');
   if(seasonExtraEnemy()){/* v2.4 «Ярость толпы»: глубины выставляют лишнего */
     const p=spot(out.length);out.push(makeDrowned(p.x,p.z));
   }
@@ -226,6 +239,7 @@ function recordBest(w:number){
   const prev=S.arenaBest||0;
   if(w<=prev){S.arenaBest=prev;return;}
   S.arenaBest=w;
+  blessRefresh();/* v2.8: новые глубины — новые благословения отряду (баннер+лог внутри) */
   void postScore(captainName(),w);/* no-throw: сервер недоступен — рекорд остаётся локальным */
 }
 export function showRecords(){/* стела у портала — читает журнал и серверную летопись */

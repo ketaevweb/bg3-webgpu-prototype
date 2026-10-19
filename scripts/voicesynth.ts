@@ -12,7 +12,7 @@ import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { VOICES, ttsNormalize, bannerSlug, BARKS, HERO_VOICE, BARK_KINDS } from '../src/game/voicecfg';
+import { VOICES, ttsNormalize, bannerSlug, BARKS, HERO_VOICE, BARK_KINDS, ENEMY_BARKS, ENEMY_VOICE, enemyBarkId } from '../src/game/voicecfg';
 
 interface LineDef{v:string;t:string;}
 interface ManLine{v:string;d:number;}
@@ -69,6 +69,13 @@ function main():void{
       const t=BARKS[hero][kind];
       if(t&&t.trim())jobs['bark.'+bannerSlug(hero)+'.'+kind]={v:voiceId,t};
     }
+  }
+  /* v2.8: глас бездны — ebark.<транслит>.aura, голос носителя ауры по ENEMY_VOICE */
+  for(const key of Object.keys(ENEMY_BARKS)){
+    const voiceId=ENEMY_VOICE[key];
+    if(!voiceId||!VOICES[voiceId])throw new Error('ebark voice missing: '+key);
+    const t=ENEMY_BARKS[key];
+    if(t&&t.trim())jobs[enemyBarkId(key)]={v:voiceId,t};
   }
   const manifest:Record<string,ManLine>={};
   let done=0,skipped=0,total=0;

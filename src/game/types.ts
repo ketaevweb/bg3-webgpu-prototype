@@ -64,6 +64,9 @@ export interface Unit{
   keepDist:boolean;elite?:boolean;caster?:boolean;healer?:boolean;
   champ?:boolean;reinforced?:boolean;depth?:number;/* v2.1: чемпион бездны (аура/подкрепление) и глубина волны */
   barkHurt?:boolean;/* v2.6: реплика «ранен» уже прозвучала (раз за бой) */
+  enemyBarked?:boolean;/* v2.8: реплика носителя ауры уже прозвучала (раз за жизнь юнита) */
+  dmgBonus?:number;/* v2.8: бонус урона глубинных благословений (к любому оружию, не пишется в сейв) */
+  blessed?:string[];/* v2.8: имена активированных благословений (не пишется в сейв — детерминировано рекордом) */
   aura?:number;/* v2.2: аура властителя — враги рядом с носителем бьют +N (чемпионы и боссы кампании) */
   atkBonus?:number;/* v2.2: бонус к броскам атаки (Осколок портала) */
   summoned?:boolean;summoner?:Unit|null;
@@ -291,6 +294,10 @@ export interface Bg3Debug{
   heroPass:()=>void;/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   fs:()=>{touch:boolean;can:boolean;on:boolean};fsToggle:()=>Promise<void>;/* v2.7: полный экран */
   touch:()=>{touch:boolean;dlg:boolean};/* v2.7: инспектор тача */
+  blessState:()=>unknown;/* v2.8: инспектор благословений {best,count,active,heroes} */
+  blessForce:(best:number|null)=>void;/* v2.8: рекорд + доза благословений (E2E) */
+  ebarkProbe:(key:string)=>{ok:boolean;id:string};/* v2.8: проба каталога реплик врагов */
+  ebarkState:()=>unknown;/* v2.8: счётчик ревов + каталог */
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
   tutSteps:()=>{id:string;title:string;text:string}[];
   openDlg:(npc:string)=>void;

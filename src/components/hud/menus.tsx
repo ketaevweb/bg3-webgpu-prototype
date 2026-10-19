@@ -130,6 +130,10 @@ export function RecordsPanel(){
         :<div className="rseason"><div className="rsd">Портал вне сезонного круга.</div></div>}
       <div className="rhead">Лучший заход</div>
       <div className="rrow"><span>Волна {rec.best}</span><span>рекорд отряда</span></div>
+      <div className="rhead">Глубинные благословения ({rec.bless.length} из 6)</div>
+      {rec.bless.length
+        ?rec.bless.map((b,i)=><div key={'b'+i} className="rrow"><span>{b.name}</span><span>{b.desc}</span></div>)
+        :<div className="rsd">Глубины пока молчат: каждые 2 покорённые глубины дают отряду новое благословение.</div>}
       <div className="rhead">Журнал заходов (последние 8)</div>
       {rec.journal.length
         ?rec.journal.map((j,i)=><div key={'j'+i} className="rrow"><span>Волна {j.w}</span><span>{j.when}</span></div>)

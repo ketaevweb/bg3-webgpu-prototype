@@ -1,15 +1,19 @@
-/* ================= BARKS (v2.6 «Эхо битвы») =================
+/* ================= BARKS (v2.6 «Эхо битвы» + v2.8 «Глас бездны») =================
    Боевые реплики героев — как barks в BG3: на события боя герой
    выкрикивает короткую фразу СВОИМ голосом (HERO_VOICE+BARKS из
    voicecfg). Гандикап спама — общий кулдаун 4 c между барьками
    (как в BG3); падение героя (down) — force, перебивает всё.
+   v2.8: enemyBark — НОСИТЕЛЬ АУРЫ (Грат/Костепёр/Ульва/Гаррум/Малвех/
+   Чемпион бездны) при первом применении ауры в бою ревёт свою реплику
+   (ENEMY_VOICE+ENEMY_BARKS): флаг src.enemyBarked живёт на юните до
+   пересоздания, кулдаун героев не трогается.
    Ключ манифеста: bark.<герой>.<событие> (герой — Unit.short в
    нижнем регистре, транслит не нужен — файлы генерируются по тем же
    ключам). Призраки-саммонцы и чужие герои молчат; мёртвый герой
    не барькает. ЛИСТ-слой: state (данные) + voicecfg + voice — циклы
-   исключены. E2E: barkProbe(kind, hero?) через __bg3 — возвращает
-   {ok,id} без побочных звуков мимо кулдауна. */
-import { BARKS } from '../voicecfg';
+   исключены. E2E: barkProbe(kind, hero?) / ebarkProbe(key) через __bg3
+   — возвращают {ok,id} без побочных звуков мимо кулдауна. */
+import { BARKS, ENEMY_VOICE, ENEMY_BARKS, enemyBarkId } from '../voicecfg';
 import type { BarkKind } from '../voicecfg';
 import { bannerSlug } from '../voicecfg';
 import { units } from '../state';
@@ -85,3 +89,34 @@ export function barkProbe(kind:BarkKind,heroKey?:string):{ok:boolean;id:string}{
 
 /* фасад для модулей игры */
 export const barks={bark,barkHeroes,barkProbe,BARK_CD};
+
+/* ================= v2.8 «ГЛАС БЕЗДНЫ»: реплики врагов =================
+   Хук — systems/combat.ts (doAttack, bossAura): когда удар союзника
+   усиливает аура носителя (Грат и др.), носитель ревёт ОДИН раз за
+   жизнь юнита (пересоздание — новая карта/волна — возвращает голос).
+   Саммонцы и юниты без каталога молчат; no-throw. */
+let ebarkCount=0;/* v2.8: счётчик успешных ревов (E2E-инспектор) */
+
+export function enemyBark(src:unknown):boolean{
+  try{
+    if(!src)return false;
+    const u=src as {side?:string;alive?:boolean;short?:string;summoned?:boolean;enemyBarked?:boolean};
+    if(u.side==='hero'||u.alive===false||u.summoned)return false;
+    const key=(u.short||'').toLowerCase();
+    if(!ENEMY_BARKS[key]||!ENEMY_VOICE[key])return false;
+    if(u.enemyBarked)return false;
+    u.enemyBarked=true;
+    void voice.play(enemyBarkId(key));
+    ebarkCount++;
+    return true;
+  }catch{return false;}
+}
+
+/* E2E-проба каталога: {ok,id} без флагов и звуков */
+export function ebarkProbe(key:string):{ok:boolean;id:string}{
+  const k=(key||'').toLowerCase();
+  const id=enemyBarkId(k||'?');
+  return {ok:!!ENEMY_BARKS[k]&&!!ENEMY_VOICE[k],id};
+}
+
+export function ebarkState(){return {count:ebarkCount,catalog:Object.keys(ENEMY_BARKS)};}
