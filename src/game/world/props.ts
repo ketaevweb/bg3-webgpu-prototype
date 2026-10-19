@@ -4,10 +4,11 @@
 import * as THREE from 'three/webgpu';
 import { srand } from '../rng';
 import { key } from '../utils';
-import { GRID, TILE, W } from '../constants';
-import { worldGroup, applyLighting } from '../render/renderer';
+import { GRID, TILE, HALF, W } from '../constants';
+import { worldGroup, applyLighting, fx } from '../render/renderer';
+import { makeSwayMaterial } from '../render/wind';/* v2.9: качание травы */
 import { G, S, solid, grass, barrels, CRYPT, SWAMP, GIANTS, CITADEL } from '../state';
-import { placePine, placeDeadPine, placeBoulder } from './nature';
+import { placePine, placeDeadPine, placeBoulder, placeNature } from './nature';
 import type { Barrel } from '../types';
 
 /* ================= СЕТКА / КАРТЫ (v0.8: лес ↔ крипта) =================
@@ -119,20 +120,11 @@ export function seedCitadel(){
 /* ================= ПОСТРОЕНИЕ МИРА ================= */
 export function addTree(x:number,z:number){
   solid.add(key(x,z));
-  const g=new THREE.Group();
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.3,1.8,7),
-    new THREE.MeshStandardMaterial({color:0x5a4630,roughness:1}));
-  trunk.position.y=0.9;trunk.castShadow=true;
-  const folM=new THREE.MeshStandardMaterial({color:0x2f5c2b,roughness:1});
-  const fol=new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,0),folM);
-  fol.position.y=2.2;fol.castShadow=true;
-  const fol2=new THREE.Mesh(new THREE.IcosahedronGeometry(0.7,0),folM);
-  fol2.position.set(0.35,2.9,0.15);fol2.castShadow=true;
-  g.add(trunk,fol,fol2);
-  g.position.set(W(x),0,W(z));
-  g.rotation.y=srand()*6.28;
-  g.scale.setScalar(0.85+srand()*0.5);
-  worldGroup.add(g);
+  /* v2.9: лес — настоящие модели POLYGON (гигантское дерево/сосны), как на перевале;
+    процедурная «ёлка-конус» ушла — силуэты живые, кроны разные */
+  const roll=srand();
+  if(roll<0.55)placeNature('SM_Tree_Generic_Giant_01',x,z,{s:0.13+srand()*0.06,spin:true});
+  else placeNature(roll<0.8?'SM_Tree_Pine_02':'SM_Tree_Pine_01',x,z,{s:0.46+srand()*0.2,spin:true});
 }
 /* v1.5: болотный сухостой — голые ветви вместо листвы */
 export function addDeadTree(x:number,z:number){
@@ -217,13 +209,60 @@ export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет
 }
 export function buildWorld(){
   applyLighting(G.mapId);
-  /* v1.5: цвет грунта/заплаток — по карте (лес/крипта/болото) */
-  const groundColor=G.mapId==='crypt'?0x3d3d47:(G.mapId==='swamp'?0x2c3a26:(G.mapId==='giants'?0x4a4640:(G.mapId==='citadel'?0x42444a:0x3a5530)));
-  const patchColor=G.mapId==='crypt'?0x34343e:(G.mapId==='swamp'?0x26331f:(G.mapId==='giants'?0x403c37:(G.mapId==='citadel'?0x3a3c42:0x324a2a)));
-  G.groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE),
-    new THREE.MeshStandardMaterial({color:groundColor,roughness:1}));
-  G.groundMesh.rotation.x=-Math.PI/2;G.groundMesh.receiveShadow=true;
-  worldGroup.add(G.groundMesh);
+  /* v1.5: цвет грунта/заплаток — по карте; v2.9: земля — вертексные пятна + холмы за ареной;
+     v2.9-брайт: палитры подняты ~+35% — тёмный мрак ушёл */
+  const groundColor=G.mapId==='crypt'?0x4c4c58:(G.mapId==='swamp'?0x3c5030:(G.mapId==='giants'?0x5e5952:(G.mapId==='citadel'?0x53555e:0x51793c)));
+  const patchColor=G.mapId==='crypt'?0x424250:(G.mapId==='swamp'?0x344628:(G.mapId==='giants'?0x524d46:(G.mapId==='citadel'?0x4a4c54:0x466a34)));
+  /* v2.9: земля с вертексными цветами — травяные/земляные пятна шумом (srand-детерминизм) */
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(GRID*TILE,GRID*TILE,36,36),
+    new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}));
+  {
+    const pos=ground.geometry.attributes.position as THREE.BufferAttribute;
+    const base=new THREE.Color(groundColor),patch=new THREE.Color(patchColor),tmp=new THREE.Color();
+    const colors=new Float32Array(pos.count*3);
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),y=pos.getY(i);
+      const n=Math.sin(x*0.34)*Math.cos(y*0.3)+Math.sin(x*0.11+y*0.19)*0.7;
+      tmp.copy(base).lerp(patch,THREE.MathUtils.clamp(n*0.5+0.5,0,1)*0.6);
+      colors[i*3]=tmp.r;colors[i*3+1]=tmp.g;colors[i*3+2]=tmp.b;
+    }
+    ground.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+  }
+  ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;
+  G.groundMesh=ground;worldGroup.add(ground);
+  /* v2.9: ЛАНДШАФТ за ареной — холмы с рельефом (вне игровой сетки, r>24)
+    + дальние горные силуэты; горизонт перестал быть обрывом в туман */
+  const skirt=new THREE.Mesh(new THREE.PlaneGeometry(250,250,52,52),
+    new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}));
+  {
+    const pos=skirt.geometry.attributes.position as THREE.BufferAttribute;
+    const low=new THREE.Color(groundColor).multiplyScalar(0.93);/* v2.9: без тёмного шва с ареной */
+    const rock=new THREE.Color(G.mapId==='giants'?0x8a8e94:(G.mapId==='swamp'?0x3e5238:(G.mapId==='crypt'?0x3c3f4c:(G.mapId==='citadel'?0x43464e:0x4a6a3c))));
+    const tmp=new THREE.Color();const colors=new Float32Array(pos.count*3);
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),y=pos.getY(i);
+      const r=Math.hypot(x,y);
+      /* урок v2.9×3: рельеф стартует далеко от арены (r>34) и растёт полого —
+         близкие холмы 6-9 м заливали кадр стенами с орбиты камеры (27-62 м) */
+      const h=r>34?Math.max(0,Math.sin(x*0.05)+Math.sin(y*0.045)+Math.sin((x+y)*0.03))/3*Math.min((r-34)*0.16,7):0;
+      pos.setZ(i,h);
+      tmp.copy(low).lerp(rock,THREE.MathUtils.clamp(h/6,0,1)*0.8+Math.max(0,Math.sin(x*0.3))*0.12);
+      colors[i*3]=tmp.r;colors[i*3+1]=tmp.g;colors[i*3+2]=tmp.b;
+    }
+    skirt.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+    skirt.geometry.computeVertexNormals();
+  }
+  skirt.rotation.x=-Math.PI/2;skirt.position.y=-0.08;skirt.receiveShadow=true;
+  worldGroup.add(skirt);
+  const MTS=['SM_Terrain_Mountain_01','SM_Terrain_Mountain_02','SM_Terrain_Mountain_03'];
+  /* урок v2.9×2: Synty-горы 25-40 м; орбита камеры до 62 м от центра —
+     ставим силуэты ЗА орбитой (86-106 м), иначе южные горы съедают кадр;
+     дальние силуэты тонут в тумане — вид «глубокой сцены» как в BG3 */
+  for(let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2+srand()*0.55;
+    const dist=86+srand()*20;
+    placeNature(MTS[i%3],Math.cos(a)*dist/TILE+HALF,Math.sin(a)*dist/TILE+HALF,{s:0.3+srand()*0.22,ry:-a+Math.PI});
+  }
   const patchGeo=new THREE.CircleGeometry(1,16);
   const patchMat=new THREE.MeshStandardMaterial({color:patchColor,roughness:1});
   for(let i=0;i<26;i++){
@@ -234,8 +273,9 @@ export function buildWorld(){
     worldGroup.add(m);
   }
   if(G.mapId==='forest'){
+    /* v2.9: трава качается ветром (TSL) — куртины + фоновые травинки по всей карте */
     const tuftG=new THREE.ConeGeometry(0.16,0.5,5);
-    const tuftM=new THREE.MeshStandardMaterial({color:0x4e8a34,roughness:1});
+    const tuftM=makeSwayMaterial({color:0x4e8a34},{amp:0.07,speed:1.7});
     for(const k of grass){
       const [x,z]=k.split('_').map(Number);
       if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
@@ -247,9 +287,20 @@ export function buildWorld(){
         worldGroup.add(t);
       }
     }
-  }else if(G.mapId==='giants'){/* v1.6: каменная крошка + серая трава перевала */
+    const bgG=new THREE.ConeGeometry(0.13,0.42,4);
+    const bgM=makeSwayMaterial({color:0x406e2c},{amp:0.06,speed:1.4});
+    const n=Math.round(110*fx.density);
+    for(let i=0;i<n;i++){
+      const gx=1+Math.floor(srand()*(GRID-2)),gz=1+Math.floor(srand()*(GRID-2));
+      if(solid.has(key(gx,gz)))continue;
+      const t=new THREE.Mesh(bgG,bgM);
+      t.position.set(W(gx)+(srand()-0.5)*1.3,0.18,W(gz)+(srand()-0.5)*1.3);
+      t.rotation.z=(srand()-0.5)*0.5;
+      worldGroup.add(t);
+    }
+  }else if(G.mapId==='giants'){/* v1.6: каменная крошка + серая трава перевала; v2.9: качается */
     const tuftG=new THREE.ConeGeometry(0.14,0.42,4);
-    const tuftM=new THREE.MeshStandardMaterial({color:0x6a7a55,roughness:1});
+    const tuftM=makeSwayMaterial({color:0x6a7a55},{amp:0.05,speed:2.1});
     for(const k of grass){
       const [x,z]=k.split('_').map(Number);
       if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;
@@ -287,7 +338,7 @@ export function buildWorld(){
       worldGroup.add(m);
     }
     const reedG=new THREE.ConeGeometry(0.05,0.95,4);
-    const reedM=new THREE.MeshStandardMaterial({color:0x5f7f3a,roughness:1});
+    const reedM=makeSwayMaterial({color:0x5f7f3a},{amp:0.13,speed:2.4});/* v2.9: камыш клонится от ветра */
     for(const k of grass){
       const [x,z]=k.split('_').map(Number);
       if(G.BARREL_POS.some(p=>p[0]===x&&p[1]===z))continue;

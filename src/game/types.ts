@@ -298,6 +298,10 @@ export interface Bg3Debug{
   blessForce:(best:number|null)=>void;/* v2.8: рекорд + доза благословений (E2E) */
   ebarkProbe:(key:string)=>{ok:boolean;id:string};/* v2.8: проба каталога реплик врагов */
   ebarkState:()=>unknown;/* v2.8: счётчик ревов + каталог */
+  skyState:()=>unknown;/* v2.9: небо {dome,clouds,sun,map,motes} */
+  windStats:()=>{active:number};/* v2.9: wind-материалы травы */
+  charStats:()=>{rings:number;runners:number};/* v2.9: ореолы/бегущие */
+  gfxState:()=>{bloom:boolean;grade:boolean;sky:boolean};/* v2.9: рубильники пост-обработки */
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
   tutSteps:()=>{id:string;title:string;text:string}[];
   openDlg:(npc:string)=>void;

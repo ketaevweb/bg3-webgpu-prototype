@@ -12,7 +12,9 @@ import { astar, passable } from './world/grid';
 import { S, G, units, barrels, fires, pick, interactables, KAYA_SPOT, GW, resetState } from './state';
 import { bus } from './bus';
 import { uiSet, useUi } from './ui/store';
-import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';/* scene — для __bg3.scn (E2E-снимки) */
+import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, sky, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';/* scene — для __bg3.scn (E2E-снимки) */
+import { charfxUpdate, charfxStats } from './render/charfx';/* v2.9: ореолы благословений + пыль шагов */
+import { windStats } from './render/wind';/* v2.9: качание травы (E2E) */
 import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
@@ -230,9 +232,11 @@ function loop(){
   }else scene.position.set(0,0,0);
   fx.update(dt);
   glows.update(dt,t);
+  sky.update(dt,t);/* v2.9: дрейф облаков + амбиент-частицы карты */
+  charfxUpdate(dt,t);/* v2.9: ореолы благословенных + пыль шагов */
   rigs.update(dt,t);
   updateOverlays();
-  if(G.postFX&&G.bloomOn)G.postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый */
+  if(G.postFX&&(G.bloomOn||G.gradeOn))G.postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый; v2.9: кинолюк живёт в postFX */
 }
 /* ================= СТАРТ ================= */
 const disposers:(()=>void)[]=[];
@@ -301,7 +305,7 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
-  log('BG3 Web-прототип v2.8 «Глубинные благословения»: каждые 2 покорённые глубины усиливают отряд (6 благословений), сезон недели меняет состав волн, носители ауры ревут своим голосом — глубины стали живее.','g-sys');
+  log('BG3 Web-прототип v2.9 «Лик Фаэруна»: мир ожил — ландшафты с холмами и дальними горами, небо с облаками и светилом, качающаяся ветром трава, кинолюк и виньетка, светлячки/споры/снег; герои благословлённых глубин носят золотые ореолы (T — летопись).','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
@@ -309,7 +313,7 @@ let disposed=false;
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v2.8 boot complete');
+  console.log('[bg3] v2.9 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -374,6 +378,8 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   heroPass:()=>{if(G.combatOn&&G.current&&G.current.side==='hero'&&G.phase==='player')endTurn();},/* v2.6: пропуск хода героя (E2E: враги получают ходы) */
   dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;
     return n?{name:n.name,text:n.text,opts:(n.opts||[]).map(o=>o.t)}:null;},/* v2.5: пробы реплик (генератор озвучки) */
+  skyState:()=>sky.state(),windStats,charStats:()=>charfxStats(),/* v2.9: небо/ветер/персонажи (E2E) */
+  gfxState:()=>({bloom:G.bloomOn,grade:G.gradeOn,sky:sky.enabled}),/* v2.9: рубильники пост-обработки (E2E) */
   tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
   openDlg:(n)=>openDlg(n),closeDlg:()=>closeDlg(),/* v2.5: диалог для E2E */
 };

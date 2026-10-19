@@ -3,7 +3,7 @@
    localStorage bg3w_gfx_v1. bloomOn/fpsLimit/frameAcc живут в G.
    Фаза 6: DOM-рендер заменён view-моделью zustand-стора (React-HUD);
    биндинги gfxOnClose/sys.onGfx. Логика применения — без изменений. */
-import { renderer, fx, glows } from '../render/renderer';
+import { renderer, fx, glows, sky, setupPostFX } from '../render/renderer';
 import { G } from '../state';
 import { sfx } from '../audio';
 import { voice } from '../ui/voice';/* v2.5: вкл/выкл голосов */
@@ -13,7 +13,7 @@ import { useUi, uiSet } from '../ui/store';
    Тени / bloom / glow-хала / плотность частиц / разрешение / лимит FPS.
    Всё применяется на живую и хранится в localStorage (bg3w_gfx_v1). */
 export const GFX_KEY='bg3w_gfx_v1';
-export const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max',voice:true,vol:'100'};/* v2.6: +vol (громкость голосов, %) */
+export const gfx={shadows:'high',bloom:true,glow:true,particles:'high',res:'100',fps:'max',voice:true,vol:'100',sky:true,grade:true};/* v2.6: +vol; v2.9: +sky/grade */
 
 export function loadGfx(){try{const raw=localStorage.getItem(GFX_KEY);if(raw)Object.assign(gfx,JSON.parse(raw));}catch{}}
 export function applyShadows(){
@@ -37,6 +37,11 @@ export function applyGfx(){
   G.fpsLimit=gfx.fps==='30'?30:(gfx.fps==='60'?60:0);
   voice.setEnabled(gfx.voice!==false);/* v2.5: голоса подчиняются панели G */
   voice.setVolume((parseInt(gfx.vol,10)||100)/100);/* v2.6: громкость голосов */
+  /* v2.9: небо/облака/амбиент + кинолюк; плотность амбиента — от частиц */
+  sky.setEnabled(gfx.sky!==false);
+  sky.density=gfx.particles==='low'?0.4:(gfx.particles==='mid'?0.7:1);
+  const grade=(gfx.grade!==false);
+  if(G.gradeOn!==grade){G.gradeOn=grade;void setupPostFX();}
   G.frameAcc=0;
   try{localStorage.setItem(GFX_KEY,JSON.stringify(gfx));}catch{}
 }
@@ -55,6 +60,8 @@ export const GFX_ROWS:{k:GfxKey;label:string;bool?:boolean;opts:[string,string][
   {k:'fps',label:'Лимит FPS',opts:[['30','30'],['60','60'],['max','Макс']]},
   {k:'voice',label:'Голоса',bool:true,opts:[['1','Вкл'],['0','Выкл']]},/* v2.5 */
   {k:'vol',label:'Громкость',opts:[['60','60%'],['80','80%'],['100','100%']]},/* v2.6 */
+  {k:'sky',label:'Небо',bool:true,opts:[['1','Вкл'],['0','Выкл']]},/* v2.9 */
+  {k:'grade',label:'Кинолюк',bool:true,opts:[['1','Вкл'],['0','Выкл']]},/* v2.9 */
 ];
 export function renderGfx(){
   const presets=( [['low','Низкий'],['mid','Средний'],['high','Высокий']] as const ).map(([k,n])=>({

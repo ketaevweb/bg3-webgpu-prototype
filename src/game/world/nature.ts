@@ -16,6 +16,28 @@ import { worldGroup } from '../render/renderer';
 const BASE = '/models/nature/';
 const cache = new Map<string, Promise<THREE.Group>>();
 
+/* v2.9: FBX-материалы не несут ссылок на атлас (probe: map NULL) — раньше все
+   модели рендерились фоллбек-серым. Красим по СЕМАНТИКЕ имени материала
+   (Trunk/Leave/Leaves_Dead/Rock/Terrain…) — чистый low-poly стиль Synty. */
+const NATURE_COLOR: [RegExp, number][] = [
+  [/trunk|bark|log|wood/i, 0x6b4a2e],
+  [/leave|leaf/i, 0x3f7d33],
+  [/dead/i, 0x7a7a4a],
+  [/rock|stone|boulder|gravel|cave/i, 0x777a72],
+  [/grass|plant|reed|fern|flower/i, 0x4e8a34],
+  [/mushroom/i, 0x9a5a4a],
+  [/terrain|mountain|cliff|dust|pile|rubble|pebble/i, 0x5f7a52],
+  [/skull|bone|skeleton/i, 0xcfcabc],
+  [/pillar|wall|brick|ruin/i, 0x8a8a80],
+  [/bridge/i, 0x6b5238],
+  [/chest|crate/i, 0x7a5a34],
+  [/sign|post|road/i, 0x6b5238],
+];
+function natureColor(matName: string): number {
+  for (const [re, c] of NATURE_COLOR) if (re.test(matName)) return c;
+  return 0x8a8f7e;
+}
+
 async function loadNature(name: string): Promise<THREE.Group> {
   let p = cache.get(name);
   if (!p) {
@@ -32,11 +54,19 @@ async function loadNature(name: string): Promise<THREE.Group> {
         const src = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshPhongMaterial | null;
         const map = src && src.map ? src.map : null;
         if (map) map.colorSpace = THREE.SRGBColorSpace;
-        /* map передаём только если есть — иначе warning «parameter map undefined» */
-        const mat = map
-          ? new THREE.MeshStandardMaterial({ map, roughness: 1 })
-          : new THREE.MeshStandardMaterial({ color: 0x8a8f7e, roughness: 1 });
-        m.material = mat;
+        /* map передаём только если есть — иначе warning «parameter map undefined»;
+           v2.9: без атласа — семантический цвет по имени материала FBX;
+           массив материалов (Trunk+Leave) сохраняем поэлементно — иначе крона
+           красится цветом первого материала */
+        const paint = (mm: THREE.MeshPhongMaterial | null) => {
+          const mp = mm && mm.map ? mm.map : null;
+          if (mp) mp.colorSpace = THREE.SRGBColorSpace;
+          return mp
+            ? new THREE.MeshStandardMaterial({ map: mp, roughness: 1 })
+            : new THREE.MeshStandardMaterial({ color: natureColor((mm && mm.name) || ''), roughness: 1 });
+        };
+        if (Array.isArray(m.material)) m.material = m.material.map((mm) => paint(mm as THREE.MeshPhongMaterial));
+        else m.material = paint(m.material as unknown as THREE.MeshPhongMaterial);
       });
       /* v1.6-фикс E2E: Synty FBX в сантиметрах (UnitScaleFactor=1) —
         приводим к метрам ДО нормализации, чтобы s-опции были метричными */
@@ -101,7 +131,8 @@ export function placePine(x: number, z: number): void {
 export function placeDeadPine(x: number, z: number): void {
   placeNature('SM_Tree_Pine_Dead_01', x, z, { s: 0.5 + srand() * 0.25, spin: true });
 }
-/* валун-преграда (solid); в метрах ~1.2-2м */
+/* валун-преграда (solid); v2.9: кластеры крупного камня уменьшены —
+   с орбиты камеры не заливают кадр */
 export function placeBoulder(x: number, z: number, s = 1.0): void {
-  placeNature(srand() < 0.5 ? 'SM_Rock_Boulder_01' : 'SM_Rock_Cluster_Large_01', x, z, { s, solid: true, spin: true });
+  placeNature(srand() < 0.5 ? 'SM_Rock_Boulder_01' : 'SM_Rock_Cluster_Large_01', x, z, { s: Math.min(s, 1.0) * 0.45, solid: true, spin: true });
 }

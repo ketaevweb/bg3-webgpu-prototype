@@ -36,7 +36,8 @@ export const G:{
   arenaWave:number;/* v1.9: номер волны арены (0 — выключена) */
   arenaRun:number;/* v2.1: счётчик заходов — старые таймеры волн умирают при новом заходе */
   seasonForced:number|null;/* v2.4: форс сезона глубины (null — реальная неделя, −1 — вне сезона) */
-  bloomOn:boolean;fpsLimit:number;frameAcc:number;
+  bloomOn:boolean;gradeOn:boolean;/* v2.9: кинолюк (цветокор+виньетка) */
+  fpsLimit:number;frameAcc:number;
 }={
   busy:false,busyCount:0,combatOn:false,phase:'idle',targeting:null,
   round:1,turnIdx:-1,current:null,
@@ -48,7 +49,7 @@ export const G:{
   arenaWave:0,
   arenaRun:0,
   seasonForced:null,
-  bloomOn:true,fpsLimit:0,frameAcc:0,
+  bloomOn:true,gradeOn:true,fpsLimit:0,frameAcc:0,
 };
 export type GameCtx=typeof G;
 

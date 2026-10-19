@@ -660,3 +660,27 @@ Stage Summary:
 - v2.8 «Глубинные благословения» готова и отмечена тегом v2.8: 6 благословений по рекорду глубин (мета в localStorage), глас бездны (6 ebark, манифест 196), сезонные составы волн
 - Пуш и Pages-деплой — в финальной фазе сессии (вместе с v2.9); напоминание об отзыве токена — в финальном ответе
 - Следующий релизный пункт — v2.9 «графика как в BG3» (запрос пользователя)
+
+---
+Task ID: 26
+Agent: main (Z.ai)
+Task: v2.9 «Лик Фаэруна» — графика как в BG3: ландшафты, небо/облака, трава, постобработка, персонажи (запрос пользователя)
+
+Work Log:
+- Старт с чистого наследия: v2.8 уже отмечена тегом (Task 25); разведка рендер-слоя (renderer/props/nature/particles/glow/animation/figure/motion)
+- render/sky.ts (новый лист, ~300): SkyFX — градиентный купол (canvas-градиент BackSide, r=150, fog=false), светило-спрайт, 12 облаков-спрайтов с дрейфом, амбиент-пул 220 (светлячки/споры/снег/пепел/пыль по палитрам карт); setMap() из applyAtmosphere; gfx.sky — рубильник
+- render/wind.ts (новый лист, 41): makeSwayMaterial — MeshStandardNodeMaterial + TSL positionNode (sin(time+worldXZ)·amp·mask(локальная высота)), no-throw фоллбек в StandardMaterial; windStats() для E2E
+- renderer.ts: setupPostFX переписана — цветокор+виньетка по картам (TSL: mix(lum)→sat→contrast→tint→smoothstep-виньетка), 4 режима композиции (bloom+grade/grade/bloom/чистый рендер), пересборка при applyGfx/applyAtmosphere; applyLighting — свет поднят (лес 1.04/2.9 «тёплый полдень», болота 0.95/1.9, перевал 0.92/2.0, цитадель 0.88/1.55, крипта 0.8/1.15)
+- props.ts: земля — PlaneGeometry 36×36 + вертексные цвета (srand-шум пятен), «юбка» 250×250 с пологим рельефом (r>34, ≤7 м — урок ×3: близкие холмы заливали кадр), палитры карт подняты ~+35%, фоновая трава 110×density с ветром, лес — FBX-деревья (Generic_Giant/Pine), дальние горы 8 шт на 86–106 м (уроки ×2: горы Synty 25–40 м — на 50 м накрывали карту)
+- giants.ts: хребет по периметру s 1.1–1.4 → 0.32–0.5 и отодвинут за край (та же урок-причина)
+- nature.ts: FBX без атласа (probe: map NULL) — семантическая раскраска по именам материалов (Trunk/Leave/Rock/Terrain/Skull…), МАССИВЫ материалов красятся поэлементно (урок: material[0] красил крону цветом ствола); placeBoulder ×0.45 (крупный камень не заливает кадр)
+- render/charfx.ts (новый лист, 91): золотые пульсирующие ореолы благословленных (u.blessed v2.8 — мета видна в кадре), пыль шагов ригов; charfxUpdate из цикла, charfxStats для E2E
+- settings.ts: gfx +sky/grade, строки панели «Небо»/«Кинолюк», applyGfx — sky.setEnabled/sky.density/пересборка postFX; engine: sky.update+charfxUpdate в цикле, рендер-ветка по bloomOn||gradeOn; __bg3 += skyState/windStats/charStats/gfxState; layout/логи v2.9
+- E2E pw_v29 (новый, 5 гейтов): boot-небо/ветер/кинолюк, тур 5 карт со скриншотами upload/e2e/v29_*.jpg, рубильники sky/grade на живую + persist, бой с ореолами (урок: героев на свежем boot только 2), чистый reload — GREEN ×3
+- Регрессии: pw_v20–v28 GREEN (v26/v27 — известные флаки swiftshader → рераны GREEN; pw_v24 G8 — серверный топ засорён прогонами → чистка Score/Tablet через prisma db execute --schema, урок v2.7 подтверждён)
+- Статика: tsc 0, ESLint 0/0, NO CYCLES, модули ≤400 (engine ровно 400, sky ~300, charfx 91, wind 41)
+
+Stage Summary:
+- v2.9 «Лик Фаэруна» готова: небо/облака/амбиент по 5 картам, качающаяся трава, ландшафты с холмами и дальними горами, FBX-деревья в цвете, цветокор+виньетка, ореолы благословений и пыль шагов; переключатели «Небо»/«Кинолюк» в панели G
+- Скриншоты: upload/e2e/v29_{forest,crypt,swamp,giants,citadel,combat,forest_nofx,reload}.jpg
+- Далее: пуш main+теги v2.8+v2.9, редеплой GitHub Pages, напоминание об отзыве токена
