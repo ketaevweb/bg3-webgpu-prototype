@@ -36,6 +36,9 @@ export function makeSwayMaterial(params: SwayParams, o: SwayOpts = {}): THREE.Ma
   try {
     const mat = new THREE.MeshStandardNodeMaterial({ color, roughness: params.roughness ?? 1 });
     if (params.map) mat.map = params.map;
+    /* v3.1: прозрачность листвы и в ветровом материале (клоны листвы качаются
+       с тем же полупрозрачным краем, что и статичные) */
+    if (params.map) { mat.transparent = true; mat.opacity = 0.92; mat.alphaTest = 0.3; mat.side = THREE.DoubleSide; }
     /* фаза: мировая X даёт длинную волну через поле, Z — крест-накрест;
        изгиб — по локальной высоте (конус травинки: низ почти стоит,
        крона дерева гнётся сильнее — маска одна на всё) */

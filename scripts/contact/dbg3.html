@@ -1,0 +1,17 @@
+<!doctype html><html><body><script type="importmap">
+{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}
+</script><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const g = await new GLTFLoader().loadAsync('/public/models/rig/rivals/goblin.glb');
+const idle = g.animations.find(a => a.name === 'idle');
+for (const t of idle.tracks) {
+  if (t.name === 'Hips.position') {
+    console.log('Hips.position values[0..8]:', Array.from(t.values.slice(0, 9)).map(v => v.toFixed(3)).join(', '));
+  }
+}
+/* рест-позиция кости Hips в узле */
+const hips = g.scene.getObjectByName('Hips');
+console.log('Hips node rest pos:', hips.position.toArray().map(v=>v.toFixed(3)).join(', '));
+console.log('Hips parent:', hips.parent?.name ?? '-');
+</script></body></html>

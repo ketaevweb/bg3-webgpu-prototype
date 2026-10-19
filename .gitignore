@@ -14,3 +14,4 @@ upload/
 .voicecache/
 scripts/piper/*.onnx
 out/
+public/models/synty/

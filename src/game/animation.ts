@@ -25,6 +25,30 @@ export const ENABLE_GLTF = true;
 export const RIG_URL = (process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/soldier.glb';/* v2.9-фикс Pages: basePath */
 const RIG_FALLBACK = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r180/examples/models/gltf/Soldier.glb';
 
+/* v3.1 «Чужие знамёна»: Synty-персонажи по классам (запечены offline
+ * scripts/bake_synty.mjs: POLYGON Fantasy Rivals — враги, Modular Fantasy
+ * Hero Characters — герои; в каждом GLB модель + 12 клипов ролей).
+ * Класс без записи → фоллбек Soldier + motions.glb (как в v1.7). */
+const R = (p: string) => (process.env.NEXT_PUBLIC_BASE_PATH ?? '') + p;
+export const SYNTY_MODEL: Record<string, string> = {
+  fighter: R('/models/rig/heroes/fighter.glb'),
+  wizard: R('/models/rig/heroes/wizard.glb'),
+  rogue: R('/models/rig/heroes/rogue.glb'),
+  cleric: R('/models/rig/heroes/cleric.glb'),
+  druid: R('/models/rig/heroes/druid.glb'),
+  paladin: R('/models/rig/heroes/paladin.glb'),
+  goblin: R('/models/rig/rivals/goblin.glb'),
+  undead: R('/models/rig/rivals/undead.glb'),
+  cultist: R('/models/rig/rivals/cultist.glb'),
+  necro: R('/models/rig/rivals/necro.glb'),
+  ogre: R('/models/rig/rivals/ogre.glb'),
+  giant: R('/models/rig/rivals/giant.glb'),
+  boss: R('/models/rig/rivals/boss.glb'),
+  swampboss: R('/models/rig/rivals/swampboss.glb'),
+  knight: R('/models/rig/rivals/knight.glb'),
+  lord: R('/models/rig/rivals/lord.glb'),
+};
+
 type RigUnit = {
   alive: boolean;
   inCombat?: boolean;
@@ -38,25 +62,35 @@ type RigUnit = {
   _attackT?: number;/* v1.6: во время атак-клипа update() не переключает анимацию */
   _hitT?: number;/* v1.7: реакция на урон (одноразовый клип) */
   _deathT?: number;/* v1.7: смерть — миксер крутится и после alive=false */
+  _rigUrl?: string;/* v3.1: источник модели (Synty/Soldier) — для E2E */
 };
 
-/* ---------- кэш загрузки GLTF (одна модель на всех) ---------- */
-let gltfCache: Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> | null = null;
+/* ---------- кэш загрузки GLTF (v3.1: по URL — Synty-модели по классам) ---------- */
+const gltfCache = new Map<string, Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>>();
 
-async function loadRig(url: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
-  if (!gltfCache) {
-    gltfCache = (async () => {
+function loadRig(url: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+  let p = gltfCache.get(url);
+  if (!p) {
+    p = (async () => {
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
       const loader = new GLTFLoader();
       const loaded = await loader.loadAsync(url);
       return { scene: loaded.scene, animations: loaded.animations ?? [] };
     })();
-    gltfCache.catch(() => { gltfCache = null; }); // позволяем ретрай по fallback
+    p.catch(() => { gltfCache.delete(url); });/* ретрай после ошибки */
+    gltfCache.set(url, p);
   }
-  return gltfCache;
+  return p;
 }
 
-async function loadRigWithFallback(): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+async function loadRigWithFallback(url?: string): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }> {
+  if (url) {
+    try {
+      return await loadRig(url);/* v3.1: Synty-GLB по классу */
+    } catch (e) {
+      console.warn('[bg3] Synty rig failed, fallback Soldier:', e);
+    }
+  }
   try {
     return await loadRig(RIG_URL);
   } catch {
@@ -93,6 +127,7 @@ export type RigOpts = {
   scale?: number;       // рост модели
   yaw?: number;         // разворот модели внутрь рига
   animSet?: AnimSet;    // v1.7: набор атак-клипов по классу
+  modelUrl?: string;    // v3.1: Synty-GLB по классу (модель + 12 клипов)
 };
 
 /** v1.7: авто-конфиг рига из полей юнита (класс/босс/элита). */
@@ -103,7 +138,11 @@ export function animOptsFor(u: { cls?: string; side?: string; isBoss?: boolean; 
   if (u.giantBoss) scale = Math.max(scale, 1.3);
   else if (u.isBoss) scale = Math.max(scale, 1.24);
   const tint = (u.isBoss || u.giantBoss) ? 0xb03424 : c.tint;
-  return { tint, tintStrength: 0.4, scale, yaw: Math.PI, animSet: c.set };
+  /* v3.1: Synty-модель по классу; тинт НЕ применяем (авторские цвета Synty) */
+  const modelUrl = SYNTY_MODEL[u.cls ?? ''];
+  return modelUrl
+    ? { scale, yaw: Math.PI, animSet: c.set, modelUrl }
+    : { tint, tintStrength: 0.4, scale, yaw: Math.PI, animSet: c.set };
 }
 
 /**
@@ -116,7 +155,12 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
   if (!ENABLE_GLTF || !unit.rig) return false;
   if (unit._gltfRig) return true;/* v1.7: идемпотентность (авто-риг в makeUnit + ручные вызовы) */
   try {
-    const [{ scene: baseScene, animations }, ] = await Promise.all([loadRigWithFallback(), loadMotions()]);
+    const isSynty = !!opts.modelUrl;
+    unit._rigUrl = opts.modelUrl ?? RIG_URL;/* v3.1: для E2E (animStats.rigs.synty) */
+    const [{ scene: baseScene, animations }] = await Promise.all([
+      loadRigWithFallback(opts.modelUrl),
+      isSynty ? Promise.resolve(true) : loadMotions(),/* Synty-GLB несёт свои клипы */
+    ]);
     const model = SkeletonUtils.clone(baseScene) as THREE.Group;
 
     /* v1.7: boundingSphere скелетного меша не следует за костями — не кулим */
@@ -126,6 +170,7 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.castShadow = true;
+      if (isSynty) return;/* v3.1: авторские цвета Synty — без подкраски */
       const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
       if (Array.isArray(mat)) {
         mesh.material = mat.map((m) => {
@@ -153,8 +198,10 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
     const mixer = new THREE.AnimationMixer(model);
     const find = (re: RegExp) => animations.find((a) => re.test(a.name));
     const actions: Record<string, THREE.AnimationAction> = {};
-    /* v1.7: приоритет — библиотека движений, фолбэк — родные клипы Soldier */
-    const idle = clipFor('idle') ?? find(/^idle/i);
+    /* v1.7: приоритет — библиотека движений, фолбэк — родные клипы Soldier.
+       v3.1: для Synty-моделей библиотека НЕ подключается (скелеты несовместимы),
+       роли берутся из собственных клипов GLB (запечены ретаргетом offline). */
+    const idle = (isSynty ? find(/^idle$/i) : clipFor('idle')) ?? find(/^idle/i);
     const idleCombat = clipFor('idleCombat') ?? idle;
     const walk = clipFor('walk') ?? find(/^walk/i);
     const run = clipFor('run') ?? find(/^run/i);
@@ -170,7 +217,7 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
       a.clampWhenFinished = clamp;
       return a;
     };
-    const atk = oneShot(ATTACK_ROLE[opts.animSet ?? 'blade'], false);
+    const atk = oneShot(ATTACK_ROLE[opts.animSet ?? 'blade'], false);/* v3.1: роль ищется и в собственных клипах */
     if (atk) {
       actions.attack = atk;
       mixer.addEventListener('finished', () => { unit._currentAnim = 'idle'; });
@@ -206,13 +253,14 @@ export class AnimRigs {
   }
   /* v1.7: статистика для E2E */
   stats() {
-    let rigs = 0, withAttack = 0, withDeath = 0;
+    let rigs = 0, withAttack = 0, withDeath = 0, synty = 0;
     for (const u of this.units) {
       if (u._gltfRig) rigs++;
       if (u._actions?.attack) withAttack++;
       if (u._actions?.death) withDeath++;
+      if (u._rigUrl && /\/rig\/(rivals|heroes)\//.test(u._rigUrl)) synty++;
     }
-    return { units: this.units.size, rigs, withAttack, withDeath };
+    return { units: this.units.size, rigs, withAttack, withDeath, synty };
   }
 
   private setAnim(u: RigUnit, next: string) {

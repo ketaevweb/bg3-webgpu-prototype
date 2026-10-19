@@ -1,0 +1,26 @@
+<!doctype html><html><body><script type="importmap">
+{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}
+</script><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+for (const f of ['rivals/goblin', 'heroes/fighter']) {
+  const g = await new GLTFLoader().loadAsync(`/public/models/rig/${f}.glb`);
+  const sc = g.scene;
+  console.log(`== ${f} ==`);
+  console.log('  root scale:', sc.scale.toArray().map((v) => v.toFixed(4)).join(','));
+  const hips = sc.getObjectByName('Hips');
+  hips.updateMatrixWorld(true);
+  const w = hips.getWorldPosition(new THREE.Vector3());
+  console.log('  Hips rest local:', hips.position.toArray().map((v) => v.toFixed(2)).join(','), 'world:', w.toArray().map((v) => v.toFixed(3)).join(','));
+  const idle = g.animations.find((a) => a.name === 'idle');
+  const t = idle?.tracks.find((x) => x.name === 'Hips.position');
+  if (t) console.log('  idle Hips.position[1..3]:', Array.from(t.values.slice(3, 6)).map((v) => v.toFixed(2)).join(','));
+  const m = new THREE.AnimationMixer(sc);
+  m.clipAction(idle).play(); m.update(0.5);
+  sc.updateMatrixWorld(true);
+  const w2 = hips.getWorldPosition(new THREE.Vector3());
+  console.log('  Hips world @idle0.5:', w2.toArray().map((v) => v.toFixed(3)).join(','));
+  const ank = sc.getObjectByName('Ankle_L');
+  if (ank) { ank.updateMatrixWorld(true); console.log('  Ankle_L world @idle:', ank.getWorldPosition(new THREE.Vector3()).toArray().map((v) => v.toFixed(3)).join(',')); }
+}
+</script></body></html>

@@ -1,0 +1,22 @@
+<!doctype html><html><body><script type="importmap">
+{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}
+</script><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const g = await new GLTFLoader().loadAsync('/public/models/rig/rivals/goblin.glb');
+const sc = g.scene;
+sc.updateMatrixWorld(true);
+const idle = g.animations.find(a => a.name === 'idle');
+console.log('idle tracks:');
+for (const t of idle.tracks.slice(0, 6)) console.log(' ', t.name, t.times.length, 'frames');
+const mixer = new THREE.AnimationMixer(sc);
+mixer.clipAction(idle).play();
+mixer.update(0.5);
+sc.updateMatrixWorld(true);
+for (const n of ['Hips','Head','Hand_L','Hand_R','Elbow_L','Shoulder_L','UpperLeg_L','Ankle_L']) {
+  const b = sc.getObjectByName(n);
+  if (b) { const v = new THREE.Vector3(); b.getWorldPosition(v); console.log('WORLD', n, v.x.toFixed(2), v.y.toFixed(2), v.z.toFixed(2)); }
+}
+const box = new THREE.Box3().setFromObject(sc);
+console.log('BOX after idle:', box.min.y.toFixed(2), box.max.y.toFixed(2));
+</script></body></html>

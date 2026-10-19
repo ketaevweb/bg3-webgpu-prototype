@@ -54,15 +54,15 @@ const tileToScreen = (page, tx, tz) => page.evaluate(([x, z]) => {
   console.log('G2 FS CLICK ON:', JSON.stringify(on1));
   if (!on1.on || !on1.el || !on1.title.includes('Выйти')) fail('G2 fullscreen не включился: ' + JSON.stringify(on1));
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' })));
-  await page.waitForTimeout(1200);/* v3.0: бот-озвучка длиннее — exit-FS транзишн >400ms под swiftshader */
+  await page.waitForTimeout(7000); /* v3.1: под swiftshader+10 GLB транзишн FS до 5.5с (замер fs_probe) */
   const off1 = await page.evaluate(() => window.__bg3.fs().on);
   if (off1) fail('G2 клавиша F не выключила fullscreen');
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'а' })));/* русская Ф */
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(7000);
   const on2 = await page.evaluate(() => window.__bg3.fs().on);
   if (!on2) fail('G2 русская «а» не включила fullscreen');
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' })));
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(7000);
   console.log('G2 FULLSCREEN: клик/F/а — OK, выходим из FS для чистоты');
   await ctx.close();
 

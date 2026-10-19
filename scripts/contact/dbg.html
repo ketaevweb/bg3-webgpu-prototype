@@ -1,0 +1,19 @@
+<!doctype html><html><body><script type="importmap">
+{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}
+</script><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const g = await new GLTFLoader().loadAsync('/public/models/rig/rivals/goblin.glb');
+g.scene.traverse((o) => {
+  if (o.isMesh) {
+    const m = o.material;
+    console.log('MESH', o.name, 'verts=', o.geometry.attributes.position?.count,
+      'mat=', m.name, 'hasMap=', !!m.map, 'mapLoaded=', m.map ? m.map.image?.width : '-',
+      'color=', m.color?.getHexString(), 'uv=', !!o.geometry.attributes.uv);
+  }
+  if (o.isBone && ['Hips','Head'].includes(o.name)) console.log('BONE', o.name, o.position.y.toFixed(3));
+});
+const box = new THREE.Box3().setFromObject(g.scene);
+console.log('BOX', box.min.y.toFixed(2), box.max.y.toFixed(2));
+console.log('ANIMS', g.animations.map(a => a.name + ':' + a.duration.toFixed(2)).join(','));
+</script></body></html>

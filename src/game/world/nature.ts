@@ -147,9 +147,14 @@ async function loadNature(name: string): Promise<THREE.Group> {
           const tex = file ? atlasTex(file) : palette;
           if (tex) {
             const tint = file ? (TINT[file] ?? 0xffffff) : tintFor(nm);
+            /* v3.1: прозрачность листвы — полупрозрачные края (alpha blending
+               с depthWrite против артефактов сортировки), мягче прежнего
+               жёсткого alphaTest-выреза */
             return new THREE.MeshStandardMaterial({
               name: nm, map: tex, roughness: 1, color: tint,
-              alphaTest: file ? 0.5 : 0, side: file ? THREE.DoubleSide : THREE.FrontSide,
+              alphaTest: file ? 0.3 : 0,
+              transparent: !!file, opacity: file ? 0.92 : 1,
+              depthWrite: true, side: file ? THREE.DoubleSide : THREE.FrontSide,
             });
           }
           /* фоллбек: FBX-ссылка на текстуру или семантический цвет */

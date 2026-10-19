@@ -278,7 +278,9 @@ let disposed=false;
      (motion.ts, офлайн-ретаргет на mixamorig — scripts/bake_motions.mjs). */
   void (async()=>{
     await import('./motion').then(m=>m.loadMotions());
-    const targets=units.filter(u=>u.side==='hero'||u.isBoss);
+    /* v3.1: риги ВСЕМ юнитам (Synty-герои/враги по классам; бочки — нет).
+       Класс без Synty-модели → фоллбек Soldier внутри upgradeUnitRig. */
+    const targets=units.filter(u=>!u.isBarrel&&(u.side==='hero'||u.side==='goblin'||u.isBoss));
     let ok=0;
     for(const u of targets){
       const done=await upgradeUnitRig(u,animOptsFor(u));

@@ -1,0 +1,13 @@
+<!doctype html><html><body><script type="importmap">
+{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}
+</script><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const g = await new GLTFLoader().loadAsync('/public/models/rig/rivals/goblin.glb');
+const sm = [];
+g.scene.traverse((o) => { if (o.isSkinnedMesh) sm.push(o); });
+const bones = sm[0].skeleton.bones;
+const depth = (b) => { let d = 0, p = b.parent; while (p) { d++; p = p.parent; } return d; };
+console.log('bone order (name, depth):');
+bones.slice(0, 24).forEach((b, i) => console.log(i, b.name, 'd' + depth(b)));
+</script></body></html>
