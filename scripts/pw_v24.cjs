@@ -94,7 +94,9 @@ const SEASONS = ['Кровавый прилив', 'Костяная стужа',
   });
   console.log('G4 BLOOD TIDE W6:', JSON.stringify(g4), '(ожидание: 3 врага, утопленник hp 16/ac 12/[2,6], скелет-рыцарь hp 25/ac 15/[2,8], тинт 0x8a2a2a)');
   if (g4.wave !== 6 || g4.n !== 3 || g4.anyChamp || g4.anyShadow) fail('G4 wave6 composition wrong');
-  if (g4.drowned.length !== 2 || g4.skk.length !== 1) fail('G4 wave6 roster wrong');
+  /* v2.8 «сезонные составы»: Кровавый прилив смывает скелет-рыцаря в утопленника —
+     состав волны 6 стал 3×утопленник (гейт актуализирован под v2.8, см. pw_v28 G5) */
+  if (g4.drowned.length !== 3 || g4.skk.length !== 0) fail('G4 wave6 roster wrong');
   if (g4.drowned.some(d => d.hp !== 16 || d.ac !== 12 || d.dice[0] !== 2 || d.dice[1] !== 6 || d.tint !== 0x8a2a2a || !d.name.startsWith('Глубинный'))) fail('G4 drowned blood tide wrong');
   if (g4.skk.some(d => d.hp !== 25 || d.ac !== 15 || d.dice[0] !== 2 || d.dice[1] !== 8 || d.tint !== 0x8a2a2a)) fail('G4 skk blood tide wrong');
   await shot(page, 'v24_season_blood_w6.jpg');
@@ -110,12 +112,13 @@ const SEASONS = ['Кровавый прилив', 'Костяная стужа',
     const es = b.S.combatGroup.filter(e => e.alive);
     const tint = (u) => { const bd = u.rig && u.rig.children[0]; return bd && bd.material && bd.material.color ? bd.material.color.getHex() : -1; };
     const pick = (cn) => es.filter(e => e.clsName === cn).map(e => ({ hp: e.maxhp, ac: e.ac, dice: [...e.weapon.dice], tint: tint(e) }));
-    return { wave: b.arenaState().wave, n: es.length, deep: pick('Культист Глубин'), ac: pick('Ученик некроманта'), dr: pick('Утопленник') };
+    return { wave: b.arenaState().wave, n: es.length, skel: pick('Скелет'), dr: pick('Утопленник') };
   });
-  console.log('G5 BONE CHILL W7:', JSON.stringify(g5), '(ожидание: 4 врага, культист hp 12/ac 14/[1,7], ученик hp 17/ac 15/[1,9], утопленник hp 17/ac 14/[1,7], тинт 0x7a9ac0)');
-  if (g5.wave !== 7 || g5.n !== 4 || g5.deep.length !== 2 || g5.ac.length !== 1 || g5.dr.length !== 1) fail('G5 wave7 composition wrong');
-  if (g5.deep.some(d => d.hp !== 12 || d.ac !== 14 || d.dice[1] !== 7 || d.tint !== 0x7a9ac0)) fail('G5 deep bone chill wrong');
-  if (g5.ac.some(d => d.hp !== 17 || d.ac !== 15 || d.dice[1] !== 9 || d.tint !== 0x7a9ac0)) fail('G5 acolyte bone chill wrong');
+  /* v2.8 «сезонные составы»: Костяная стужа поднимает скелетов вместо культистов
+     (cultist→skeleton, adept→boneknight) — состав волны 7: 3×скелет + 1 утопленник */
+  console.log('G5 BONE CHILL W7:', JSON.stringify(g5), '(ожидание: 4 врага, скелеты с тинтом 0x7a9ac0, утопленник hp 17/ac 14/[1,7])');
+  if (g5.wave !== 7 || g5.n !== 4 || g5.skel.length !== 3 || g5.dr.length !== 1) fail('G5 wave7 composition wrong');
+  if (g5.skel.some(d => d.tint !== 0x7a9ac0)) fail('G5 skeleton bone chill wrong');
   if (g5.dr.some(d => d.hp !== 17 || d.ac !== 14 || d.dice[1] !== 7 || d.tint !== 0x7a9ac0)) fail('G5 drowned bone chill wrong');
 
   /* G6: сезон 3 «Ярость толпы» (волна 8, k=3): рецепт 3 врага +1 лишний = 4, тинт 0x9a5a30 */

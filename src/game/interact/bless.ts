@@ -40,6 +40,27 @@ export function blessCount(best?:number):number{
 }
 export function blessActive():BlessDef[]{return BLESSINGS.slice(0,blessCount());}
 
+/* ---- v2.8: мета-прогресс переживает страницу ----
+   Рекорд глубин хранится в localStorage (bg3w_best_v1) — сейв v2
+   заморожен и не меняется. Восстановление — loadBestMeta() из bootGame
+   ДО buildHeroes (свежий отряд получает благословения по рекорду).
+   Рост монотонный: пишем только max(текущий, сохранённый). */
+const BEST_KEY='bg3w_best_v1';
+export function loadBestMeta(){
+  try{
+    const v=parseInt(localStorage.getItem(BEST_KEY)||'',10);
+    if(Number.isFinite(v)&&v>(S.arenaBest||0))S.arenaBest=v;
+  }catch{/* приватный режим — мета просто не восстановится */}
+}
+function saveBestMeta(){
+  try{
+    const cur=S.arenaBest||0;
+    const prev=parseInt(localStorage.getItem(BEST_KEY)||'',10);
+    const v=Number.isFinite(prev)?Math.max(cur,prev):cur;
+    if(v>0)localStorage.setItem(BEST_KEY,String(v));
+  }catch{}
+}
+
 /* применить юниту благословения, которых у него ещё нет (u.blessed —
    список имён на юните; пересозданный юнит получает пустой список).
    Возвращает имена ДОЛИТЫХ сейчас (пусто — ничего нового). */
@@ -66,6 +87,7 @@ export function applyBlessings(u:Unit){grant(u,false);}
    и из E2E-хука blessForce. Баннер+лог — один на дозу. no-throw. */
 export function blessRefresh(){
   try{
+    saveBestMeta();/* v2.8: мета-рекорд переживает перезагрузку страницы */
     const heroes=units.filter(u=>u.side==='hero'&&u.alive);
     const fresh:string[]=[];
     for(const h of heroes){

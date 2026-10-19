@@ -27,7 +27,7 @@ import { joinOlkha } from './interact/swamp';/* v1.5: друид болот */
 import { joinHaldir } from './interact/citadel';/* v1.9: капитан Дозора */
 import { arenaStart, arenaWipe, arenaState, arenaEndless } from './interact/arena';/* v1.9+v2.0: испытание Глубин */
 import { seasonState, forceSeason, toggleRecords, closeRecords } from './interact/season';/* v2.4: сезоны глубины + летопись (T) */
-import { blessState, blessForce } from './interact/bless';/* v2.8: глубинные благословения (E2E) */
+import { blessState, blessForce, loadBestMeta } from './interact/bless';/* v2.8: глубинные благословения (E2E) + мета-рекорд */
 import { ebarkProbe, ebarkState } from './ui/barks';/* v2.8: глас бездны (E2E) */
 import { awardXP } from './systems/progression';/* v2.2: калибровка опыта (E2E) */
 import { buyRelic, upgradeRelic } from './interact/dialog';/* v2.2: обмен реликвий; v2.3: апгрейд (E2E) */
@@ -258,6 +258,7 @@ let disposed=false;
   seedForest();
   applyAtmosphere('forest');
   buildWorld();
+  loadBestMeta();/* v2.8: мета-рекорд глубин ДО buildHeroes — отряд рождается благословлённым */
   buildHeroes();
   spawnEnemies();
   buildForestScenery();

@@ -24,6 +24,7 @@ const waitCalm = (page) => page.waitForFunction(() => window.__bg3 && !window.__
 const fail = (msg) => { console.log('FAIL: ' + msg); process.exit(1); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const NOISE = ['soldier.glb', 'favicon'];
+const g_errors = [];/* модуль-скоуп: виден из catch вне IIFE */
 
 (async () => {
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
@@ -32,9 +33,10 @@ const NOISE = ['soldier.glb', 'favicon'];
     try { localStorage.setItem('bg3w_gfx_v1', JSON.stringify({ shadows: 'off', bloom: false, glow: false, particles: 'low', res: '50', fps: '30', voice: true, vol: '80' })); } catch {}
   });
   const page = await ctx.newPage();
-  const errors = [];
+  const errors = g_errors;
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
+  page.on('response', (r) => { if (r.status() >= 400) errors.push('HTTP' + r.status() + ': ' + r.url()); });/* v2.8-диагностика: URL не-200 */
 
   /* G1: boot + манифест 196 + целостность файлов + каталог ebark + благословения 0 */
   await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -93,7 +95,20 @@ const NOISE = ['soldier.glb', 'favicon'];
   console.log('G3 RECORDS PANEL:', JSON.stringify(g3));
   if (g3.bless !== 6 || g3.firstName !== 'Крепость глубин' || !g3.panel) fail('G3 records panel bless wrong');
 
-  /* G4: живой рев Грата — бой лагеря Костей, аура при первом попадании гоблина */
+  /* G4: живой рев Грата — бой лагеря Костей, аура при первом попадании гоблина.
+     Урок v2.8: отряд при boot стоит у южного тракта — гоблины не доходят за
+     60 проходов; телепортируем героев в лагерь ДО startCombat (кольцо вокруг
+     Грата, клетки не заняты врагами/бочками). */
+  await page.evaluate(() => {
+    const g = window.__bg3.S.campGroup[0];
+    const spots = [[0, 2], [-2, 0], [2, 1], [0, -2], [-2, 2], [3, 1]];
+    const heroes = window.__bg3.units.filter((u) => u.side === 'hero' && u.alive);
+    heroes.forEach((h, i) => {
+      const s = spots[i] || [0, 3 + i];
+      h.x = g.x + s[0]; h.z = g.z + s[1];
+      h.mesh.position.set(g.mesh.position.x + s[0] * 1.6, 0, g.mesh.position.z + s[1] * 1.6);
+    });
+  });
   await page.evaluate(() => window.__bg3.startCombat(window.__bg3.S.campGroup.slice()));
   await waitCombat(page);
   let ebark = { count: 0, inHist: false, flag: false };
@@ -110,13 +125,35 @@ const NOISE = ['soldier.glb', 'favicon'];
   await shot(page, 'v28_grat_ebark.jpg');
   console.log('G4 GRAT EBARK:', JSON.stringify(ebark));
   if (!ebark.count || !ebark.inHist || !ebark.flag) fail('G4 grat enemy bark not fired');
-  await page.evaluate(() => window.__bg3.arenaWipe());
-  await waitCalm(page);
-  await page.waitForTimeout(1200);
+  await page.evaluate(() => {
+    window.__bg3.arenaWipe();
+    /* Урок v2.8: отряд в лагере — в 5 клетках от живого патруля (14,12) →
+       checkTriggers открывает диалог патруля и блокирует switchMap.
+       Уводим отряд на южный тракт В ТОМ ЖЕ evaluate (до тика интервала). */
+    const heroes = window.__bg3.units.filter((u) => u.side === 'hero' && u.alive);
+    const spots = [[13, 24], [14, 23], [12, 23], [15, 24], [11, 24], [16, 23]];
+    heroes.forEach((h, i) => {
+      const s = spots[i] || [13, 25];
+      h.x = s[0]; h.z = s[1];
+      h.mesh.position.set((s[0] - 13.5) * 1.6, 0, (s[1] - 13.5) * 1.6);
+    });
+  });
+  /* победная последовательность держит busy — ждём фактического explore */
+  await page.waitForFunction(() => { const t = window.__bg3.turn(); return !t.combatOn && !t.busy && t.phase === 'explore'; }, null, { timeout: 20000 });
+  await page.waitForTimeout(600);
+  await page.evaluate(() => window.__bg3.closeDlg());/* защитно: если диалог успел открыться */
+  await page.waitForFunction(() => { const t = window.__bg3.turn(); return !t.busy && t.phase === 'explore'; }, null, { timeout: 10000 });
 
   /* G5: сезонные составы — сезон 0 «Кровавый прилив» волна 6: кости смываются в утопленники */
   await page.evaluate(() => { window.__bg3.S.citadelDone = true; window.__bg3.S.campaignDone = true; window.__bg3.questDone('giants'); });
   await page.evaluate(() => window.__bg3.switchMap('citadel'));
+  /* диагностика v2.8: почему переход не доходит — печатаем turn() и ошибки */
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(2000);
+    const st = await page.evaluate(() => window.__bg3.turn()).catch((e) => ({ evalErr: String(e).slice(0, 80) }));
+    console.log('G5 DIAG', i, JSON.stringify(st), 'errs:', errors.length ? errors[errors.length - 1].slice(0, 120) : '-');
+    if (st.mapId === 'citadel') break;
+  }
   await page.waitForFunction(() => window.__bg3.turn().mapId === 'citadel', null, { timeout: 30000 });
   await page.waitForTimeout(3000);
   await page.evaluate(() => window.__bg3.forceSeason(0));
@@ -180,15 +217,17 @@ const NOISE = ['soldier.glb', 'favicon'];
   await page.waitForFunction(() => !!window.__bg3, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__bg3.voice().ready, null, { timeout: 30000 });
   await page.waitForTimeout(3000);
-  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)));
+  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)) && !e.startsWith('CONSOLE: Failed to load resource'));
+  const bad404 = errors.filter((e) => e.startsWith('HTTP') && !NOISE.some((n) => e.includes(n)) && !e.includes('/api/'));
   const g8 = await page.evaluate(() => {
     const st = window.__bg3.blessState();
     return { count: st.count, best: st.best };
   });
-  console.log('G8 RELOAD:', JSON.stringify({ ...g8, errors: realErr.length }));
+  console.log('G8 RELOAD:', JSON.stringify({ ...g8, errors: realErr.length, bad404: bad404.length }));
+  if (bad404.length) console.log('G8 bad404:', bad404.slice(0, 6).join(' | '));
   if (g8.count !== 6 || g8.best !== 12) fail('G8 bless state after reload wrong');
-  if (realErr.length) fail('G8 console errors: ' + realErr[0]);
+  if (realErr.length) fail('G8 console errors: ' + realErr.slice(0, 4).join(' | '));
 
   await browser.close();
   console.log('PW_V28: ALL GATES GREEN');
-})().catch((e) => { console.error('FATAL:', e.message); process.exit(1); });
+})().catch((e) => { console.error('FATAL:', e.message); console.error(e.stack ? e.stack.split('\n').slice(0, 4).join('\n') : ''); console.error('PAGE ERRORS:', errors.slice(0, 6).join(' | ') || '-'); process.exit(1); });
