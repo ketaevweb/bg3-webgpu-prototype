@@ -124,7 +124,7 @@ const g_errors = [];
     return { gfx: window.__bg3.gfxState(), savedSky: saved.sky, savedGrade: saved.grade, map: window.__bg3.turn().mapId };
   });
   await shot(page, 'v29_reload.jpg');
-  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)) && !e.startsWith('CONSOLE: Failed to load resource'));
+  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)) && !e.startsWith('CONSOLE: Failed to load resource') && !e.includes('/api/'));/* v3.0: /api/ — транспортный шум дев-сервера (tts 503 флак) */
   const bad404 = errors.filter((e) => e.startsWith('HTTP') && !NOISE.some((n) => e.includes(n)) && !e.includes('/api/'));
   console.log('G5 RELOAD:', JSON.stringify({ ...g5, errors: realErr.length, bad404: bad404.length }));
   if (bad404.length) console.log('G5 bad404:', bad404.slice(0, 6).join(' | '));

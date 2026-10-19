@@ -10,6 +10,7 @@
  * держится до горизонта), облака/светило — тоже.
  * ============================================================ */
 import * as THREE from 'three/webgpu';
+import { loadCloudVariants } from './clouds';/* v3.0: мешевые облака Synty */
 
 export type SkyMap = 'forest' | 'crypt' | 'swamp' | 'giants' | 'citadel';
 
@@ -74,6 +75,8 @@ export class SkyFX {
   private dome: THREE.Mesh | null = null;
   private sun: THREE.Sprite | null = null;
   private clouds: THREE.Sprite[] = [];
+  private meshClouds: THREE.Group[] = [];/* v3.0: мешевые облака (фоллбек — спрайты) */
+  private cloudSpin: number[] = [];
   private group = new THREE.Group();/* всё небо — в одной группе: вкл/выкл одним флагом */
   private map: SkyMap = 'forest';
   /** v2.9: общий рубильник (gfx.sky) */
@@ -148,6 +151,54 @@ export class SkyFX {
       this.clouds.push(s);
       this.group.add(s);
     }
+    /* v3.0: мешевые облака Synty (низкополигональные «пухляши»);
+       при неудаче загрузки спрайты остаются фоллбеком */
+    void loadCloudVariants().then(vs => {
+      if (!vs) return;
+      this.clouds.forEach(s => { s.visible = false; });
+      for (let i = 0; i < 12; i++) {
+        const m = vs[i % vs.length].clone(true);
+        m.renderOrder = -8;
+        m.userData.spd = 0.5 + Math.random() * 0.9;
+        m.userData.spin = (Math.random() - 0.5) * 0.04;
+        const target = 16 + Math.random() * 14;/* целевая ширина облака в метрах */
+        const box = new THREE.Box3().setFromObject(m);
+        const w = Math.max(box.max.x - box.min.x, 0.01);
+        m.userData.scl = target / w;
+        m.scale.setScalar(m.userData.scl);
+        this.meshClouds.push(m);
+        this.cloudSpin.push(m.userData.spin);
+        this.group.add(m);
+      }
+      this.placeClouds();/* v3.0: только расстановка облаков — амбиент не сбрасываем (урок: полный applyPalette реска motes) */
+    });
+  }
+
+  /* v3.0: расстановка/тинт облаков (спрайты или меши) по текущей карте */
+  private placeClouds() {
+    const p = PALETTE[this.map];
+    this.clouds.forEach((s, i) => {
+      const a = (i / this.clouds.length) * Math.PI * 2 + this.map.length;
+      const r = 40 + (i % 4) * 22;
+      s.position.set(Math.cos(a) * r, p.cloudY + (i % 3) * 6, Math.sin(a) * r - 20);
+      s.scale.set(s.userData.scl, s.userData.scl * 0.42, 1);
+      (s.material as THREE.SpriteMaterial).color.setHex(p.cloudTint);
+      s.visible = i < p.clouds && this.enabled && this.meshClouds.length === 0;
+    });
+    /* v3.0: мешевые облака — та же раскладка, тинт по карте */
+    this.meshClouds.forEach((m, i) => {
+      const a = (i / 12) * Math.PI * 2 + this.map.length;
+      const r = 40 + (i % 4) * 22;
+      m.position.set(Math.cos(a) * r, p.cloudY + (i % 3) * 6, Math.sin(a) * r - 20);
+      m.visible = i < p.clouds && this.enabled;
+      m.traverse(ch => {
+        const mesh = ch as THREE.Mesh;
+        if (mesh.isMesh && mesh.material) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          mat.color.setHex(p.cloudTint);
+        }
+      });
+    });
   }
 
   /* палитра текущей карты: купол/светило/облака/амбиент */
@@ -164,14 +215,7 @@ export class SkyFX {
       this.sun.scale.setScalar(p.sunScale);
       (this.sun.material as THREE.SpriteMaterial).color.setHex(p.sun);
     }
-    this.clouds.forEach((s, i) => {
-      const a = (i / this.clouds.length) * Math.PI * 2 + this.map.length;
-      const r = 40 + (i % 4) * 22;
-      s.position.set(Math.cos(a) * r, p.cloudY + (i % 3) * 6, Math.sin(a) * r - 20);
-      s.scale.set(s.userData.scl, s.userData.scl * 0.42, 1);
-      (s.material as THREE.SpriteMaterial).color.setHex(p.cloudTint);
-      s.visible = i < p.clouds && this.enabled;
-    });
+    this.placeClouds();
     /* перекраска живых амбиент-частиц под новую карту */
     const col = new THREE.Color(p.mote);
     for (let i = 0; i < this.N; i++) {
@@ -204,6 +248,13 @@ export class SkyFX {
       s.position.x += s.userData.spd * dt * 0.7;
       if (s.position.x > 110) s.position.x = -110;
     }
+    /* v3.0: мешевые облака — дрейф + медленное вращение */
+    this.meshClouds.forEach((m, i) => {
+      if (!m.visible) return;
+      m.position.x += m.userData.spd * dt * 0.7;
+      if (m.position.x > 110) m.position.x = -110;
+      m.rotation.y += this.cloudSpin[i] * dt * 8;
+    });
     /* амбиент: медленный спавн вокруг центра сцены, дрейф по ветру */
     const p = PALETTE[this.map];
     const want = Math.floor(p.moteN * this.density);
@@ -247,9 +298,11 @@ export class SkyFX {
 
   /** статистика для E2E (skyState) */
   state() {
+    const meshVis = this.meshClouds.filter((m) => m.visible).length;
     return {
       dome: !!this.dome && this.group.visible,
-      clouds: this.clouds.filter((s) => s.visible).length,
+      clouds: this.clouds.filter((s) => s.visible).length + meshVis,/* v3.0: спрайты+меши (совместимость E2E) */
+      meshClouds: meshVis,/* v3.0 */
       sun: !!this.sun && this.group.visible,
       map: this.map,
       motes: this.pos ? this.pos.reduce((a, y, i) => (i % 3 === 1 && y > -50 ? a + 1 : a), 0) : 0,

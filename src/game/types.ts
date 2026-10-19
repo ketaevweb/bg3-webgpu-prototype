@@ -300,6 +300,7 @@ export interface Bg3Debug{
   ebarkState:()=>unknown;/* v2.8: счётчик ревов + каталог */
   skyState:()=>unknown;/* v2.9: небо {dome,clouds,sun,map,motes} */
   windStats:()=>{active:number};/* v2.9: wind-материалы травы */
+  natureStats:()=>{cached:number;failed:string[]};/* v3.0: модели пака (E2E) */
   charStats:()=>{rings:number;runners:number};/* v2.9: ореолы/бегущие */
   gfxState:()=>{bloom:boolean;grade:boolean;sky:boolean};/* v2.9: рубильники пост-обработки */
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;

@@ -15,6 +15,7 @@ import { uiSet, useUi } from './ui/store';
 import { renderer, scene, worldGroup, camera, controls, fx, glows, rigs, sky, initRenderer, ensureRendererInit, clearGroup, setupPostFX, applyAtmosphere } from './render/renderer';/* scene — для __bg3.scn (E2E-снимки) */
 import { charfxUpdate, charfxStats } from './render/charfx';/* v2.9: ореолы благословений + пыль шагов */
 import { windStats } from './render/wind';/* v2.9: качание травы (E2E) */
+import { natureStats } from './world/nature';/* v3.0: модели пака (E2E) */
 import { tickTweens, clearTweens } from './fx/tweens';
 import { seedForest, buildWorld } from './world/props';
 import { switchMap } from './world/maps';
@@ -62,8 +63,6 @@ import './ui/tutorial';/* v1.4: биндинг bus.tutEvent (реализаци�
    Состояние — в state.ts (Фаза 4a), рендер — render/renderer.ts,
    твины — fx/tweens.ts; системы выносятся по REFACTORING.md §5 (4b–4h). */
 export function bootGame(){
-
-
 
 
 /* v2.7: говорить/осмотреть — общий код для клавиши E и тач-кнопки 🗣 */
@@ -305,7 +304,7 @@ let disposed=false;
     sfx.ui();
   };
   uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
-  log('BG3 Web-прототип v2.9 «Лик Фаэруна»: мир ожил — ландшафты с холмами и дальними горами, небо с облаками и светилом, качающаяся ветром трава, кинолюк и виньетка, светлячки/споры/снег; герои благословлённых глубин носят золотые ореолы (T — летопись).','g-sys');
+  log('BG3 Web-прототип v3.0 «Дикая чаща»: POLYGON Nature Pack — 129 моделей Synty с настоящей палитрой: чаща берез/ив/дубов, камни и валуны, костер и кувшинки, облака-мешы, текстурная земля, качающаяся листва; горы и реквизит снова в кадре (T — летопись).','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
@@ -313,7 +312,7 @@ let disposed=false;
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
   renderer.setAnimationLoop(loop);
-  console.log('[bg3] v2.9 boot complete');
+  console.log('[bg3] v3.0 boot complete');
   }catch(err){
     console.error('[bg3] boot failed:',err);
   }
@@ -379,6 +378,7 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   dlgProbe:(npc,id)=>{const f=DLGS[npc];const n=f?f(id):null;
     return n?{name:n.name,text:n.text,opts:(n.opts||[]).map(o=>o.t)}:null;},/* v2.5: пробы реплик (генератор озвучки) */
   skyState:()=>sky.state(),windStats,charStats:()=>charfxStats(),/* v2.9: небо/ветер/персонажи (E2E) */
+  natureStats,/* v3.0: модели пака в кэше/упавшие (E2E) */
   gfxState:()=>({bloom:G.bloomOn,grade:G.gradeOn,sky:sky.enabled}),/* v2.9: рубильники пост-обработки (E2E) */
   tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
   openDlg:(n)=>openDlg(n),closeDlg:()=>closeDlg(),/* v2.5: диалог для E2E */

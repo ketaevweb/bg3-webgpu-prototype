@@ -80,9 +80,9 @@ export function applyLighting(m:'forest'|'crypt'|'swamp'|'giants'|'citadel'){
   if(m==='crypt'){/* v0.8: ночная крипта; v2.9: чуть светлее — читается */
     hemi.color.setHex(0x7c8ca4);hemi.groundColor.setHex(0x1a1826);hemi.intensity=0.8;
     sun.color.setHex(0x9fb4d8);sun.intensity=1.15;
-  }else if(m==='swamp'){/* v1.5: мертвенно-зелёные сумерки; v2.9: читаемее */
-    hemi.color.setHex(0x9ab88a);hemi.groundColor.setHex(0x1a2416);hemi.intensity=0.95;
-    sun.color.setHex(0xcfe0a8);sun.intensity=1.9;
+  }else if(m==='swamp'){/* v1.5: мертвенно-зелёные сумерки; v3.0: Mud-тайл темнит — свет поднят */
+    hemi.color.setHex(0x9ab88a);hemi.groundColor.setHex(0x1a2416);hemi.intensity=1.2;
+    sun.color.setHex(0xcfe0a8);sun.intensity=2.5;
   }else if(m==='giants'){/* v1.6: холодный свет высокогорья; v2.9: читаемее */
     hemi.color.setHex(0xa8c0d8);hemi.groundColor.setHex(0x242a34);hemi.intensity=0.92;
     sun.color.setHex(0xd8e4f0);sun.intensity=2.0;

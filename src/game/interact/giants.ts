@@ -52,12 +52,12 @@ export function buildGiantsScenery(){/* v1.6: обрыв, мост, лагерь
     v2.9-урок: при s 1.1-1.4 (30-55 м) хребет заливал кадр стенами с орбиты
     камеры — холмы-обрамление 8-14 м (s 0.32-0.5), отодвинуты за край */
   for(let x=0;x<28;x+=3){
-    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(x/3)%3),x,-3,{s:0.34+Math.floor(x/3)%3*0.05,spin:true});
-    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((x+2)/3)%3),x,30,{s:0.38+Math.floor(x/3)%3*0.05,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(x/3)%3),x,-4,{s:0.18+Math.floor(x/3)%3*0.04,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((x+2)/3)%3),x,31,{s:0.2+Math.floor(x/3)%3*0.04,spin:true});
   }
   for(let z=3;z<28;z+=4){
-    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(z/4)%3),-3,z,{s:0.34+Math.floor(z/4)%3*0.05,spin:true});
-    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((z+2)/4)%3),30,z,{s:0.36+Math.floor(z/4)%3*0.05,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor(z/4)%3),-4,z,{s:0.18+Math.floor(z/4)%3*0.04,spin:true});
+    placeNature('SM_Terrain_Mountain_0'+(1+Math.floor((z+2)/4)%3),31,z,{s:0.19+Math.floor(z/4)%3*0.04,spin:true});
   }
   /* обрыв: тёмная полоса между рядами z 13..14, кроме клеток моста */
   const chM=new THREE.MeshStandardMaterial({color:0x0d0c10,roughness:1});

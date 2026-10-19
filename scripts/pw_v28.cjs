@@ -217,7 +217,7 @@ const g_errors = [];/* модуль-скоуп: виден из catch вне IIF
   await page.waitForFunction(() => !!window.__bg3, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__bg3.voice().ready, null, { timeout: 30000 });
   await page.waitForTimeout(3000);
-  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)) && !e.startsWith('CONSOLE: Failed to load resource'));
+  const realErr = errors.filter((e) => !NOISE.some((n) => e.includes(n)) && !e.startsWith('CONSOLE: Failed to load resource') && !e.includes('/api/'));/* v3.0: /api/ — транспортный шум дев-сервера (tts 503 флак) */
   const bad404 = errors.filter((e) => e.startsWith('HTTP') && !NOISE.some((n) => e.includes(n)) && !e.includes('/api/'));
   const g8 = await page.evaluate(() => {
     const st = window.__bg3.blessState();
