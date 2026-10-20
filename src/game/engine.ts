@@ -54,8 +54,12 @@ import { serverGet, serverPut } from './save/server';/* v1.5: серверные
 import { cloudPull, serverPull } from './save/slots';
 /* v3.3 «Кузница»: редактор игры (панель React — components/editor/EditorPanel.tsx) */
 import { edToggle, edIsOpen, edOpen, edClose, edSelect, edSetField, edStatus, edSpawn, edDelete,
-  edSetPaused, edStep, edSetTime, edGlobalsSet, edSpawnKeys, bindEditor } from './editor/bridge';
+  edSetPaused, edStep, edSetTime, edGlobalsSet, edSpawnKeys, bindEditor, edFocus } from './editor/bridge';
 import { useEd } from './ui/editorStore';
+import { edClickGuard, edProbe } from './editor/forge';/* v3.4: гард клика при гизмо + пробник E2E */
+import { edDuplicateUnit, edAnimPlay, edAnimSpeed, edRigReload, forgeSetGizmo, forgeSetSnap } from './editor/forge';/* v3.4: E2E-действия мастерской */
+import { edDlgPickNpc, edDlgPickNode, edDlgSetField, edDlgApply, edDlgReset } from './editor/dlgEd';/* v3.4: диалоги */
+import { edPlaceProp, edPropList, edClearProps, restoreWorldEd } from './editor/worldEd';/* v3.4: декор (E2E) */
 /* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
 import './ui/party';/* refreshParty/refreshInit/refreshBossBar/openExploreUI */
 import './ui/actionbar';/* refreshUI */
@@ -179,7 +183,8 @@ function bindInput(){
     const btn=downPos.b,touch=downPos.t==='touch';downPos=null;
     if(btn===2){cancelTargeting();return;}
     /* v2.7: на таче порог «тапа» шире — палец неточен (14px вместо 7px) */
-    if(btn===0&&dx*dx+dy*dy<(touch?196:49)){updatePick(e);onLeftClick();}
+    /* v3.4: клик по стрелкам гизмо кузницы — не игровое действие */
+    if(btn===0&&dx*dx+dy*dy<(touch?196:49)&&!edClickGuard()){updatePick(e);onLeftClick();}
   });
   el.addEventListener('pointermove',updatePick);
   el.addEventListener('contextmenu',e=>e.preventDefault());
@@ -284,6 +289,7 @@ let disposed=false;
   buildHeroes();
   spawnEnemies();
   buildForestScenery();
+  restoreWorldEd('forest');/* v3.4: вернуть редакторский декор мира (persist localStorage) */
   initMarkers();
   initOverlays();
   bindInput();
@@ -367,6 +373,7 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   openBag:()=>toggleBag(),
   gearKeys:()=>Object.keys(GEAR),
   animStats,/* v1.7: E2E-гейт анимации */
+  ed34:edProbe,/* v3.4: пробник мастерской (гизмо/кисть/декор/диалоги/анимации) */
   turn:()=>({phase:G.phase,combatOn:G.combatOn,hero:!!G.current&&G.current.side==='hero',
     action:G.current?G.current.action:0,round:G.round,mapId:G.mapId,busy:G.busy}),/* v1.8: инспектор хода; v2.7: +busy */
   solidAt:(x,z)=>GW.solid.has(key(x,z)),/* v1.8: проверка стены цитадели */
@@ -417,6 +424,15 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   edGold:(n)=>edGlobalsSet('gold',n),edMap:(m)=>edGlobalsSet('mapId',m),
   edTree:()=>useEd.getState().tree,edInsp:()=>useEd.getState().insp,
   edLog:()=>useEd.getState().log.map(l=>l.msg),
+  /* ===== v3.4 «Мастерская»: гизмо/дублирование/анимации/декор/диалоги (E2E) ===== */
+  edFocus:(id)=>edFocus(id),edGizmo:(m)=>forgeSetGizmo(m as Parameters<typeof forgeSetGizmo>[0]),edSnap:(b)=>forgeSetSnap(!!b),
+  edDup:(id)=>edDuplicateUnit(id),
+  edAnim:(name)=>edAnimPlay(name),edAnimSpeed:(v)=>edAnimSpeed(v),edRig:()=>edRigReload(),
+  edPropPlace:(name,x,z)=>edPlaceProp(G.mapId as string,name,x,z,{}),
+  edProps:()=>edPropList().map(p=>({id:p.id,name:p.name,x:p.x,z:p.z})),
+  edPropClear:()=>edClearProps(G.mapId as string),
+  edDlgNpc:(n)=>edDlgPickNpc(n),edDlgNode:(id)=>edDlgPickNode(id),
+  edDlgSet:(k,v)=>edDlgSetField(k,String(v)),edDlgApply:()=>edDlgApply(),edDlgReset:()=>edDlgReset(),
   tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
   openDlg:(n)=>openDlg(n),closeDlg:()=>closeDlg(),/* v2.5: диалог для E2E */
 };

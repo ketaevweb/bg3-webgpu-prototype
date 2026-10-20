@@ -267,6 +267,15 @@ export interface Bg3Debug{
   step:(x:number,z:number)=>void;/* v1.7: боевое перемещение для E2E */
   fire:(x:number,z:number)=>Promise<void>;
   animStats:()=>unknown;/* v1.7: сводка анимационной системы (motion+rigs) */
+  ed34:()=>Record<string,unknown>;/* v3.4: пробник мастерской (гизмо/кисть/декор/диалоги) */
+  edFocus:(id:number)=>void;edGizmo:(m:string)=>void;edSnap:(b:boolean)=>void;
+  edDup:(id:number)=>void;
+  edAnim:(name:string)=>void;edAnimSpeed:(v:number)=>void;edRig:()=>void;
+  edPropPlace:(name:string,x:number,z:number)=>Promise<unknown>;
+  edProps:()=>{id:number;name:string;x:number;z:number}[];
+  edPropClear:()=>void;
+  edDlgNpc:(n:string)=>void;edDlgNode:(id:string)=>void;edDlgSet:(k:string,v:string)=>void;
+  edDlgApply:()=>void;edDlgReset:()=>void;/* v3.4: E2E мастерской */
   /* v1.8: инспекторы E2E (только чтение) */
   turn:()=>{phase:string;combatOn:boolean;hero:boolean;action:number;round:number;mapId:string};
   solidAt:(x:number,z:number)=>boolean;

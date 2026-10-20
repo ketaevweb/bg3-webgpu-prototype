@@ -812,3 +812,27 @@ Stage Summary:
 - v3.3 полностью опубликован: main, тег, Release, Pages. Живой сайт с редактором: https://ketaevweb.github.io/bg3-webgpu-prototype/
 - Дорожная карта редактора (v3.4): пресеты правок (persist JSON в localStorage), дублирование юнитов, редактор ростера/оружий
 - Напоминание игроку: отозвать токен ghp_5gMHjf… после сессии (GitHub → Settings → Developer settings → Tokens)
+
+---
+Task ID: 31
+Agent: Z.ai (main)
+Task: v3.4 «Мастерская» — редактор как в Unity: гизмо-transform (W/E/R), фокус по двойному клику, дублирование, кисть+drag&drop, редактор мира (декор persist), правка диалогов и анимаций рига, секция ИИ
+
+Work Log:
+- Запрос игрока: «В редакторе не хватает: gizmos; акцентирования/приближения по двойному клику; добавления/удаления/копирования юнитов перетаскиванием; редактирования мира (деревья/кусты/декор); редактирования ИИ, диалогов, анимаций…»
+- editor/gizmo.ts (75): TransformControls r180 — getHelper() в сцену, маппинг GizmoMode↔TC ('move'→'translate' — урок: TC.setMode('move') ронял updateMatrixWorld: picker['move'] undefined), dragging-changed отключает орбиту, onDragEnd → forge применяет клетку/шаг
+- editor/forge.ts (386): каталог спавна переехал из bridge (одно направление bridge→forge, инжект initForge({log,select,focus,refreshTree,findUnit})); edSpawnAt (кисть/drop ставят в клетку клика), edDuplicateUnit — фабричный клон или шаблонный makeUnit (герои: «Торик Кремень (копия)» с Synty-ригом и профилем), gizmoEnd (клетка/поворот 15°/масштаб), кисть: capture pointerdown/up + brushDown, drop: text/bg3ed spawn:/prop:/move:, клавиши W/E/R/Q + Ctrl+D capture, propFromEvent (луч по мешам пропов), edProbe (E2E), edClickGuard (engine pointerup гард)
+- editor/worldEd.ts (237): каталог 38 моделей POLYGON Nature в 4 группах (деревья/кусты и травы/камни/декор — все файлы сверены с public/models/nature), реестр EdProp, edPlaceProp через placeNatureSync, удаление/очистка, persist bg3w_world_v1 по mapId, restoreWorldEd (boot 'forest' + buildMap каждой карты), инспектор пропа (X/Z/масштаб/поворот °/подъём/преграда) + syncProps
+- editor/dlgEd.ts (167): обёртка DLGS (каждый ключ заворачивается, lastNode пишется), правки name/text/opts[i] поверх оригинала, persist bg3w_dlg_v1, dlgSet переоткрывает открытый узел (showNode), dlgProbeNodes — пробник известных id без побочных эффектов, редактор узла (секции полей + pending + применить/сбросить)
+- editor/bridge.ts (431): интеграция (gizmoOn/Off в select/close/delete, syncProps+каталог+dlgNpcs в refreshAll), секция «ИИ и бой» (aura/atkBonus/caster/fearImmune/pacified), act-биндинги v3.4, forgeBind в bindEditor cleanup
+- engine.ts: edClickGuard в pointerup (гизмо не играет кликов), boot вызывает restoreWorldEd('forest') (урок: boot собирает лес через seedForest, не buildMap — первый persist-гейт падал), __bg3: ed34 + edFocus/edGizmo/edSnap/edDup/edAnim/edAnimSpeed/edRig/edPropPlace/edProps/edPropClear/edDlg*
+- React: fields.tsx (Row/Section), EditorTabs.tsx (DecorTab: каталог/кисть/выбор кликом/список/инспектор/удаление; DlgTab: npc→узел→поля→применить/сбросить), EditorPanel (гизмо-тулбар ⬆⟳⤢✕+«шаг», палитра draggable+🖌, дерево draggable+dblclick, «Анимации рига» с клипами/скоростью/перезагрузкой, «Дублировать», 4 вкладки), game.css +14 строк
+- Уроки E2E: KeyboardEvent на window не проходит capture document (диспатчить на document); клик канваса при панели 640px справа — только левая половина; addInitScript чистит localStorage на КАЖДОЙ навигации — persist-гейты чистят ключи один раз после первого goto; HMR-пересборка посреди прогона даёт флак — перепрогон
+- E2E pw_v34 «Мастерская» 8 гейтов ALL GREEN: G1 гизмо attach + W/E/R/Q; G2 фокус dblclick (moved 6.6); G3 дублирование героя с ригом + чистка; G4 кисть ставит юнита кликом, глушка не пускает клик в игру; G5 декор + persist через reload + «убрать всё»; G6 диалог: 4 узла patrol, текст применён и в DLGS и в DOM открытого диалога, сброс; G7 клипы idle…death, walk-play, mixer ×0.5, секция в панели; G8 reload чистый. Регресс pw_v33 ALL GREEN (секции уже с «ИИ и бой»)
+- Статика: tsc 0, ESLint 0, NO CYCLES; forge 386 / worldEd 237 / dlgEd 167 / gizmo 75 / bridge 431 / EditorPanel 201 / EditorTabs 109 / fields 53
+- Дорожная карта: v3.5 — undo/redo стека правок, пресеты юнитов, редактор квестов
+
+Stage Summary:
+- v3.4 «Мастерская»: все 6 запрошенных инструментов редактора реализованы (гизмо, фокус, drag&drop юнитов, декор мира с persist, ИИ/диалоги, анимации) — игрок правит недочёты сам, без кода
+- Ни одна прежняя функция не сломана (pw_v33 GREEN), сейв v2 не менялся
+- Далее: коммит, тег v3.4, пуш, Release, редеплой Pages

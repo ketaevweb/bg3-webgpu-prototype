@@ -11,46 +11,23 @@
 import type * as THREE from 'three/webgpu';
 import type { Abil, MapId, StatusType, Unit } from '../types';
 import { G, S, units, barrels, pick, GW, MAP_NAME } from '../state';
-import { TILE, GRID, HALF, W } from '../constants';
+import { TILE, GRID, W } from '../constants';
 import { clamp } from '../utils';
 import { passable, unitAt } from '../world/grid';
 import { camera, controls, renderer } from '../render/renderer';
 import { removeUnit } from '../entities/units';
-import { GOB, makeGoblin, makeSkeleton, makeSkeletonKnight, makeCultist,
-  makeDrowned, makeOgre, makeGrat, makeNecro, makeUlva, makeGarrum, makeMalveh,
-  makeIlva, makeKaya, makeOlkha, makeHaldir, applyElite } from '../entities/roster';
+import { applyElite } from '../entities/roster';
 import { damageUnit } from '../systems/combat';
 import { switchMap } from '../world/maps';
 import { forceSeason } from '../interact/season';
 import { gfx, applyGfx } from '../save/settings';
-import { upgradeUnitRig, animOptsFor } from '../animation';
 import { bus } from '../bus';
 import { useEd, uiEdSet, edPushLog } from '../ui/editorStore';
-
-/* ---------- каталог спавна (v3.3) ---------- */
-export const ED_SPAWN:{k:string;label:string;make:(x:number,z:number)=>Unit}[]=[
-  {k:'bruiser',label:'Гоблин-задира',make:(x,z)=>makeGoblin(GOB.bruiser,x,z)},
-  {k:'archer',label:'Гоблин-лучник',make:(x,z)=>makeGoblin(GOB.archer,x,z)},
-  {k:'shaman',label:'Гоблин-шаман',make:(x,z)=>makeGoblin(GOB.shaman,x,z)},
-  {k:'chief',label:'Гоблин-вожак',make:(x,z)=>makeGoblin(GOB.chief,x,z)},
-  {k:'veteran',label:'Гоблин-ветеран (элита)',make:(x,z)=>applyElite(makeGoblin(GOB.veteran,x,z))},
-  {k:'skeleton',label:'Скелет-страж',make:makeSkeleton},
-  {k:'knight',label:'Скелет-рыцарь (элита)',make:makeSkeletonKnight},
-  {k:'cultist',label:'Культист Костепёра',make:(x,z)=>makeCultist('cultist',x,z)},
-  {k:'acolyte',label:'Ученик Костепёра (элита)',make:(x,z)=>makeCultist('acolyte',x,z)},
-  {k:'deep',label:'Культист Глубин',make:(x,z)=>makeCultist('deep',x,z)},
-  {k:'drowned',label:'Утопленник',make:makeDrowned},
-  {k:'ogre',label:'Огр перевала',make:makeOgre},
-  {k:'grat',label:'★ Грат Костолом (босс)',make:makeGrat},
-  {k:'necro',label:'★ Вхорил Костепёр (босс)',make:(x,z)=>placeUnit(makeNecro(),x,z)},
-  {k:'ulva',label:'★ Ульва, Матерь Топей (босс)',make:(x,z)=>placeUnit(makeUlva(),x,z)},
-  {k:'garrum',label:'★ Гаррум Камнегрыз (босс)',make:(x,z)=>placeUnit(makeGarrum(),x,z)},
-  {k:'malveh',label:'★ Малвех, лорд-комендант (босс)',make:(x,z)=>placeUnit(makeMalveh(),x,z)},
-  {k:'ilva',label:'Илва (спутница)',make:makeIlva},
-  {k:'kaya',label:'Кая (спутница)',make:makeKaya},
-  {k:'olkha',label:'Ольха (спутница)',make:makeOlkha},
-  {k:'haldir',label:'Хальдир (спутница)',make:makeHaldir},
-];
+/* v3.4 «Мастерская»: гизмо/кисть/drag&drop/дублирование/анимации/декор/диалоги */
+import { initForge, forgeBind, forgeOnSelect, forgeOnClose, forgeSetGizmo, forgeSetSnap,
+  edSpawnAt, edDuplicateUnit, edAnimPlay, edAnimSpeed, edRigReload, ED_SPAWN } from './forge';
+import { dlgNpcList, edDlgPickNpc, edDlgPickNode, edDlgSetField, edDlgApply, edDlgReset } from './dlgEd';
+import { ED_PROPS, syncProps, edPropSelect, edPropSetField, edPropDel, edPropFocus, edPropClear } from './worldEd';
 
 const ABIL_RU:Record<Abil,string>={str:'СИЛ',dex:'ЛОВ',con:'Тел',int:'ИНТ',wis:'МДР',cha:'ХАР'};
 const ABIL_OPTS:[string,string][]=(['str','dex','con','int','wis','cha'] as const).map(a=>[a,ABIL_RU[a]]);
@@ -62,6 +39,8 @@ function findUnit(id:number):Unit|null{
   return units.find(u=>u.id===id)||barrels.find(b=>b.id===id)||null;
 }
 function edLog(msg:string){edPushLog(msg);}
+/* снять гизмо с выбранного (v3.4) */
+function gizmoOff(){forgeOnClose();}
 
 /* подсветка выбранного: кольцо фигурки красим в cyan, прежний цвет помним */
 let ringSaved:{mesh:THREE.Object3D;hex:number}|null=null;
@@ -83,22 +62,13 @@ function freeNear(x:number,z:number):[number,number]{
   }
   return [clamp(x,0,GRID-1),clamp(z,0,GRID-1)];
 }
-function placeUnit(u:Unit,x:number,z:number):Unit{
-  const [fx,fz]=freeNear(clamp(x,0,GRID-1),clamp(z,0,GRID-1));
-  u.x=fx;u.z=fz;
-  u.mesh.position.set(W(fx),0,W(fz));
-  return u;
-}
 /* «пришить» mesh-позицию к x/z после правки координат инспектором */
 function syncMesh(u:Unit){
   const [fx,fz]=freeNear(u.x,u.z);
   u.x=fx;u.z=fz;
   u.mesh.position.set(W(fx),0,W(fz));
 }
-function camTile():[number,number]{
-  return [clamp(Math.round(controls.target.x/TILE+HALF),0,GRID-1),
-    clamp(Math.round(controls.target.z/TILE+HALF),0,GRID-1)];
-}
+void TILE;/* v3.4: тайл-конверсия переехала в forge (tileFromEvent) */
 
 /* ---------- иерархия сцены (Hierarchy) ---------- */
 function treeRows(){
@@ -157,13 +127,20 @@ function inspSections(u:Unit):Sec[]{
       f('maxhp','Макс. хиты','int',u.maxhp,{min:1,max:999}),
     ]});
   }
+  sec.push({title:'ИИ и бой',rows:[
+    f('aura','Аура властителя (+N врагам)','int',u.aura??0,{min:0,max:10}),
+    f('atkBonus','Бонус бросков атаки','int',u.atkBonus??0,{min:-5,max:10}),
+    f('keepDist','Держит дистанцию (стрелок/кастер)','bool',!!u.keepDist),
+    f('healer','Целитель (лечит союзников)','bool',!!u.healer),
+    f('caster','Кастер (яды/огонь)','bool',!!u.caster),
+    f('fearImmune','Иммунитет к страху','bool',!!u.fearImmune),
+    f('pacified','Запуган (без реакции атаки)','bool',!!u.pacified),
+  ]});
   sec.push({title:'Позиция и вид',rows:[
     f('x','X (0–27)','int',u.x,{min:0,max:GRID-1}),
     f('z','Z (0–27)','int',u.z,{min:0,max:GRID-1}),
     f('scale','Размер фигурки','num',u.mesh.scale.x,{min:0.3,max:3,step:0.05}),
     f('elite','Элита','bool',!!u.elite),
-    f('keepDist','Держит дистанцию (ИИ)','bool',!!u.keepDist),
-    f('healer','Целитель (ИИ)','bool',!!u.healer),
   ]});
   return sec;
 }
@@ -194,7 +171,8 @@ function globalsSections():Sec[]{
 
 /* ---------- применение правок ---------- */
 const NUM_KEYS=new Set(['hp','maxhp','ac','speed','action','bonus','moveLeft','slots','potions',
-  'str','dex','con','int','wis','cha','level','xp','weaponN','weaponD','weaponRange','dmgBonus','x','z']);
+  'str','dex','con','int','wis','cha','level','xp','weaponN','weaponD','weaponRange','dmgBonus',
+  'x','z','aura','atkBonus']);/* v3.4: +аура/бонус атаки (ИИ и бой) */
 function applyUnitField(u:Unit,k:string,v:number|boolean|string){
   const num=typeof v==='number'?v:(parseFloat(String(v))||0);
   if(u.weapon&&NUM_KEYS.has(k)){
@@ -217,6 +195,8 @@ function applyUnitField(u:Unit,k:string,v:number|boolean|string){
       case 'dmgBonus':u.dmgBonus=Math.round(clamp(num,-5,20));break;
       case 'level':u.level=Math.round(clamp(num,1,20));break;
       case 'xp':u.xp=Math.max(0,Math.round(num));break;
+      case 'aura':u.aura=Math.round(clamp(num,0,10));break;
+      case 'atkBonus':u.atkBonus=Math.round(clamp(num,-5,10));break;
       case 'x':case 'z':syncMesh(u);break;
       default:(u as unknown as Record<string,number>)[k]=Math.round(clamp(num,1,30));break;
     }
@@ -238,6 +218,9 @@ function applyUnitField(u:Unit,k:string,v:number|boolean|string){
       break;
     case 'keepDist':u.keepDist=!!v;break;
     case 'healer':u.healer=!!v;break;
+    case 'caster':u.caster=!!v;break;
+    case 'fearImmune':u.fearImmune=!!v;break;
+    case 'pacified':u.pacified=!!v;edLog('Запуган (реакция атаки недоступна): '+(v?'да':'нет'));break;
     default:edLog('Поле «'+k+'» не редактируется.');
   }
 }
@@ -272,7 +255,7 @@ function applyGlobal(k:string,v:number|boolean|string){
     case 'bloom':gfx.bloom=!!v;applyGfx();break;
     case 'grade':gfx.grade=!!v;applyGfx();break;
     case 'sky':gfx.sky=!!v;applyGfx();break;
-    case 'mapId':void switchMap(String(v) as MapId).then(()=>{edLog('Карта: '+(MAP_NAME[String(v) as MapId]||v));refreshAll();});break;
+    case 'mapId':void switchMap(String(v) as MapId).then(()=>{edLog('Карта: '+(MAP_NAME[String(v) as MapId]||v));gizmoOff();uiEdSet({propSel:null,propInsp:null});refreshAll();});break;
     case 'seasonForced':{
       const s=String(v);
       forceSeason(s==='real'?null:parseInt(s,10));
@@ -290,10 +273,11 @@ export function edGlobalsSet(k:string,v:number|boolean|string){
 export function edSelect(id:number|null){
   const prev=useEd.getState().selId;
   if(prev!=null){const pu=findUnit(prev);if(pu)paintRing(pu,false);}
-  if(id==null){uiEdSet({selId:null,insp:null});return;}
+  if(id==null){gizmoOff();uiEdSet({selId:null,insp:null});return;}
   const u=findUnit(id);
-  if(!u){uiEdSet({selId:null,insp:null});return;}
+  if(!u){gizmoOff();uiEdSet({selId:null,insp:null});return;}
   paintRing(u,true);
+  forgeOnSelect(u);/* v3.4: гизмо + список клипов рига */
   uiEdSet({selId:id,insp:inspSections(u),tab:'unit'});
 }
 export function edHeal(id:number){
@@ -314,6 +298,7 @@ export function edDelete(id:number){
   const u=findUnit(id);if(!u)return;
   if(G.current===u){edLog('Нельзя убирать юнита активного хода — передайте ход.');return;}
   paintRing(u,false);
+  if(useEd.getState().selId===id)gizmoOff();
   removeUnit(u);
   if(u.isBarrel){const i=barrels.indexOf(u);if(i>=0)barrels.splice(i,1);}
   const oi=G.order.indexOf(u);if(oi>=0)G.order.splice(oi,1);
@@ -335,18 +320,7 @@ export function edFocus(id:number){
   edLog('Камера наведена: '+u.name);
 }
 export function edSpawn(k:string){
-  const def=ED_SPAWN.find(s=>s.k===k);
-  if(!def){edLog('Неизвестный спавн: '+k);return;}
-  const [tx,tz]=camTile();
-  const [x,z]=freeNear(tx,tz);
-  const u=def.make(x,z);
-  edLog('Заспавнен: '+u.name+' ('+u.x+','+u.z+') — камера наведена.');
-  refreshAll();
-  edSelect(u.id);
-  edFocus(u.id);
-  void upgradeUnitRig(u,animOptsFor(u)).then(ok=>{
-    edLog(ok?('Риг подключен: '+u.name):(u.name+' — Synty-рига нет, осталась капсула.'));
-  }).catch(()=>{edLog(u.name+' — риг не подключился (капсула).');});
+  edSpawnAt(k);/* v3.4: фабрика/фокус/риг — в forge */
 }
 
 /* ---------- пауза / шаг / темп ---------- */
@@ -376,6 +350,7 @@ export function edOpen(){
 export function edClose(){
   const st=useEd.getState();
   if(st.selId!=null){const u=findUnit(st.selId);if(u)paintRing(u,false);}
+  gizmoOff();
   uiEdSet({open:false,selId:null,insp:null});
 }
 export function edToggle(){if(useEd.getState().open)edClose();else edOpen();}
@@ -383,7 +358,11 @@ export function edSpawnKeys(){return ED_SPAWN.map(d=>d.k);}
 
 function refreshAll(){
   uiEdSet(s=>({tree:treeRows(),treeVer:s.treeVer+1,globals:globalsSections(),
-    spawnList:ED_SPAWN.map(d=>({k:d.k,label:d.label}))}));
+    spawnList:ED_SPAWN.map(d=>({k:d.k,label:d.label})),
+    props:[],propSel:null,propInsp:null}));/* список декора заполнит syncProps */
+  syncProps();/* v3.4: список декоров мира */
+  uiEdSet({dlgNpcs:dlgNpcList(),/* v3.4: список диалогов */
+    propCatalog:ED_PROPS.map(d=>({name:d.name,label:d.label,group:d.group}))});
   const sel=useEd.getState().selId;
   if(sel!=null){const u=findUnit(sel);uiEdSet({insp:u?inspSections(u):null});}
 }
@@ -392,6 +371,7 @@ function refreshAll(){
    (обработчик игры висит на самом канвасе — capture-листенеры предков
    гарантированно срабатывают раньше листенеров цели) */
 export function bindEditor():()=>void{
+  const unbindForge=forgeBind();/* v3.4: гизмо/кисть/dnd/клавиши W·E·R */
   const onUp=(e:PointerEvent)=>{
     const st=useEd.getState();
     if(!st.open||!st.pickMode)return;
@@ -406,10 +386,11 @@ export function bindEditor():()=>void{
     const sel=useEd.getState().selId;
     if(sel!=null){const u=findUnit(sel);if(u)uiEdSet({insp:inspSections(u)});}
   },1200);
-  return ()=>{document.removeEventListener('pointerup',onUp,true);clearInterval(iv);};
+  return ()=>{document.removeEventListener('pointerup',onUp,true);clearInterval(iv);unbindForge();};
 }
 
 /* ---------- биндинги колбэков панели (side-effect при загрузке, как в settings.ts) ---------- */
+initForge({log:edLog,select:edSelect,focus:edFocus,refreshTree:refreshAll,findUnit});
 uiEdSet(s=>({act:{...s.act,
   setOpen:(o)=>o?edOpen():edClose(),
   setPaused:edSetPaused,
@@ -427,4 +408,24 @@ uiEdSet(s=>({act:{...s.act,
   spawn:edSpawn,
   setPick:(b)=>uiEdSet({pickMode:b}),
   clearLog:()=>uiEdSet({log:[]}),
+  /* v3.4 «Мастерская»: гизмо/кисть/дублирование/анимации/декор/диалоги */
+  setGizmo:forgeSetGizmo,
+  setSnap:forgeSetSnap,
+  setBrush:(k)=>uiEdSet({brush:k}),
+  dbl:(id)=>edFocus(id),
+  dup:()=>{const sel=useEd.getState().selId;if(sel!=null)edDuplicateUnit(sel);},
+  animPlay:edAnimPlay,
+  animSpeed:edAnimSpeed,
+  rigReload:edRigReload,
+  propSelect:edPropSelect,
+  propSetField:edPropSetField,
+  propDel:edPropDel,
+  propFocus:edPropFocus,
+  propClear:edPropClear,
+  propSetPick:(b)=>uiEdSet({propPick:b}),
+  dlgPickNpc:edDlgPickNpc,
+  dlgPickNode:edDlgPickNode,
+  dlgSetField:edDlgSetField,
+  dlgApply:edDlgApply,
+  dlgReset:edDlgReset,
 }}));

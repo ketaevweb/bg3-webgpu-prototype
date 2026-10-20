@@ -21,6 +21,7 @@ import { initOverlays, log, setHint } from '../ui/overlays';
 import { cancelTargeting } from '../ui/targeting';
 import { removeFire } from '../systems/statuses';
 import { upgradeUnitRig, animOptsFor } from '../animation';/* v3.3: риги гарнизону по классам */
+import { restoreWorldEd } from '../editor/worldEd';/* v3.4: восстановление редакторского декора */
 import type { MapId } from '../types';
 
 /* v3.3 «Кузница»: риги ВСЕМ новым юнитам карты. Раньше — только боссы, и
@@ -98,6 +99,7 @@ export function buildMap(id:MapId,spots:number[][]|null){
   G.phase='explore';
   setRound(MAP_NAME[G.mapId]);
   sfx.sceneMotif(id);/* v1.9: короткий мотив прибытия на карту */
+  restoreWorldEd(id as string);/* v3.4: вернуть редакторский декор мира (persist localStorage) */
 }
 /* v0.8: смена карты — телепорт отряда, разбор старой декорации, сборка новой */
 export async function switchMap(id:MapId):Promise<void>{

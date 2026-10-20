@@ -319,6 +319,19 @@
 .edBtns .edBad{border-color:#6a3f3f;color:#e89f9f}
 .edHint{color:#77808f;font-size:11px;padding:8px 2px}
 
+/* v3.4 «Мастерская»: гизмо-тулбар, кисть, список декора */
+.edGiz{display:flex;align-items:center;gap:3px;border-left:1px solid #2a2e36;padding-left:7px}
+.edSnap{display:flex;align-items:center;gap:3px;color:#8fa3b8;white-space:nowrap;cursor:pointer;font-size:11px}
+.edSnap input{accent-color:#38c8ff}
+.edBtns button.on{background:#24405c;border-color:#38c8ff;color:#bfe4ff}
+.edPropList{max-height:150px;overflow:auto;border:1px solid #23272f;border-radius:7px;background:#0d0f13}
+.edPropRow{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:3px 8px;cursor:pointer}
+.edPropRow:hover{background:#1d2129}
+.edPropRow.on{background:#24405c}
+.edPropRow .edLbl{max-width:none;flex:1}
+.edSpawn{cursor:grab}
+.edSpawn:active{cursor:grabbing}
+
 .edCon{border-top:1px solid #2a2e36;height:96px;overflow:auto;padding:5px 10px 7px;background:#0e1013}
 .edConH{display:flex;justify-content:space-between;align-items:center;color:#77808f;font-size:10.5px;
   text-transform:uppercase;letter-spacing:.5px;position:sticky;top:-5px;background:#0e1013;padding:3px 0}
