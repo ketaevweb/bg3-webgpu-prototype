@@ -836,3 +836,19 @@ Stage Summary:
 - v3.4 «Мастерская»: все 6 запрошенных инструментов редактора реализованы (гизмо, фокус, drag&drop юнитов, декор мира с persist, ИИ/диалоги, анимации) — игрок правит недочёты сам, без кода
 - Ни одна прежняя функция не сломана (pw_v33 GREEN), сейв v2 не менялся
 - Далее: коммит, тег v3.4, пуш, Release, редеплой Pages
+
+---
+Task ID: 32
+Agent: Z.ai (main)
+Task: Публикация v3.4 «Мастерская» — коммит/тег/пуш, GitHub Release, редеплой Pages
+
+Work Log:
+- Коммит 2c5796f, тег v3.4, пуш main — origin/main синхронизирован
+- GitHub Release v3.4 создан (полное описание всех инструментов): https://github.com/ketaevweb/bg3-webgpu-prototype/releases/tag/v3.4
+- Редеплой Pages: deploy_ghpages.sh (билд 2.9 мин, gh-pages push -f, Pages 409/ок)
+- Живой сайт: HTTP 200, «v3.4 Мастерская» в HTML, редакторный чанк подтверждён (18feb559…: «Кузница Дозора/Иерархия»)
+
+Stage Summary:
+- v3.4 полностью опубликован: https://ketaevweb.github.io/bg3-webgpu-prototype/
+- Дорожная карта: v3.5 — undo/redo, пресеты юнитов, редактор квестов
+- Напоминание: отозвать токен ghp_5gMHjf… после сессии
