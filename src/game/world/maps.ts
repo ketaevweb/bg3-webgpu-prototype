@@ -20,8 +20,21 @@ import { QUESTS, questStart, questObj, refreshTracker } from '../interact/quests
 import { initOverlays, log, setHint } from '../ui/overlays';
 import { cancelTargeting } from '../ui/targeting';
 import { removeFire } from '../systems/statuses';
-import { upgradeUnitRig } from '../animation';
+import { upgradeUnitRig, animOptsFor } from '../animation';/* v3.3: риги гарнизону по классам */
 import type { MapId } from '../types';
+
+/* v3.3 «Кузница»: риги ВСЕМ новым юнитам карты. Раньше — только боссы, и
+   те со старым tint-конфигом БЕЗ Synty-модели (фоллбек Soldier + 404
+   /models/rig/soldier.glb), а рядовые гарнизоны (скелеты/культисты/утопленники/
+   огры/рыцари) оставались капсулами. animOptsFor даёт Synty-GLB по классу
+   (тот же путь, что у boot-прохода engine) — идемпотентно по _gltfRig. */
+function rigGarrison(){
+  for(const u of units){
+    if(u.isBarrel||u.side==='hero')continue;
+    if((u as { _gltfRig?:boolean })._gltfRig)continue;/* v3.1: риг уже стоит */
+    void upgradeUnitRig(u,animOptsFor(u)).catch(()=>{});
+  }
+}
 
 export function teardownWorld(){
   cancelTargeting();setHint('');
@@ -45,46 +58,38 @@ export function buildMap(id:MapId,spots:number[][]|null){
   G.mapId=id;
   if(id==='crypt'){
     seedCrypt();applyAtmosphere('crypt');
-    buildWorld();buildCryptScenery();spawnEnemies();
+    buildWorld();buildCryptScenery();spawnEnemies();rigGarrison();/* v3.3 */
     if(spots)placeHeroes(spots);
     controls.target.set(1,0,8);
     if(QUESTS.crypt.state==='hidden')questStart('crypt');
     questObj('crypt','enter');
-    const nc=units.find(u=>u.cryptBoss);
-    if(nc)void upgradeUnitRig(nc,{tint:0x4a7a5f,tintStrength:0.5,scale:1.14,yaw:Math.PI});
     log('Крипта Костепёра. Зелёный свет жаровен, холод и стрёкот костей в темноте.','g-sys');
   }else if(id==='swamp'){/* v1.5: болота культистов */
     seedSwamp();applyAtmosphere('swamp');
-    buildWorld();buildSwampScenery();spawnEnemies();
+    buildWorld();buildSwampScenery();spawnEnemies();rigGarrison();/* v3.3 */
     if(spots)placeHeroes(spots);
     controls.target.set(14,0,14);
     startSwampQuest();
-    const ub=units.find(u=>u.swampBoss);
-    if(ub)void upgradeUnitRig(ub,{tint:0x4a6a4f,tintStrength:0.5,scale:1.16,yaw:Math.PI});
     log('Болота культистов. Зелёный туман, тина по колено и песня из глубины.','g-sys');
   }else if(id==='giants'){/* v1.6: перевал великанов */
     seedGiants();applyAtmosphere('giants');
     buildWorld();buildGiantsScenery();buildCitadelTrail();/* v1.8: тракт к цитадели за мостом */
-    spawnEnemies();
+    spawnEnemies();rigGarrison();/* v3.3 */
     if(spots)placeHeroes(spots);
     controls.target.set(14,0,14);
     startGiantsQuest();
-    const gb=units.find(u=>u.giantBoss);
-    if(gb)void upgradeUnitRig(gb,{tint:0x8a7a5f,tintStrength:0.5,scale:1.3,yaw:Math.PI});
     log('Перевал великанов. Холодный ветер, грохот камней и хруст костей у огрского костра.','g-sys');
   }else if(id==='citadel'){/* v1.8: цитадель Долгого Дозора — финал кампании */
     seedCitadel();applyAtmosphere('citadel');
-    buildWorld();buildCitadelScenery();spawnEnemies();
+    buildWorld();buildCitadelScenery();spawnEnemies();rigGarrison();/* v3.3 */
     if(spots)placeHeroes(spots);
     controls.target.set(14,0,14);
     startCitadelQuest();
-    const lb=units.find(u=>u.citadelBoss);
-    if(lb)void upgradeUnitRig(lb,{tint:0x4a6a5f,tintStrength:0.5,scale:1.18,yaw:Math.PI});
     log('Цитадель Долгого Дозора. Изумрудная мгла, песня в камне и зелёные бразиры. Где-то здесь — лорд-комендант Малвех.','g-sys');
   }else{
     seedForest();applyAtmosphere('forest');
     buildWorld();buildForestScenery();buildSwampTrail();buildGiantsTrail();/* v1.5: гать на болота; v1.6: тропа на перевал */
-    spawnEnemies();
+    spawnEnemies();rigGarrison();/* v3.3: идемпотентно — герои/старые риги пропускаются */
     if(spots)placeHeroes(spots);
     controls.target.set(1,0,12);
     log('Вы поднимаетесь на тракт. Ветер и пение птиц — мертвецы больше не тревожат дорогу.','g-sys');

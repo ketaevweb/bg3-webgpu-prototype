@@ -255,3 +255,84 @@
     #log{max-height:30vh;width:170px}
   }
 }
+
+/* ============ v3.3 «Кузница»: редактор игры (как в Unity) ============ */
+#edBtn{position:fixed;top:12px;left:338px;z-index:30;width:38px;height:38px;font-size:15px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#cfc9b6;cursor:pointer}
+#edBtn:hover{border-color:var(--gold)}
+
+.edWrap{position:fixed;inset:0;z-index:70;pointer-events:none;
+  font:12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c9d0da}
+.edPanel{pointer-events:auto;position:absolute;top:58px;right:8px;bottom:8px;width:min(640px,96vw);
+  display:flex;flex-direction:column;background:#15171cee;border:1px solid #3a3f4a;border-radius:12px;
+  box-shadow:0 12px 40px #000a;backdrop-filter:blur(3px)}
+.edHead{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid #2a2e36;flex-wrap:wrap}
+.edTitle{color:#e8c874;font-size:13px;margin-right:4px;white-space:nowrap}
+.edTb{background:#1d2129;border:1px solid #3a3f4a;border-radius:7px;color:#c9d0da;
+  padding:4px 9px;cursor:pointer;font:inherit;white-space:nowrap}
+.edTb:hover{border-color:#e8c874;color:#fff}
+.edTb.on{background:#24405c;border-color:#38c8ff}
+.edTb.edX{margin-left:auto}
+.edTime{display:flex;align-items:center;gap:5px;color:#8fa3b8;white-space:nowrap}
+.edTime input[type=range]{width:86px;accent-color:#e8c874}
+.edPick{display:flex;align-items:center;gap:4px;color:#8fa3b8;white-space:nowrap;cursor:pointer}
+.edPick input{accent-color:#38c8ff}
+.edSpawn{display:flex;gap:4px;align-items:center}
+.edSpawn select{background:#0f1116;border:1px solid #333945;border-radius:7px;color:#dfe4ec;
+  padding:4px 5px;font:inherit;max-width:190px}
+
+.edTabs{display:flex;gap:4px;padding:6px 10px 0}
+.edTabs button{background:none;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;
+  color:#8fa3b8;padding:4px 14px;cursor:pointer;font:inherit}
+.edTabs button.on{background:#0f1116;color:#e8c874;border-color:#2a2e36}
+
+.edCols{flex:1;display:flex;min-height:0;border-top:1px solid #2a2e36}
+.edTree{width:225px;border-right:1px solid #2a2e36;display:flex;flex-direction:column;min-height:0}
+.edTreeH{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 8px;
+  color:#8fa3b8;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.edTreeH input{width:96px;background:#0f1116;border:1px solid #333945;border-radius:6px;color:#dfe4ec;
+  padding:3px 6px;font:inherit;font-size:11.5px}
+.edTreeList{flex:1;overflow:auto;padding-bottom:6px}
+.edTreeRow{display:flex;align-items:center;gap:5px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+.edTreeRow:hover{background:#1d2129}
+.edTreeRow.on{background:#24405c}
+.edTreeRow.dead{opacity:.42}
+.edTreeRow.dead .edLbl{text-decoration:line-through}
+.edIco{width:24px;flex:none;text-align:center}
+.edLbl{overflow:hidden;text-overflow:ellipsis;max-width:96px}
+.edSub{color:#77808f;font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+
+.edInsp{flex:1;overflow:auto;padding:8px 12px 14px;min-width:0}
+.edInspEmpty{padding:26px 18px;color:#77808f;text-align:center}
+.edSecT{margin:10px 0 4px;color:#8fa3b8;text-transform:uppercase;font-size:10.5px;letter-spacing:.6px;
+  border-bottom:1px dashed #2a2e36;padding-bottom:2px}
+.edRow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2.5px 0}
+.edRow>span{color:#aab3c0}
+.edRow input[type=number],.edRow input[type=text],.edRow select{width:150px;background:#0f1116;
+  border:1px solid #333945;border-radius:6px;color:#dfe4ec;padding:3px 7px;font:inherit}
+.edRow input[type=number]:focus,.edRow input[type=text]:focus,.edRow select:focus{border-color:#e8c874;outline:none}
+.edBtns{display:flex;flex-wrap:wrap;gap:5px;padding:3px 0 6px}
+.edBtns button{background:#1d2129;border:1px solid #3a3f4a;border-radius:7px;color:#c9d0da;
+  padding:4px 10px;cursor:pointer;font:inherit}
+.edBtns button:hover{border-color:#e8c874;color:#fff}
+.edBtns .edGood{border-color:#3f6a45;color:#9fe8b8}
+.edBtns .edBad{border-color:#6a3f3f;color:#e89f9f}
+.edHint{color:#77808f;font-size:11px;padding:8px 2px}
+
+.edCon{border-top:1px solid #2a2e36;height:96px;overflow:auto;padding:5px 10px 7px;background:#0e1013}
+.edConH{display:flex;justify-content:space-between;align-items:center;color:#77808f;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.5px;position:sticky;top:-5px;background:#0e1013;padding:3px 0}
+.edConH button{background:none;border:none;color:#77808f;cursor:pointer;font:inherit;font-size:10.5px;
+  text-transform:uppercase;text-decoration:underline dotted}
+.edConRow{color:#9aa7b5;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.edEmpty{color:#77808f;padding:6px 8px;font-size:11.5px}
+
+@media (pointer:coarse){
+  .edPanel{top:64px;width:97vw}
+  .edTree{width:180px}
+  .edRow input[type=number],.edRow input[type=text],.edRow select{width:132px}
+  #edBtn{width:42px;height:42px;left:auto}
+}
+@media (max-height:520px) and (pointer:coarse){
+  #edBtn{left:332px}
+}

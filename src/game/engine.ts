@@ -52,6 +52,10 @@ import { initMobile, toggleFullscreen, fsState } from './ui/mobile';/* v2.7: м�
 import { cloudGet, cloudPut } from './save/cloud';/* v1.4: облачные скрижали */
 import { serverGet, serverPut } from './save/server';/* v1.5: серверные скрижали */
 import { cloudPull, serverPull } from './save/slots';
+/* v3.3 «Кузница»: редактор игры (панель React — components/editor/EditorPanel.tsx) */
+import { edToggle, edIsOpen, edOpen, edClose, edSelect, edSetField, edStatus, edSpawn, edDelete,
+  edSetPaused, edStep, edSetTime, edGlobalsSet, edSpawnKeys, bindEditor } from './editor/bridge';
+import { useEd } from './ui/editorStore';
 /* регистрации на шине bus: side-effect импорты (порядок — до bootGame) */
 import './ui/party';/* refreshParty/refreshInit/refreshBossBar/openExploreUI */
 import './ui/actionbar';/* refreshUI */
@@ -181,7 +185,11 @@ function bindInput(){
   el.addEventListener('contextmenu',e=>e.preventDefault());
   const onKey=(e:KeyboardEvent)=>{
     sfx.unlock();
-    if(e.key==='Escape'){cancelTargeting();uiSet({sheet:null});closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();closeRecords();}/* v2.4: +летопись */
+    /* v3.3: пока фокус в полях кузницы — служебные хоткеи игры не мешают вводу */
+    const tgt=e.target as HTMLElement|null;
+    if(edIsOpen()&&tgt&&tgt.closest&&tgt.closest('input,textarea,select'))return;
+    if(e.key==='Escape'){cancelTargeting();uiSet({sheet:null});closeJournal();closeShop();closeChoice();closeGfx();closeSaveMenu();closeRecords();edClose();}/* v2.4: +летопись; v3.3: +кузница */
+    if(e.key==='`'||e.key==='~'||e.key==='ё'||e.key==='Ё'){edToggle();return;}/* v3.3: кузница */
     if(e.key==='e'||e.key==='E'||e.key==='у'||e.key==='У'){
       if(G.phase==='explore'&&!G.busy){const it=nearestInteract();if(it)it.fn();}
     }
@@ -211,8 +219,18 @@ function loop(){
   const rdt=Math.min(clock.getDelta(),0.05),t=clock.elapsedTime;
   /* v1.1: лимит FPS — пропускаем кадры сверх лимита */
   if(G.fpsLimit>0){G.frameAcc+=rdt;if(G.frameAcc+1e-4<0.98/G.fpsLimit)return;G.frameAcc=0;}
+  /* v3.3 «Кузница»: Пауза — симуляция стоит, рендер/камера/оверлеи живут;
+     Шаг — один кадр симуляции; Темп — множитель dt (как timeScale в Unity) */
+  const sim=!G.paused||G.stepOnce;
+  if(G.stepOnce)G.stepOnce=false;
+  if(!sim){
+    controls.update();
+    updateOverlays();
+    if(G.postFX&&(G.bloomOn||G.gradeOn))G.postFX.render();else renderer.render(scene,camera);
+    return;
+  }
   slowmo.update(rdt);
-  const dt=rdt*slowmo.scale;
+  const dt=rdt*slowmo.scale*G.timeScale;/* v3.3: темп времени кузницы */
   mmAcc+=rdt;
   if(mmAcc>0.5){mmAcc=0;if(useUi.getState().minimapOpen)refreshMinimap();}/* v1.9 */
   tickTweens(dt);
@@ -297,6 +315,7 @@ let disposed=false;
   loadGfx();applyGfx();renderGfx();renderSaves();
   const disposeMobile=initMobile();/* v2.7: тач-флаги + полноэкранный режим (биндинги стора) */
   disposers.push(disposeMobile);
+  disposers.push(bindEditor());/* v3.3: кузница — capture-выбор кликом + тик дерева */
   uiSet(s=>({sys:{...s.sys,onTalk:talkNearest}}));/* v2.7: тач-кнопка «Говорить» (E) */
   await initVoice();/* v2.5: манифест ДО наставника — первый шаг озвучен */
   initTutorial();
@@ -306,11 +325,12 @@ let disposed=false;
     uiSet(s=>({sys:{...s.sys,sndIcon:sfx.isMuted()?'🔇':'🔊'}}));
     sfx.ui();
   };
-  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords()}}));
+  uiSet(s=>({sys:{...s.sys,onSnd,sndIcon:sfx.isMuted()?'🔇':'🔊',onMm:()=>toggleMinimap(),onRecords:()=>toggleRecords(),onEd:edToggle}}));/* v3.3: +onEd */
   log('BG3 Web-прототип v3.0 «Дикая чаща»: POLYGON Nature Pack — 129 моделей Synty с настоящей палитрой: чаща берез/ив/дубов, камни и валуны, костер и кувшинки, облака-мешы, текстурная земля, качающаяся листва; горы и реквизит снова в кадре (T — летопись).','g-sys');
   log('Освободите Илву в клетке (запад) и найдите алтарь Кая у тракта — обе становятся играбельными спутницами.','g-sys');
   log('В лагере Костей орудует гоблин-ветеран, в крипте ждут культисты и Костепёр, на болотах поёт жрица Глубин, на перевале — великан Гаррум, а в цитадели на севере запел сам лорд-комендант. Элита носит реликвии!','g-sys');
   log('Высадка у южного тракта. Торговец Дамрок зовёт поговорить (E или клик по нему).','g-sys');
+  log('v3.3 «Кузница»: редактор игры открыт клавишей ` (ё) или кнопкой 🛠 — Hierarchy/Inspector/Play-Pause, спавн врагов, живые правки статов.','g-sys');
   log('ЛКМ — идти отрядом • E — говорить/осматривать • M — миникарта • I — снаряжение • T — летопись Глубин • J — журнал • K — сейвы (и на сервере) • G — графика • ПКМ/Esc — отмена.','g-sys');
   log('Разгромите лагерь Костей — откроется крипта под курганом (северо-восток), после неё — болота (восток), за болотами — тропа на перевал (северо-запад), а с перевала — тракт к цитаделе. ЭТО ФИНАЛ.','g-sys');
   log('После финала у цитадели ждут Хальдир, Капитан Дозора, и портал Испытания Глубин — пять волн теней. Дальше — бесконечные волны под сезоном недели: T — летопись Глубин.','g-sys');
@@ -383,6 +403,20 @@ window.__bg3={units,S,QUESTS,switchMap,startCombat,questDone,
   skyState:()=>sky.state(),windStats,charStats:()=>charfxStats(),/* v2.9: небо/ветер/персонажи (E2E) */
   natureStats,/* v3.0: модели пака в кэше/упавшие (E2E) */
   gfxState:()=>({bloom:G.bloomOn,grade:G.gradeOn,sky:sky.enabled}),/* v2.9: рубильники пост-обработки (E2E) */
+  /* ===== v3.3 «Кузница»: редактор игры (E2E) ===== */
+  ed:()=>({open:useEd.getState().open,paused:G.paused,timeScale:G.timeScale,
+    selId:useEd.getState().selId,tree:useEd.getState().tree.length,log:useEd.getState().log.length,
+    pick:useEd.getState().pickMode}),
+  edOpen:()=>edOpen(),edClose:()=>edClose(),edToggle:()=>edToggle(),
+  edSel:(id)=>edSelect(id),
+  edSet:(id,k,v)=>edSetField(id,k,v),
+  edStatus:(id,k,t)=>edStatus(id,k,t),
+  edSpawn:(k)=>edSpawn(k),edSpawnKeys:()=>edSpawnKeys(),
+  edDel:(id)=>edDelete(id),edGlobal:(k,v)=>edGlobalsSet(k,v),
+  edPause:(p)=>edSetPaused(!!p),edStep:()=>edStep(),edTime:(v)=>edSetTime(v),
+  edGold:(n)=>edGlobalsSet('gold',n),edMap:(m)=>edGlobalsSet('mapId',m),
+  edTree:()=>useEd.getState().tree,edInsp:()=>useEd.getState().insp,
+  edLog:()=>useEd.getState().log.map(l=>l.msg),
   tutSteps:()=>TUT_STEPS.map(s=>({id:s.id,title:s.title,text:s.text})),/* v2.5: шаги наставника (генератор) */
   openDlg:(n)=>openDlg(n),closeDlg:()=>closeDlg(),/* v2.5: диалог для E2E */
 };

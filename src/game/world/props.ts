@@ -172,7 +172,7 @@ export function addBarrel(x:number,z:number,bodyColor?:number){/* v0.8: цвет
   g.position.set(W(x),0,W(z));
   g.rotation.y=srand()*3;
   worldGroup.add(g);
-  const b={x,z,alive:true,hp:1,maxhp:1,ac:8,name:G.mapId==='crypt'?'Погребальная урна':(G.mapId==='swamp'?'Бочка с гниловаром':'Взрывная бочка'),isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие), полный Barrel — в p4c */
+  const b={id:++G.uid,x,z,alive:true,hp:1,maxhp:1,ac:8,name:G.mapId==='crypt'?'Погребальная урна':(G.mapId==='swamp'?'Бочка с гниловаром':'Взрывная бочка'),isBarrel:true,mesh:g} as unknown as Barrel;/* Фаза 3: бочка — частичный юнит (только препятствие); v3.3: +id (ключи React в иерархии кузницы) */
   g.userData.ent=b;
   barrels.push(b);
 }

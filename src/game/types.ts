@@ -303,6 +303,24 @@ export interface Bg3Debug{
   natureStats:()=>{cached:number;failed:string[]};/* v3.0: модели пака (E2E) */
   charStats:()=>{rings:number;runners:number};/* v2.9: ореолы/бегущие */
   gfxState:()=>{bloom:boolean;grade:boolean;sky:boolean};/* v2.9: рубильники пост-обработки */
+  /* ===== v3.3 «Кузница»: редактор игры (E2E) ===== */
+  ed:()=>{open:boolean;paused:boolean;timeScale:number;selId:number|null;tree:number;log:number;pick:boolean};
+  edOpen:()=>void;edClose:()=>void;edToggle:()=>void;
+  edSel:(id:number|null)=>void;
+  edSet:(id:number,k:string,v:number|boolean|string)=>void;
+  edStatus:(id:number,k:string,turns:number)=>void;
+  edSpawn:(k:string)=>void;
+  edSpawnKeys:()=>string[];
+  edDel:(id:number)=>void;
+  edGlobal:(k:string,v:number|boolean|string)=>void;
+  edPause:(p:boolean)=>void;
+  edStep:()=>void;
+  edTime:(v:number)=>void;
+  edGold:(n:number)=>void;
+  edMap:(m:string)=>void;
+  edTree:()=>unknown;
+  edInsp:()=>unknown;
+  edLog:()=>string[];
   dlgProbe:(npc:string,id:string)=>{name:string;text:string;opts:string[]}|null;
   tutSteps:()=>{id:string;title:string;text:string}[];
   openDlg:(npc:string)=>void;

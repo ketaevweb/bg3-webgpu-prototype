@@ -6,7 +6,7 @@ import { S, G, gobCount, units, SWAMP, GIANTS, CITADEL } from '../state';
 import { makeUnit } from './units';
 import type { Unit, UnitTemplate } from '../types';
 
-const GOB:Record<string,UnitTemplate>={
+export const GOB:Record<string,UnitTemplate>={/* v3.3: экспортен — каталог спавна кузницы (editor/bridge.ts) */
   bruiser:{name:'Гоблин-задира',short:'Задира',hp:7,ac:13,xp:50,color:0x5d8f3f,
     weapon:{name:'Скимитар',dice:[1,6],abil:'str',melee:true,range:1}},
   archer:{name:'Гоблин-лучник',short:'Лучник',hp:7,ac:13,xp:50,color:0x6b7d3f,dex:14,

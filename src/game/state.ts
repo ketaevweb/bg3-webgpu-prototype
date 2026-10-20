@@ -38,6 +38,7 @@ export const G:{
   seasonForced:number|null;/* v2.4: форс сезона глубины (null — реальная неделя, −1 — вне сезона) */
   bloomOn:boolean;gradeOn:boolean;/* v2.9: кинолюк (цветокор+виньетка) */
   fpsLimit:number;frameAcc:number;
+  paused:boolean;stepOnce:boolean;timeScale:number;/* v3.3: кузница — пауза/шаг/темп симуляции */
 }={
   busy:false,busyCount:0,combatOn:false,phase:'idle',targeting:null,
   round:1,turnIdx:-1,current:null,
@@ -50,6 +51,7 @@ export const G:{
   arenaRun:0,
   seasonForced:null,
   bloomOn:true,gradeOn:true,fpsLimit:0,frameAcc:0,
+  paused:false,stepOnce:false,timeScale:1,
 };
 export type GameCtx=typeof G;
 
@@ -127,7 +129,8 @@ export function resetState(){
     round:1,turnIdx:-1,current:null,uid:0,shakeT:0,
     groundMesh:null,fireLight:null,flameMesh:null,
     mapId:'forest' as MapId,
-    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0,arenaRun:0,seasonForced:null});
+    TREES:[],ROCKS:[],TENTS:[],FIREPIT:null,BARREL_POS:[],order:[],arenaWave:0,arenaRun:0,seasonForced:null,
+    paused:false,stepOnce:false,timeScale:1});
   units.length=0;barrels.length=0;fires.clear();
   pick.tile=null;pick.ent=null;pick.inter=null;
   solid.clear();grass.clear();

@@ -15,7 +15,7 @@ export function makeUnit(cfg:Partial<Unit>&{x:number;z:number}):Unit{/* Фаза
   const u=Object.assign({
     id:++G.uid,statuses:[],alive:true,reaction:1,level:1,xp:0,potions:0,
     slots:0,slotsMax:0,prof:2,swUsed:false,surge:0,actionMax:1,keepDist:false,poisonBlade:0,dawnUsed:false,/* v1.2 */
-    action:0,bonus:0,/* Фаза 4a: обязательные поля Unit (переопределяются в beginTurn) */
+    action:0,bonus:0,moveLeft:0,/* Фаза 4a: обязательные поля Unit (переопределяются в beginTurn); v3.3: +moveLeft — кузница читает его вне боя */
   },cfg) as Unit;
   u.mesh=buildFigure(cfg);
   u.mesh.position.set(W(cfg.x),0,W(cfg.z));
