@@ -795,3 +795,20 @@ Stage Summary:
 - v3.3 «Кузница»: игрок сам правит любые элементы игры вживую как в Unity — дерево сцены, инспектор полей, спавн/удаление, глобалы мира, Play/Пауза/Шаг/Темп; попутно закрыт старый графический недочёт гарнизонов не-лесных карт
 - Сейв v2 не менялся; ничего из v3.2 не сломано (регресс зелёный)
 - Далее: коммит, тег v3.3, пуш main (+висящие v3.0–v3.2), редеплой GitHub Pages, напоминание об отзыве токена
+
+---
+Task ID: 30
+Agent: Z.ai (main)
+Task: Публикация v3.3 «Кузница» — пуш main/тегов, GitHub Release, редеплой GitHub Pages, проверка редактора на живом сайте
+
+Work Log:
+- Проверка состояния: локальный main = origin/main (v3.3 6f59046 уже был запушен; устаревший remote-tracking ref обновлён git update-ref), теги v2.8–v3.3 на удале
+- GitHub Release v3.3 создан через API (полное описание редактора: тулбар/Hierarchy/Inspector/Спавн/Мир/попутный фикс rigGarrison/проверки): https://github.com/ketaevweb/bg3-webgpu-prototype/releases/tag/v3.3
+- Редеплой Pages: scripts/deploy_ghpages.sh (GH_PAGES=1 экспорт, basePath /bg3-webgpu-prototype, gh-pages push -f, .nojekyll) — билд 2.8 мин, Pages 409/ок
+- Живой сайт: HTTP 200, «v3.3 Кузница» в HTML; редакторный код подтверждён в деплое (чанк 9d93b757…: Иерархия/Инспектор/Спавн)
+- API-роуты восстановлены после экспорта, working tree чистый
+
+Stage Summary:
+- v3.3 полностью опубликован: main, тег, Release, Pages. Живой сайт с редактором: https://ketaevweb.github.io/bg3-webgpu-prototype/
+- Дорожная карта редактора (v3.4): пресеты правок (persist JSON в localStorage), дублирование юнитов, редактор ростера/оружий
+- Напоминание игроку: отозвать токен ghp_5gMHjf… после сессии (GitHub → Settings → Developer settings → Tokens)
