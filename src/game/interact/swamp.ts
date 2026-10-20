@@ -15,6 +15,7 @@ import { freeSpotNear } from '../world/grid';
 import { addRock } from '../world/props';
 import { addInteract, rigHero, refreshHintExplore } from './explore';
 import { buildFigure } from '../entities/figure';
+import { upgradeNpcFigure } from '../animation';
 import { makeOlkha } from '../entities/roster';
 import { bigBanner, log, setHint } from '../ui/overlays';
 import { QUESTS, questStart, questObj } from '../interact/quests';
@@ -80,6 +81,8 @@ export function buildSwampScenery(){/* v1.5: идол, цепи Ольхи, ал
     const fig=buildFigure({color:0x6a9a4a,side:'npc'});
     fig.scale.setScalar(0.94);
     fig.position.set(W(ox),0,W(oz));
+    /* v3.2: Ольха — Synty-друид вместо капсулы */
+    void upgradeNpcFigure(fig,(process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/heroes/druid.glb',{scale:0.92,yaw:Math.PI});
     const chain=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.05,6,14),
       new THREE.MeshStandardMaterial({color:0x555a60,metalness:0.7,roughness:0.4}));
     chain.rotation.x=Math.PI/2;chain.position.y=0.5;

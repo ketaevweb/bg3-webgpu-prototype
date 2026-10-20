@@ -21,7 +21,7 @@ import { aliveHeroes } from '../entities/units';
 import { bigBanner, log, setHint } from '../ui/overlays';
 import { questStart, questObj, questDone, gainGold, refreshTracker, QUESTS } from '../interact/quests';
 import { animateMove } from '../systems/movement';
-import { upgradeUnitRig } from '../animation';
+import { upgradeUnitRig, upgradeNpcFigure } from '../animation';
 import type { Interact, Unit } from '../types';
 
 /* HERO_TINT → constants.ts (Фаза 2); cls-ключ вне словаря — базовый тинт */
@@ -76,6 +76,8 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
   dam.position.set(W(MERCHANT.x),0,W(MERCHANT.z));
   worldGroup.add(dam);
   solid.add(key(MERCHANT.x,MERCHANT.z));
+  /* v3.2: Дамрок — Synty-гном вместо жёлтой капсулы */
+  void upgradeNpcFigure(dam,(process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/rivals/dwarf.glb',{scale:1.04,yaw:Math.PI});
   const cart=new THREE.Group();
   const box=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,1.0),
     new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:0.9}));
@@ -111,6 +113,8 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
     ilva.scale.setScalar(0.92);
     ilva.position.set(W(CAGE.x),0,W(CAGE.z));
     worldGroup.add(ilva);
+    /* v3.2: Илва — Synty-разбойница в клетке */
+    void upgradeNpcFigure(ilva,(process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/heroes/rogue.glb',{scale:0.9,yaw:0});
     addInteract(CAGE.x,CAGE.z,2.4,'Поговорить с пленницей',()=>bus.openDlg.call('ilva'),ilva,
       'Илва','Пленница в клетке. Похожа на разведчицу.');
     S.cageMesh=cage;S.ilvaMesh=ilva;
@@ -149,6 +153,8 @@ export function buildForestScenery(){/* v0.8: было buildScenery + охран
     kayaFig.position.set(W(KAYA_SPOT[0]+1),0,W(KAYA_SPOT[1]));
     worldGroup.add(kayaFig);
     solid.add(key(KAYA_SPOT[0]+1,KAYA_SPOT[1]));
+    /* v3.2: Кая — Synty-жрица у алтаря вместо жёлтой капсулы (жалоба «пипец») */
+    void upgradeNpcFigure(kayaFig,(process.env.NEXT_PUBLIC_BASE_PATH??'')+'/models/rig/heroes/cleric.glb',{scale:0.94,yaw:-Math.PI/2});
     addInteract(KAYA_SPOT[0],KAYA_SPOT[1],2.6,'Поговорить с Кая',()=>bus.openDlg.call('kaya'),alt,
       'Кая Заря','Жрица Рассвета. Молится у придорожного алтаря — ищет попутчиков на север.');
     S.kayaMesh=kayaFig;

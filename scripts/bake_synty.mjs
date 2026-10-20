@@ -663,7 +663,13 @@ if (mode === 'heroes') {
         const takeClip = take ? src.animations.find((c) => c.name === take)
           : src.animations.find((c) => !/^t-?pose$/i.test(c.name));
         if (!takeClip) { console.error('SKIP', role, 'no take'); continue; }
-        const out = retargetClipManual(model, dstBones, src, takeClip, names, hip, 'rest-local');
+        /* v3.2-фикс T-Pose героев: схема B (world-delta). Схема A (rest-local)
+           предполагает совпадение ЛОКАЛЬНЫХ офсетов «кость→дитя» у источника
+           (blink32: дети вдоль -X) и цели (MFH: вдоль +X) — не совпадают, локоть
+           после поворота «рука вниз» улетал вверх → вечный T-Pose/«зомби».
+           Схема B требует лишь равенства МИРОВЫХ направлений кости на ребёнка
+           в T-позе — у blink32 и MFH они совпадают (+X мира). */
+        const out = retargetClipManual(model, dstBones, src, takeClip, names, hip);
         out.name = role;
         clips.push(out);
       }

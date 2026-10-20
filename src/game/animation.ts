@@ -239,6 +239,43 @@ export async function upgradeUnitRig(unit: RigUnit, opts: RigOpts = {}): Promise
   }
 }
 
+/* ---------- v3.2: Synty-фигуры для NPC (Кая/Дамрок/Илва/Ольха) ----------
+   Капсульные buildFigure у NPC выглядели недоделкой (жёлтые болванки у алтаря).
+   Ставим поверх ту же Synty-модель с idle-миксером (без боевых клипов).
+   Миксеры апдейтятся в общем loop через updateNpcMixers. */
+const npcMixers: THREE.AnimationMixer[] = [];
+export function updateNpcMixers(dt: number): void {
+  for (const m of npcMixers) m.update(dt);
+}
+export async function upgradeNpcFigure(fig: THREE.Object3D, modelUrl: string, opts: { scale?: number; yaw?: number } = {}): Promise<boolean> {
+  try {
+    const { scene: baseScene, animations } = await loadRig(modelUrl);
+    const model = SkeletonUtils.clone(baseScene);
+    model.traverse((o) => {
+      const m = o as THREE.SkinnedMesh;
+      if (m.isSkinnedMesh) { m.frustumCulled = false; m.castShadow = true; }
+    });
+    model.scale.setScalar(opts.scale ?? 1.0);
+    const holder = new THREE.Group();
+    holder.add(model);
+    holder.rotation.y = opts.yaw ?? Math.PI;
+    /* прячем капсулу (тело/голова/оружие), кольцо фракции оставляем */
+    const ring = fig.userData.ring as THREE.Object3D | undefined;
+    for (const ch of [...fig.children]) if (ch !== ring) ch.visible = false;
+    fig.add(holder);
+    const idle = animations.find((a) => /^idle$/i.test(a.name));
+    if (idle) {
+      const mixer = new THREE.AnimationMixer(model);
+      mixer.clipAction(idle).reset().fadeIn(0.2).play();
+      npcMixers.push(mixer);
+    }
+    return true;
+  } catch (e) {
+    console.warn('[bg3] NPC Synty figure failed:', e);
+    return false;
+  }
+}
+
 export class AnimRigs {
   private units = new Set<RigUnit>();
   /* v1.6: активные процедурные замахи (fallback без клипов) */

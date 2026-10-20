@@ -5,7 +5,7 @@
 import * as THREE from 'three/webgpu';
 import { sfx } from './audio';
 import { slowmo } from './slowmo';
-import { upgradeUnitRig, animOptsFor, animStats } from './animation';/* v1.7: риги + сводка анимации */
+import { upgradeUnitRig, animOptsFor, animStats, updateNpcMixers } from './animation';/* v1.7: риги + сводка анимации; v3.2: NPC-миксеры */
 import { clamp, cheb, key } from './utils';
 import { TILE, GRID, HALF, W } from './constants';
 import { astar, passable } from './world/grid';
@@ -234,6 +234,7 @@ function loop(){
   sky.update(dt,t);/* v2.9: дрейф облаков + амбиент-частицы карты */
   charfxUpdate(dt,t);/* v2.9: ореолы благословенных + пыль шагов */
   rigs.update(dt,t);
+  updateNpcMixers(dt);/* v3.2: idle-анимации Synty-фигур NPC */
   updateOverlays();
   if(G.postFX&&(G.bloomOn||G.gradeOn))G.postFX.render();else renderer.render(scene,camera);/* v1.1: bloom отключаемый; v2.9: кинолюк живёт в postFX */
 }
